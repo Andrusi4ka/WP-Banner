@@ -1,0 +1,14 @@
+# Normalise line endings in the repository.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.svg text
+
+# Not part of the installable plugin (left out of wp-layer-motion.zip by git archive).
+/.github        export-ignore
+/.github/**     export-ignore
+/.gitattributes export-ignore
+/.gitignore     export-ignore
+/README.md      export-ignore
+/tests          export-ignore
+/tests/**       export-ignore

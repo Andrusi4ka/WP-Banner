@@ -1,0 +1,106 @@
+/* WP Layer Motion "What's new" window (whats-new.js): on its own, also on the
+   Dashboard, where admin.css is not loaded. Over the admin bar. */
+body.wplm-news-open {
+	overflow: hidden;
+}
+
+.wplm-news {
+	position: fixed;
+	inset: 0;
+	z-index: 100050;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+}
+
+.wplm-news[hidden] {
+	display: none;
+}
+
+.wplm-news__backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.6);
+}
+
+.wplm-news__box {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: min(640px, 100%);
+	max-height: 100%;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+}
+
+.wplm-news__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 12px 12px 20px;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.wplm-news__title {
+	margin: 0;
+	font-size: 16px;
+	line-height: 1.4;
+}
+
+.wplm-news__close {
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: #50575e;
+	cursor: pointer;
+}
+
+.wplm-news__close:hover,
+.wplm-news__close:focus {
+	background: #f0f0f1;
+	color: #1d2327;
+}
+
+.wplm-news__body {
+	overflow-y: auto;
+	padding: 16px 20px;
+}
+
+.wplm-news__version {
+	margin: 16px 0 6px;
+	font-size: 14px;
+}
+
+.wplm-news__version:first-child {
+	margin-top: 0;
+}
+
+.wplm-news__list {
+	margin: 0;
+	padding-left: 20px;
+	list-style: disc;
+}
+
+.wplm-news__list li {
+	margin: 0 0 8px;
+	line-height: 1.5;
+}
+
+.wplm-news__foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 12px 20px;
+	border-top: 1px solid #dcdcde;
+}

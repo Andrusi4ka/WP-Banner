@@ -1,0 +1,64 @@
+# Publishes a release with wp-layer-motion.zip for every "vX.Y.Z" tag; sites with
+# the plugin then see the update (wp-layer-motion.php: wplm_updates()). Only
+# once the tests (tests.yml) have passed for that tag: otherwise no release.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# To publish the release. The actions are pinned to a commit (their tag in
+# a comment): what runs with this right never changes behind our back.
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  release:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check that the tag matches the plugin version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          header=$(grep -m1 -oP '^\s*\*\s*Version:\s*\K\S+' wp-layer-motion.php)
+          stable=$(grep -m1 -oP '^Stable tag:\s*\K\S+' readme.txt)
+          if [ "$tag" != "$header" ] || [ "$tag" != "$stable" ]; then
+            echo "::error::Tag v$tag, wp-layer-motion.php Version $header and readme.txt Stable tag $stable must match."
+            exit 1
+          fi
+
+      # For the minifiers below (npx, versions pinned).
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+
+      # git archive leaves out what .gitattributes marks export-ignore (dev
+      # files). The plugin's own scripts and stylesheets then minified in the
+      # copy that goes into the zip, under the same names (the repository
+      # keeps them as written, comments and all).
+      - name: Build wp-layer-motion.zip
+        run: |
+          mkdir build
+          git archive --format=tar --prefix=wp-layer-motion/ HEAD | tar -x -C build
+          cd build/wp-layer-motion
+          for f in assets/js/*.js; do
+            npx --yes terser@5.31.6 "$f" --compress --mangle --comments false -o "$f.min"
+            mv "$f.min" "$f"
+          done
+          for f in assets/css/*.css; do
+            npx --yes lightningcss-cli@1.25.1 --minify "$f" -o "$f.min"
+            mv "$f.min" "$f"
+          done
+          cd ..
+          zip -qr ../wp-layer-motion.zip wp-layer-motion
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: wp-layer-motion.zip
+          generate_release_notes: true

@@ -1,0 +1,11 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build output
+*.zip
+
+# Screenshots the browser tests write
+/tests/*.png
