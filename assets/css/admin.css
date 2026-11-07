@@ -1,211 +1,269 @@
-/* WP Layer Motion admin: WP Swiper's look (menu, grey cards, fields, preview bar), with its own assets. */
+/* WP Banner admin: WP Swiper's look (menu, grey cards, fields, preview bar), with its own assets. */
 
 /* One accent colour, whatever the admin colour scheme (as WP Swiper). */
-#wplm-app,#wplm-shortcode{--wplm-accent:#2271b1;--wplm-accent-darker:#135e96;--wp-admin-theme-color:#2271b1;--wp-admin-theme-color--rgb:34,113,177;--wp-admin-theme-color-darker-10:#135e96;--wp-admin-theme-color-darker-20:#0a4b78}
-#wplm-editor .inside{margin:0;padding:12px;container-type:inline-size}
-#wplm-app{color:#1d2327}
-#wplm-app button:focus-visible{outline:2px solid var(--wplm-accent);outline-offset:1px}
-#wplm-app .description,#wplm-shortcode .description{font-size:12px}
+#wpbn-app,#wpbn-shortcode{--wpbn-accent:#2271b1;--wpbn-accent-darker:#135e96;--wp-admin-theme-color:#2271b1;--wp-admin-theme-color--rgb:34,113,177;--wp-admin-theme-color-darker-10:#135e96;--wp-admin-theme-color-darker-20:#0a4b78}
+#wpbn-editor .inside{margin:0;padding:12px;container-type:inline-size}
+#wpbn-app{color:#1d2327}
+#wpbn-app button:focus-visible{outline:2px solid var(--wpbn-accent);outline-offset:1px}
+#wpbn-app .description,#wpbn-shortcode .description{font-size:12px}
 
 /* Three columns sized by the box: menu, the chosen card, the preview (twice as wide). */
-.wplm-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:start}
-.wplm-sidebar{display:flex;flex-direction:column;gap:16px;min-width:0}
-.wplm-settings{min-width:0}
+.wpbn-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:start}
+.wpbn-sidebar{display:flex;flex-direction:column;gap:16px;min-width:0}
+.wpbn-settings{min-width:0}
 
 /* Scene settings: one of WP Swiper's menu items. */
-.wplm-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dcdcde;border-radius:6px;background:#fff;color:#1d2327;font:inherit;font-weight:600;text-align:left;cursor:pointer}
-.wplm-menu-item .dashicons{color:#646970}
-.wplm-menu-item:after{content:"\f345";margin-left:auto;font:normal 16px/1 dashicons;color:#a7aaad}
-.wplm-menu-item:hover{border-color:var(--wplm-accent);color:var(--wplm-accent)}
-.wplm-menu-item[aria-current=true]{border-color:var(--wplm-accent);background:#f0f6fc;color:var(--wplm-accent);box-shadow:inset 3px 0 0 var(--wplm-accent)}
-.wplm-menu-item[aria-current=true] .dashicons,.wplm-menu-item[aria-current=true]:after{color:var(--wplm-accent)}
+.wpbn-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dcdcde;border-radius:6px;background:#fff;color:#1d2327;font:inherit;font-weight:600;text-align:left;cursor:pointer}
+.wpbn-menu-item .dashicons{color:#646970}
+.wpbn-menu-item:after{content:"\f345";margin-left:auto;font:normal 16px/1 dashicons;color:#a7aaad}
+.wpbn-menu-item:hover{border-color:var(--wpbn-accent);color:var(--wpbn-accent)}
+.wpbn-menu-item[aria-current=true]{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent);box-shadow:inset 3px 0 0 var(--wpbn-accent)}
+.wpbn-menu-item[aria-current=true] .dashicons,.wpbn-menu-item[aria-current=true]:after{color:var(--wpbn-accent)}
 
 /* Sections: a frame with its title (Layers, Layer settings, Scene settings). */
-.wplm-section{min-width:0;margin:0;padding:12px 16px;border:1px solid #dcdcde;border-radius:4px}
-.wplm-section legend{padding:0 6px;font-weight:600}
-.wplm-layers>.description{margin:0 0 10px}
+.wpbn-section{min-width:0;margin:0;padding:12px 16px;border:1px solid #dcdcde;border-radius:4px}
+.wpbn-section legend{padding:0 6px;font-weight:600}
+.wpbn-layers>.description{margin:0 0 10px}
 
 /* Layer rows: thumbnail, name and kind, then hide / duplicate / delete. */
-#wplm-layers{display:flex;flex-direction:column;gap:6px}
-.wplm-layer-row{position:relative;display:flex;align-items:center;gap:2px;padding-right:6px;border:1px solid #dcdcde;border-radius:6px;background:#fff;cursor:grab;touch-action:none;user-select:none}
+#wpbn-layers{display:flex;flex-direction:column;gap:6px}
+.wpbn-layer-row{position:relative;display:flex;align-items:center;gap:2px;padding-right:6px;border:1px solid #dcdcde;border-radius:6px;background:#fff;cursor:grab;touch-action:none;user-select:none}
 /* A grip of dots on the left: the row can be dragged. */
-.wplm-layer-grip{flex:0 0 8px;width:8px;height:16px;margin-left:6px;background:radial-gradient(circle,#a7aaad 1.2px,transparent 1.6px) 0 0/4px 4px;opacity:.8}
-.wplm-layer-row:hover .wplm-layer-grip{opacity:1}
-body.wplm-sorting,body.wplm-sorting *{cursor:grabbing!important}
-.wplm-layer-row:hover{border-color:var(--wplm-accent)}
-.wplm-layer-row.is-active{border-color:var(--wplm-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wplm-accent)}
-.wplm-layer-row.is-dragging{z-index:2;opacity:.9;box-shadow:0 6px 16px rgba(0,0,0,.18);transition:none}
-.wplm-layer-row.is-drop-before:before,.wplm-layer-row.is-drop-after:before{content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:var(--wplm-accent);pointer-events:none}
-.wplm-layer-row.is-drop-before:before{top:-5px}
-.wplm-layer-row.is-drop-after:before{bottom:-5px}
-.wplm-layer-select{display:flex;flex:1 1 auto;align-items:center;gap:10px;min-width:0;padding:8px 4px 8px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-weight:600;text-align:left;line-height:1.35;cursor:grab}
-.wplm-layer-row:hover .wplm-layer-select,.wplm-layer-row.is-active .wplm-layer-select{color:var(--wplm-accent)}
-.wplm-layer-thumb{display:flex;flex:0 0 44px;align-items:center;justify-content:center;width:44px;height:32px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
-.wplm-layer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-.wplm-layer-thumb--text{background:#1d2327;font:800 18px/1 Arial,sans-serif}
-.wplm-layer-label{min-width:0;overflow-wrap:anywhere}
-.wplm-layer-label small{display:block;color:#646970;font-weight:400;font-size:11px}
-.wplm-layer-row.is-hidden .wplm-layer-thumb,.wplm-layer-row.is-hidden .wplm-layer-label{opacity:.5}
-.wplm-layer-tools{display:flex;flex:0 0 auto;gap:2px}
-.wplm-icon-button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:3px;background:none;color:#a7aaad;cursor:pointer}
-.wplm-icon-button .dashicons{width:18px;height:18px;font-size:18px}
-.wplm-icon-button svg{display:block;width:14px;height:14px}
-.wplm-icon-button:hover{background:#f0f0f1;color:var(--wplm-accent)}
-.wplm-icon-button--danger:hover{color:#d63638}
-.wplm-icon-button[aria-pressed=true]{color:#50575e}
-.wplm-icon-button:disabled{color:#dcdcde;background:none;cursor:not-allowed}
-.wplm-empty{margin:0;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2;color:#646970}
+.wpbn-layer-grip{flex:0 0 8px;width:8px;height:16px;margin-left:6px;background:radial-gradient(circle,#a7aaad 1.2px,transparent 1.6px) 0 0/4px 4px;opacity:.8}
+.wpbn-layer-row:hover .wpbn-layer-grip{opacity:1}
+body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
+.wpbn-layer-row:hover{border-color:var(--wpbn-accent)}
+.wpbn-layer-row.is-active{border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
+.wpbn-layer-row.is-dragging{z-index:2;opacity:.9;box-shadow:0 6px 16px rgba(0,0,0,.18);transition:none}
+.wpbn-layer-row.is-drop-before:before,.wpbn-layer-row.is-drop-after:before{content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:var(--wpbn-accent);pointer-events:none}
+.wpbn-layer-row.is-drop-before:before{top:-5px}
+.wpbn-layer-row.is-drop-after:before{bottom:-5px}
+.wpbn-layer-select{display:flex;flex:1 1 auto;align-items:center;gap:10px;min-width:0;padding:8px 4px 8px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-weight:600;text-align:left;line-height:1.35;cursor:grab}
+.wpbn-layer-row:hover .wpbn-layer-select,.wpbn-layer-row.is-active .wpbn-layer-select{color:var(--wpbn-accent)}
+.wpbn-layer-thumb{display:flex;flex:0 0 44px;align-items:center;justify-content:center;width:44px;height:32px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
+.wpbn-layer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
+.wpbn-layer-thumb--text{background:#1d2327;font:800 18px/1 Arial,sans-serif}
+.wpbn-layer-label{min-width:0;overflow-wrap:anywhere}
+.wpbn-layer-label small{display:block;color:#646970;font-weight:400;font-size:11px}
+.wpbn-layer-row.is-hidden .wpbn-layer-thumb,.wpbn-layer-row.is-hidden .wpbn-layer-label{opacity:.5}
+.wpbn-layer-tools{display:flex;flex:0 0 auto;gap:2px}
+.wpbn-icon-button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:3px;background:none;color:#a7aaad;cursor:pointer}
+.wpbn-icon-button .dashicons{width:18px;height:18px;font-size:18px}
+.wpbn-icon-button svg{display:block;width:14px;height:14px}
+.wpbn-icon-button:hover{background:#f0f0f1;color:var(--wpbn-accent)}
+.wpbn-icon-button--danger:hover{color:#d63638}
+.wpbn-icon-button[aria-pressed=true]{color:#50575e}
+.wpbn-icon-button:disabled{color:#dcdcde;background:none;cursor:not-allowed}
+.wpbn-empty{margin:0;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2;color:#646970}
 
 /* Add element: a block like a layer row (dashed); it opens the elements in the settings column. */
-.wplm-add{margin-top:6px;border:1px dashed #a7aaad;border-radius:6px;background:#fff}
-.wplm-add:hover{border-color:var(--wplm-accent)}
-.wplm-add:has([aria-current=true]){border-style:solid;border-color:var(--wplm-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wplm-accent)}
-.wplm-add__toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;padding:8px 12px;border:0;border-radius:6px;background:none;color:#50575e;font:inherit;font-weight:600;cursor:pointer}
-.wplm-add__toggle:hover,.wplm-add__toggle[aria-current=true]{color:var(--wplm-accent)}
-.wplm-add__plus{width:20px;height:20px;font-size:20px}
+.wpbn-add{margin-top:6px;border:1px dashed #a7aaad;border-radius:6px;background:#fff}
+.wpbn-add:hover{border-color:var(--wpbn-accent)}
+.wpbn-add:has([aria-current=true]){border-style:solid;border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
+.wpbn-add__toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;padding:8px 12px;border:0;border-radius:6px;background:none;color:#50575e;font:inherit;font-weight:600;cursor:pointer}
+.wpbn-add__toggle:hover,.wpbn-add__toggle[aria-current=true]{color:var(--wpbn-accent)}
+.wpbn-add__plus{width:20px;height:20px;font-size:20px}
 /* The elements to add: tiles, as many in a row as fit (more kinds to come). */
-.wplm-elements{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
-.wplm-element{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:1;padding:6px;border:1px solid #dcdcde;border-radius:4px;background:#fff;color:#50575e;font:inherit;font-size:12px;cursor:pointer}
-.wplm-element .dashicons{width:28px;height:28px;font-size:28px}
-.wplm-element:hover,.wplm-element:focus-visible{border-color:var(--wplm-accent);background:#f0f6fc;color:var(--wplm-accent)}
+.wpbn-elements{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.wpbn-element{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:1;padding:6px;border:1px solid #dcdcde;border-radius:4px;background:#fff;color:#50575e;font:inherit;font-size:12px;cursor:pointer}
+.wpbn-element .dashicons{width:28px;height:28px;font-size:28px}
+.wpbn-element:hover,.wpbn-element:focus-visible{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent)}
 /* Under the image picker: its file name, then pixel size and weight. */
-.wplm-picker__info{margin:6px 0 0;font-size:12px;line-height:1.45;color:#646970}
-.wplm-picker__name{display:block;color:#1d2327;font-weight:500;overflow-wrap:anywhere}
+.wpbn-picker__info{margin:6px 0 0;font-size:12px;line-height:1.45;color:#646970}
+.wpbn-picker__name{display:block;color:#1d2327;font-weight:500;overflow-wrap:anywhere}
 
 /* Grey cards with an upper-case title (WP Swiper's blocks). */
-.wplm-card{margin-top:5px;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2}
-.wplm-section>legend+.wplm-card{margin-top:4px}
-.wplm-subheading{margin:0 0 10px;color:#646970;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
-.wplm-after-cards{margin:14px 0 0}
+.wpbn-card{margin-top:5px;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2}
+.wpbn-section>legend+.wpbn-card{margin-top:4px}
+.wpbn-subheading{margin:0 0 10px;color:#646970;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.wpbn-after-cards{margin:14px 0 0}
 
 /* A field: its label row (label, device icons at the end), the control, a help text. */
-.wplm-field{margin:0 0 14px}
-.wplm-field:last-child{margin-bottom:0}
-.wplm-field__head{display:flex;align-items:center;gap:6px;min-height:26px;margin-bottom:4px}
-.wplm-field__head label,.wplm-field__label{margin:0;font-weight:500}
-.wplm-field input[type=text],.wplm-field input[type=number],.wplm-field select{width:100%;max-width:100%;box-sizing:border-box}
-.wplm-field input[type=color]{width:100%;height:34px;padding:2px;box-sizing:border-box;cursor:pointer}
-.wplm-field .description{margin:4px 0 0}
-.wplm-field__row{display:flex;align-items:center;gap:12px}
-.wplm-field__row input[type=range]{flex:1 1 auto;min-width:0;margin:0;accent-color:var(--wplm-accent);cursor:pointer}
-.wplm-field .wplm-field__row input[type=number]{flex:0 0 90px;width:90px}
+.wpbn-field{margin:0 0 14px}
+.wpbn-field:last-child{margin-bottom:0}
+.wpbn-field__head{display:flex;align-items:center;gap:6px;min-height:26px;margin-bottom:4px}
+.wpbn-field__head label,.wpbn-field__label{margin:0;font-weight:500}
+.wpbn-field input[type=text],.wpbn-field input[type=number],.wpbn-field select{width:100%;max-width:100%;box-sizing:border-box}
+.wpbn-field input[type=color]{width:100%;height:34px;padding:2px;box-sizing:border-box;cursor:pointer}
+.wpbn-field .description{margin:4px 0 0}
+.wpbn-field__row{display:flex;align-items:center;gap:12px}
+.wpbn-field__row input[type=range]{flex:1 1 auto;min-width:0;margin:0;accent-color:var(--wpbn-accent);cursor:pointer}
+.wpbn-field .wpbn-field__row input[type=number]{flex:0 0 90px;width:90px}
 /* Height: the number and its unit (px / vh / % / Auto), as WP Swiper's. */
-.wplm-field--height .wplm-field__row{gap:6px}
-.wplm-field.wplm-field--height .wplm-field__row input[type=number]{flex:1 1 auto;width:auto;min-width:0}
-.wplm-field.wplm-field--height .wplm-field__row select{flex:0 0 84px;width:84px}
+/* Two equal halves; with Auto the number is greyed (its value kept for a switch back). */
+.wpbn-field--height .wpbn-field__row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
+.wpbn-field.wpbn-field--height .wpbn-field__row input[type=number],.wpbn-field.wpbn-field--height .wpbn-field__row select{flex:none;width:100%;min-width:0;max-width:none;min-height:40px;margin:0}
+.wpbn-field.wpbn-field--height .wpbn-field__row input[type=number]:disabled{background:#f0f0f1;border-color:#dcdcde;color:#a7aaad;box-shadow:none}
 
 /* A field's desktop / tablet / mobile icons. */
-.wplm-devices{display:inline-flex;gap:2px;margin-left:auto}
-.wplm-devices__btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:3px;background:none;color:#a7aaad;cursor:pointer}
-.wplm-devices__btn .dashicons{width:18px;height:18px;font-size:18px}
-.wplm-devices__btn:hover{color:#50575e}
-.wplm-devices__btn.is-active{color:var(--wplm-accent)}
-.wplm-devices__btn{position:relative}
+.wpbn-devices{display:inline-flex;gap:2px;margin-left:auto}
+.wpbn-devices__btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:3px;background:none;color:#a7aaad;cursor:pointer}
+.wpbn-devices__btn .dashicons{width:18px;height:18px;font-size:18px}
+.wpbn-devices__btn:hover{color:#50575e}
+.wpbn-devices__btn.is-active{color:var(--wpbn-accent)}
+.wpbn-devices__btn{position:relative}
 /* That device has a value of its own (not the larger screen's): a green dot, as in WP Swiper. */
-.wplm-devices__btn.has-value:after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#00a32a}
+.wpbn-devices__btn.has-value:after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#00a32a}
 /* Editing tablet or mobile values: a note at the top of the layer settings. */
-.wplm-device-note{display:flex;align-items:flex-start;gap:6px;margin:0 0 8px;padding:8px 10px;border-left:4px solid var(--wplm-accent);background:#f0f6fc;font-size:12px;line-height:1.45}
-.wplm-device-note .dashicons{flex:0 0 auto;width:16px;height:16px;font-size:16px;color:var(--wplm-accent)}
-.wplm-field input[type=number]::placeholder{color:#8c8f94}
-#wplm-app .wplm-position-reset{margin-left:6px;font-size:12px}
-.wplm-position .wplm-devices{margin-left:auto}
-.wplm-position .wplm-devices+.button{margin-left:6px}
+.wpbn-device-note{display:flex;align-items:flex-start;gap:6px;margin:0 0 8px;padding:8px 10px;border-left:4px solid var(--wpbn-accent);background:#f0f6fc;font-size:12px;line-height:1.45}
+.wpbn-device-note .dashicons{flex:0 0 auto;width:16px;height:16px;font-size:16px;color:var(--wpbn-accent)}
+.wpbn-field input[type=number]::placeholder{color:#8c8f94}
+#wpbn-app .wpbn-position-reset{margin-left:6px;font-size:12px}
+.wpbn-position .wpbn-devices{margin-left:auto}
+.wpbn-position .wpbn-devices+.button{margin-left:6px}
 
 /* An image: a checkered thumbnail (transparency shows), Choose / Change and Remove. */
-.wplm-picker{display:flex;align-items:center;gap:10px}
-.wplm-picker__thumb{display:flex;flex:0 0 auto;align-items:center;justify-content:center;width:48px;height:48px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/12px 12px}
-.wplm-picker__thumb img{display:block;max-width:100%;max-height:100%;object-fit:contain}
-#wplm-app .wplm-picker__remove{color:#b32d2e}
+/* Thumbnail, name and size, then Change / Remove at the right end. */
+.wpbn-picker{display:flex;align-items:center;gap:12px}
+.wpbn-picker .wpbn-picker__info{flex:1 1 auto;min-width:0;margin:0}
+.wpbn-picker__actions{display:flex;flex:0 0 auto;align-items:center;gap:8px;margin-left:auto}
+#wpbn-app .wpbn-picker__actions .button{min-height:30px;padding:0 10px;line-height:28px;font-size:12px}
+.wpbn-picker__thumb{display:flex;flex:0 0 auto;align-items:center;justify-content:center;width:58px;height:58px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/12px 12px}
+.wpbn-picker__thumb img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+#wpbn-app .wpbn-picker__remove{color:#b32d2e}
 
 /* Position: its label and the point-picker button on one row, the value under it. */
-.wplm-position .wplm-field__head .button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;margin-left:auto;padding:0 6px;line-height:1}
-.wplm-position .wplm-field__head svg{display:block;width:20px;height:20px}
-.wplm-position-value{margin:2px 0 0;color:#50575e;font-size:12px}
+.wpbn-position .wpbn-field__head .button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;margin-left:auto;padding:0 6px;line-height:1}
+.wpbn-position .wpbn-field__head svg{display:block;width:20px;height:20px}
+.wpbn-position-value{margin:2px 0 0;color:#50575e;font-size:12px}
 
 /* Preview: bar, frame, scroll simulation. In view while the settings scroll. */
-.wplm-preview{position:sticky;top:46px;min-width:0;padding:12px 16px 16px;border:1px solid #dcdcde;border-radius:4px;background:#f6f7f7}
-.wplm-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
-.wplm-preview-title{font-weight:600}
-.wplm-toolbar #wplm-dark{margin-right:auto}
-.wplm-toolbar__end{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.wplm-preview-devices{display:flex;gap:4px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
-.wplm-device-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;min-width:0;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:none;color:#50575e;font:inherit;cursor:pointer}
-.wplm-device-button:hover{color:#1d2327}
-.wplm-device-button[aria-pressed=true]{border-color:var(--wplm-accent);background:#fff;color:var(--wplm-accent);font-weight:600}
-.wplm-preview-devices .dashicons{width:16px;height:16px;font-size:16px}
-#wplm-rotate,#wplm-dark{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
-#wplm-rotate svg{display:block;width:22px;height:auto}
-#wplm-dark svg{display:block;width:20px;height:20px}
-#wplm-rotate[aria-pressed=true],#wplm-dark[aria-pressed=true]{border-color:var(--wplm-accent);background:var(--wplm-accent);color:#fff}
-#wplm-refresh{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
-#wplm-refresh .dashicons{width:16px;height:16px;font-size:16px;line-height:1;vertical-align:middle;color:inherit}
-#wplm-app #wplm-refresh.is-stale{border-color:var(--wplm-accent);background:var(--wplm-accent);color:#fff}
-#wplm-device[hidden]{display:none}
-#wplm-preview-stage{position:relative;overflow:hidden}
-#wplm-preview-stage.is-turning{z-index:2;overflow:visible}
-#wplm-device-shell{position:static}
-#wplm-frame{position:absolute;top:0;left:0;border:0;background:#fff;transform-origin:0 0}
-.wplm-device-drawing{position:absolute;top:0;z-index:1;display:block;max-width:none;pointer-events:none;user-select:none;transform-origin:0 0}
-.wplm-device-drawing[hidden]{display:none}
-.wplm-scrub{display:flex;gap:10px;align-items:center;margin-top:18px;font-weight:500}
-#wplm-play{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
-#wplm-play .dashicons{width:18px;height:18px;font-size:18px;line-height:1}
-#wplm-app #wplm-play.is-playing{border-color:var(--wplm-accent);background:var(--wplm-accent);color:#fff}
-.wplm-scrub input{flex:1;min-width:0;accent-color:var(--wplm-accent)}
-@container(max-width:1000px){.wplm-workspace{grid-template-columns:repeat(2,minmax(0,1fr))}.wplm-preview{position:static;grid-column:1/-1}}
-@container(max-width:560px){.wplm-workspace{grid-template-columns:minmax(0,1fr)}}
+.wpbn-preview{position:sticky;top:46px;min-width:0;padding:12px 16px 16px;border:1px solid #dcdcde;border-radius:4px;background:#f6f7f7}
+.wpbn-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.wpbn-preview-title{font-weight:600}
+.wpbn-toolbar #wpbn-dark{margin-right:auto}
+.wpbn-toolbar__end{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.wpbn-preview-devices{display:flex;gap:4px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
+.wpbn-device-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;min-width:0;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:none;color:#50575e;font:inherit;cursor:pointer}
+.wpbn-device-button:hover{color:#1d2327}
+.wpbn-device-button[aria-pressed=true]{border-color:var(--wpbn-accent);background:#fff;color:var(--wpbn-accent);font-weight:600}
+.wpbn-preview-devices .dashicons{width:16px;height:16px;font-size:16px}
+#wpbn-rotate,#wpbn-dark{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
+#wpbn-rotate svg{display:block;width:22px;height:auto}
+#wpbn-dark svg{display:block;width:20px;height:20px}
+#wpbn-rotate[aria-pressed=true],#wpbn-dark[aria-pressed=true]{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
+#wpbn-refresh{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
+#wpbn-refresh .dashicons{width:16px;height:16px;font-size:16px;line-height:1;vertical-align:middle;color:inherit}
+#wpbn-app #wpbn-refresh.is-stale{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
+#wpbn-device[hidden]{display:none}
+#wpbn-preview-stage{position:relative;overflow:hidden}
+#wpbn-preview-stage.is-turning{z-index:2;overflow:visible}
+#wpbn-device-shell{position:static}
+#wpbn-frame{position:absolute;top:0;left:0;border:0;background:#fff;transform-origin:0 0}
+.wpbn-device-drawing{position:absolute;top:0;z-index:1;display:block;max-width:none;pointer-events:none;user-select:none;transform-origin:0 0}
+.wpbn-device-drawing[hidden]{display:none}
+.wpbn-scrub{display:flex;gap:10px;align-items:center;margin-top:18px;font-weight:500}
+#wpbn-play{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
+#wpbn-play .dashicons{width:18px;height:18px;font-size:18px;line-height:1}
+#wpbn-app #wpbn-play.is-playing{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
+.wpbn-scrub input{flex:1;min-width:0;accent-color:var(--wpbn-accent)}
+@container(max-width:1000px){.wpbn-workspace{grid-template-columns:repeat(2,minmax(0,1fr))}.wpbn-preview{position:static;grid-column:1/-1}}
+@container(max-width:560px){.wpbn-workspace{grid-template-columns:minmax(0,1fr)}}
 
 /* Shortcode box (side column), as WP Swiper's. */
-.wplm-shortcode{width:100%;font-family:Consolas,Monaco,monospace;cursor:copy}
+.wpbn-shortcode{width:100%;font-family:Consolas,Monaco,monospace;cursor:copy}
 
 /* Position field and dialog: WP Swiper's modal design, scoped to this plugin. */
-body.wplm-modal-open{overflow:hidden}
-.wplm-modal{position:fixed;inset:0;z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;--wp-admin-theme-color:#2271b1}
-.wplm-modal[hidden]{display:none}
-.wplm-modal__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}
-.wplm-modal__box{position:relative;display:flex;flex-direction:column;width:min(980px,100%);max-height:100%;border-radius:4px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.3)}
-.wplm-modal__head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 12px 12px 20px;border-bottom:1px solid #dcdcde}
-.wplm-modal__title{flex:1 1 auto;margin:0;font-size:16px;line-height:1.4}
-.wplm-modal__layer{color:#646970;font-weight:400}
-.wplm-modal__close{display:flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:4px;background:none;color:#50575e;cursor:pointer}
-.wplm-modal__close:hover,.wplm-modal__close:focus{background:#f0f0f1;color:#1d2327}
-.wplm-modal__body{padding:20px;overflow:auto;min-height:0}
-.wplm-modal__body>.description{margin:0 0 12px}
-.wplm-modal__foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid #dcdcde}
-.wplm-focus{display:flex;align-items:flex-start;gap:16px}
-.wplm-focus__main{display:flex;flex:1 1 auto;justify-content:center;min-width:0}
-.wplm-focus__stage{position:relative;flex:0 1 auto;line-height:0;cursor:crosshair;touch-action:none;user-select:none;border-radius:4px;outline-offset:2px}
-.wplm-focus__stage.is-over-layer{cursor:move}
-.wplm-focus__stage:focus-visible{outline:2px solid #2271b1}
-.wplm-focus__point{position:absolute;width:22px;height:22px;border:2px solid #fff;border-radius:50%;background:rgba(34,113,177,.55);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none;z-index:2}
+body.wpbn-modal-open{overflow:hidden}
+.wpbn-modal{position:fixed;inset:0;z-index:100050;display:flex;align-items:center;justify-content:center;padding:16px;--wp-admin-theme-color:#2271b1}
+.wpbn-modal[hidden]{display:none}
+.wpbn-modal__backdrop{position:absolute;inset:0;background:rgba(0,0,0,.6)}
+.wpbn-modal__box{position:relative;display:flex;flex-direction:column;width:min(980px,100%);max-height:100%;border-radius:4px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.wpbn-modal__head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 12px 12px 20px;border-bottom:1px solid #dcdcde}
+.wpbn-modal__title{flex:1 1 auto;margin:0;font-size:16px;line-height:1.4}
+.wpbn-modal__layer{color:#646970;font-weight:400}
+.wpbn-modal__close{display:flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:4px;background:none;color:#50575e;cursor:pointer}
+.wpbn-modal__close:hover,.wpbn-modal__close:focus{background:#f0f0f1;color:#1d2327}
+.wpbn-modal__body{padding:20px;overflow:auto;min-height:0}
+.wpbn-modal__body>.description{margin:0 0 12px}
+.wpbn-modal__foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid #dcdcde}
+.wpbn-focus{display:flex;align-items:flex-start;gap:16px}
+.wpbn-focus__main{display:flex;flex:1 1 auto;justify-content:center;min-width:0}
+.wpbn-focus__stage{position:relative;flex:0 1 auto;line-height:0;cursor:crosshair;touch-action:none;user-select:none;border-radius:4px;outline-offset:2px}
+.wpbn-focus__stage.is-over-layer{cursor:move}
+.wpbn-focus__stage:focus-visible{outline:2px solid #2271b1}
+.wpbn-focus__point{position:absolute;width:22px;height:22px;border:2px solid #fff;border-radius:50%;background:rgba(34,113,177,.55);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none;z-index:2}
 /* The scene on each device, at its own height (WP Swiper shows crops here). */
-.wplm-focus__frames{display:flex;flex:0 0 150px;flex-direction:column;gap:10px}
-.wplm-focus__device{margin:0}
-.wplm-focus__frame{display:block;position:relative;overflow:hidden;border-radius:4px;background:#f0f0f1}
-.wplm-focus__device figcaption{display:flex;align-items:center;gap:4px;margin-top:4px;color:#646970;font-size:12px;line-height:1.3}
-.wplm-focus__device .dashicons{width:14px;height:14px;font-size:14px}
-.wplm-focus__value{margin:12px 0 0;color:#50575e}
-.wplm-focus__reset{margin-right:auto!important}
-.wplm-position-canvas{display:block;position:absolute;inset:0;overflow:hidden;border-radius:4px;background:#f0f0f1;pointer-events:none}
-.wplm-position-item{display:block;position:absolute;text-align:center;font-weight:800;line-height:1.05;overflow-wrap:anywhere;transform-origin:center}
-.wplm-position-item img{display:block;width:100%;height:100%;max-width:none}
+.wpbn-focus__frames{display:flex;flex:0 0 150px;flex-direction:column;gap:10px}
+.wpbn-focus__device{margin:0}
+.wpbn-focus__frame{display:block;position:relative;overflow:hidden;border-radius:4px;background:#f0f0f1}
+.wpbn-focus__device figcaption{display:flex;align-items:center;gap:4px;margin-top:4px;color:#646970;font-size:12px;line-height:1.3}
+.wpbn-focus__device .dashicons{width:14px;height:14px;font-size:14px}
+.wpbn-focus__value{margin:12px 0 0;color:#50575e}
+.wpbn-focus__reset{margin-right:auto!important}
+.wpbn-position-canvas{display:block;position:absolute;inset:0;overflow:hidden;border-radius:4px;background:#f0f0f1;pointer-events:none}
+.wpbn-position-item{display:block;position:absolute;text-align:center;font-weight:800;line-height:1.05;overflow-wrap:anywhere;transform-origin:center}
+.wpbn-position-item img{display:block;width:100%;height:100%;max-width:none}
 /* The layer being placed: outlined; the others dimmed. */
-.wplm-position-item.is-other{filter:brightness(.6) saturate(.7)}
-.wplm-position-target{outline:2px dashed #fff;outline-offset:-2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
-.wplm-focus__frame .wplm-position-target{outline-width:1px;outline-offset:-1px}
+.wpbn-position-item.is-other{filter:brightness(.6) saturate(.7)}
+.wpbn-position-target{outline:2px dashed #fff;outline-offset:-2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.wpbn-focus__frame .wpbn-position-target{outline-width:1px;outline-offset:-1px}
 /* What the layer leaves uncovered. */
-.wplm-position-gap{position:absolute;z-index:1;background:repeating-linear-gradient(45deg,rgba(214,54,56,.65) 0 2px,rgba(214,54,56,.12) 2px 8px);pointer-events:none}
-.wplm-position-warning{display:flex;align-items:flex-start;gap:6px;margin:10px 0 0;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;line-height:1.45}
-.wplm-position-warning[hidden]{display:none}
-.wplm-position-warning .dashicons{flex:0 0 auto;color:#dba617}
-@media(max-width:782px){.wplm-focus{flex-direction:column}.wplm-focus__main{width:100%}.wplm-focus__frames{flex:none;flex-direction:row;align-items:flex-start}}
+.wpbn-position-gap{position:absolute;z-index:1;background:repeating-linear-gradient(45deg,rgba(214,54,56,.65) 0 2px,rgba(214,54,56,.12) 2px 8px);pointer-events:none}
+.wpbn-position-warning{display:flex;align-items:flex-start;gap:6px;margin:10px 0 0;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;line-height:1.45}
+.wpbn-position-warning[hidden]{display:none}
+.wpbn-position-warning .dashicons{flex:0 0 auto;color:#dba617}
+@media(max-width:782px){.wpbn-focus{flex-direction:column}.wpbn-focus__main{width:100%}.wpbn-focus__frames{flex:none;flex-direction:row;align-items:flex-start}}
 
 /* Position in the layer settings: an outline button with its icon and name, the value under it. */
-#wplm-app .wplm-position-button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
-.wplm-position-button svg{display:block;width:18px;height:18px}
-.wplm-position .wplm-position-value{margin:6px 0 0}
+#wpbn-app .wpbn-position-button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
+.wpbn-position-button svg{display:block;width:18px;height:18px}
+.wpbn-position .wpbn-position-value{margin:6px 0 0}
+/* Image fit and Position: label and device icons over the select (icons at its right edge),
+   Position beside the select and as tall, its value over it. */
+.wpbn-fit-position{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px}
+.wpbn-fit-position>.wpbn-field__head{grid-column:1;grid-row:1}
+/* The drawn phone icon (not its button's padding) at the select's right edge, as by the sliders. */
+.wpbn-fit-position>.wpbn-field__head .wpbn-devices{margin-right:-6px}
+.wpbn-fit-position>select{grid-column:1;grid-row:2;width:100%}
+#wpbn-app .wpbn-fit-position>.wpbn-position-button{grid-column:2;grid-row:2;align-self:stretch;min-height:0}
+/* The value over the button, at its right edge, on the label's line. */
+.wpbn-fit-position>.wpbn-position-value{grid-column:2;grid-row:1;align-self:center;justify-self:end;margin:0 0 4px}
 /* Image position: the whole photo on the stage, as in WP Swiper (the scene drawing is for text layers). */
-.wplm-focus__image{display:none}
-.wplm-modal.is-focus .wplm-focus__stage>.wplm-position-canvas{display:none}
-.wplm-modal.is-focus .wplm-focus__image{display:block;width:100%;height:100%;border-radius:4px;pointer-events:none}
-.wplm-modal.is-focus .wplm-position-target{outline:0;box-shadow:none}
+.wpbn-focus__image{display:none}
+.wpbn-modal.is-focus .wpbn-focus__stage>.wpbn-position-canvas{display:none}
+.wpbn-modal.is-focus .wpbn-focus__image{display:block;width:100%;height:100%;border-radius:4px;pointer-events:none}
+/* Image position: a checkerboard under the photo and in the device frames, so a transparent image's
+   empty parts show as empty (as in the layer thumbnails); an opaque photo covers it. */
+.wpbn-modal.is-focus .wpbn-focus__image,.wpbn-modal.is-focus .wpbn-position-canvas{background:repeating-conic-gradient(#e0e0e2 0% 25%,#fff 0% 50%) 50%/16px 16px}
+.wpbn-modal.is-focus .wpbn-position-target{outline:0;box-shadow:none}
+
+/* Text areas and links, as wide as the other fields. */
+.wpbn-field textarea,.wpbn-field input[type=url]{width:100%;max-width:100%;box-sizing:border-box}
+.wpbn-field textarea{min-height:60px;resize:vertical}
+/* Reset beside a slider's number: greyed while there is nothing to reset. */
+/* Close to its number (4px instead of the row's 12px), no room of its own on the right. */
+.wpbn-field__row .wpbn-reset{flex:0 0 17px;width:17px;margin-left:-8px;color:#50575e}
+.wpbn-field__row .wpbn-reset:hover{color:var(--wpbn-accent)}
+.wpbn-field__row .wpbn-reset:disabled{color:#dcdcde}
+/* The device icons (the drawn icon, not its button's padding) line up with the number's right edge; Reset in a column of its own beside it. */
+.wpbn-field:has(.wpbn-reset) .wpbn-field__head .wpbn-devices{margin-right:15px}
+.wpbn-field__row .wpbn-reset svg{width:15px;height:15px}
+/* A setting that does not apply now: greyed, its value kept (as in WP Swiper). */
+.wpbn-field.is-disabled{opacity:.5}
+.wpbn-field.is-disabled *{cursor:not-allowed}
+/* Switches: WP Swiper's look for checkboxes. */
+.wpbn-switch{position:relative;display:flex;align-items:center;gap:8px;min-height:26px;font-weight:500;cursor:pointer}
+.wpbn-switch input{position:absolute;width:1px;height:1px;margin:0;opacity:0}
+.wpbn-switch__track{position:relative;flex:0 0 32px;width:32px;height:18px;border-radius:9px;background:#8c8f94;transition:background .15s}
+.wpbn-switch__track:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.wpbn-switch input:checked+.wpbn-switch__track{background:var(--wpbn-accent)}
+.wpbn-switch input:checked+.wpbn-switch__track:after{transform:translateX(14px)}
+.wpbn-switch input:focus-visible+.wpbn-switch__track{outline:2px solid var(--wpbn-accent);outline-offset:2px}
+.wpbn-field--check{margin-bottom:10px}
+/* Placement: another scene uses the same class. */
+.wpbn-target-warning{display:flex;align-items:flex-start;gap:6px;margin:-6px 0 12px;padding:8px 10px;border-left:4px solid #dba617;background:#fcf9e8;font-size:12px;line-height:1.45}
+.wpbn-target-warning[hidden]{display:none}
+.wpbn-target-warning .dashicons{flex:0 0 auto;width:16px;height:16px;font-size:16px;color:#dba617}
+
+/* A screen size of one's own for the previewed device, above the preview. */
+.wpbn-resolution{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-4px 0 12px;font-size:12px}
+.wpbn-resolution__label{font-weight:600;font-size:13px;margin-right:2px}
+.wpbn-resolution input[type=number]{width:84px;min-height:30px}
+.wpbn-resolution__hint{color:#646970;margin-left:4px}
+/* Shown in a plain frame (the device drawings have fixed proportions). */
+/* Light, as the screen; dark with the Dark button. */
+#wpbn-plain-frame{display:none;position:absolute;box-sizing:border-box;border:1px solid #dcdcde;border-radius:10px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+#wpbn-preview-stage.is-dark #wpbn-plain-frame{border-color:#1d2327;background:#1d2327;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+#wpbn-preview-stage.is-custom #wpbn-plain-frame{display:block}
+#wpbn-preview-stage.is-custom #wpbn-frame{z-index:1}

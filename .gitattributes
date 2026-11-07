@@ -4,7 +4,7 @@
 *.jpg binary
 *.svg text
 
-# Not part of the installable plugin (left out of wp-layer-motion.zip by git archive).
+# Not part of the installable plugin (left out of wp-banner.zip by git archive).
 /.github        export-ignore
 /.github/**     export-ignore
 /.gitattributes export-ignore

@@ -10,16 +10,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class WPLM_Whats_New {
+class WPBN_Whats_New {
 
 	// The version the site ran last (an update shows when it changes).
-	const OPTION_VERSION = 'wplm_version';
+	const OPTION_VERSION = 'wpbn_version';
 	// The version updated from: the changes after it are new. '' unknown (an
 	// update from before this option): the current version's only.
-	const OPTION_FROM = 'wplm_updated_from';
+	const OPTION_FROM = 'wpbn_updated_from';
 	// Per user: the version whose changes they have seen.
-	const META_SEEN = 'wplm_seen_version';
-	const AJAX      = 'wplm_whats_new_seen';
+	const META_SEEN = 'wpbn_seen_version';
+	const AJAX      = 'wpbn_whats_new_seen';
 
 	/** @var array Versions to show (entries()), per user ID, once worked out. */
 	private static $entries = array();
@@ -40,15 +40,15 @@ class WPLM_Whats_New {
 	 */
 	public static function track_version() {
 		$stored = get_option( self::OPTION_VERSION );
-		if ( WPLM_VERSION === $stored ) {
+		if ( WPBN_VERSION === $stored ) {
 			return;
 		}
 		if ( false === $stored ) {
-			$from = self::has_scenes() ? '' : WPLM_VERSION;
+			$from = self::has_scenes() ? '' : WPBN_VERSION;
 		} else {
 			$from = (string) $stored;
 		}
-		update_option( self::OPTION_VERSION, WPLM_VERSION );
+		update_option( self::OPTION_VERSION, WPBN_VERSION );
 		update_option( self::OPTION_FROM, $from );
 		self::$entries = array();
 	}
@@ -56,7 +56,7 @@ class WPLM_Whats_New {
 	private static function has_scenes() {
 		$found = get_posts(
 			array(
-				'post_type'      => 'wplm_scene',
+				'post_type'      => 'wpbn_scene',
 				'post_status'    => 'any',
 				'posts_per_page' => 1,
 				'fields'         => 'ids',
@@ -137,20 +137,20 @@ class WPLM_Whats_New {
 	 * @return array See entries().
 	 */
 	private static function work_out() {
-		$type = get_post_type_object( 'wplm_scene' );
+		$type = get_post_type_object( 'wpbn_scene' );
 		if ( ! $type || ! current_user_can( $type->cap->edit_posts ) ) {
 			return array();
 		}
 		$seen = (string) get_user_meta( get_current_user_id(), self::META_SEEN, true );
-		$from = '' !== $seen ? $seen : (string) get_option( self::OPTION_FROM, WPLM_VERSION );
-		if ( '' !== $from && version_compare( $from, WPLM_VERSION, '>=' ) ) {
+		$from = '' !== $seen ? $seen : (string) get_option( self::OPTION_FROM, WPBN_VERSION );
+		if ( '' !== $from && version_compare( $from, WPBN_VERSION, '>=' ) ) {
 			return array();
 		}
 
-		$readme = WPLM_DIR . 'readme.txt';
+		$readme = WPBN_DIR . 'readme.txt';
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local plugin file.
 		$text = is_readable( $readme ) ? (string) file_get_contents( $readme ) : '';
-		return self::between( self::parse_changelog( $text ), $from, WPLM_VERSION );
+		return self::between( self::parse_changelog( $text ), $from, WPBN_VERSION );
 	}
 
 	/**
@@ -164,7 +164,7 @@ class WPLM_Whats_New {
 		if ( ! $screen ) {
 			return '';
 		}
-		if ( 'wplm_scene' === $screen->post_type ) {
+		if ( 'wpbn_scene' === $screen->post_type ) {
 			return 'plugin';
 		}
 		return 'dashboard' === $screen->id ? 'dashboard' : '';
@@ -174,11 +174,11 @@ class WPLM_Whats_New {
 		if ( ! self::place() || ! self::entries() ) {
 			return;
 		}
-		wp_enqueue_style( 'wplm-whats-new', WPLM_URL . 'assets/css/whats-new.css', array(), wplm_asset( 'assets/css/whats-new.css' ) );
-		wp_enqueue_script( 'wplm-whats-new', WPLM_URL . 'assets/js/whats-new.js', array( 'jquery' ), wplm_asset( 'assets/js/whats-new.js' ), true );
+		wp_enqueue_style( 'wpbn-whats-new', WPBN_URL . 'assets/css/whats-new.css', array(), wpbn_asset( 'assets/css/whats-new.css' ) );
+		wp_enqueue_script( 'wpbn-whats-new', WPBN_URL . 'assets/js/whats-new.js', array( 'jquery' ), wpbn_asset( 'assets/js/whats-new.js' ), true );
 		wp_localize_script(
-			'wplm-whats-new',
-			'wplmWhatsNew',
+			'wpbn-whats-new',
+			'wpbnWhatsNew',
 			array(
 				'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
 				'action'   => self::AJAX,
@@ -193,10 +193,10 @@ class WPLM_Whats_New {
 			return;
 		}
 		printf(
-			'<div class="notice notice-info is-dismissible wplm-news-notice"><p>%s <button type="button" class="button-link wplm-news-open">%s</button></p></div>',
+			'<div class="notice notice-info is-dismissible wpbn-news-notice"><p>%s <button type="button" class="button-link wpbn-news-open">%s</button></p></div>',
 			/* translators: %s: plugin version. */
-			esc_html( sprintf( __( 'WP Layer Motion has been updated to %s.', 'wp-layer-motion' ), WPLM_VERSION ) ),
-			esc_html__( 'See what\'s new', 'wp-layer-motion' )
+			esc_html( sprintf( __( 'WP Banner has been updated to %s.', 'wp-banner' ), WPBN_VERSION ) ),
+			esc_html__( 'See what\'s new', 'wp-banner' )
 		);
 	}
 
@@ -206,34 +206,34 @@ class WPLM_Whats_New {
 			return;
 		}
 		?>
-		<div class="wplm-news" role="dialog" aria-modal="true" aria-labelledby="wplm-news-title" hidden>
-			<div class="wplm-news__backdrop"></div>
-			<div class="wplm-news__box">
-				<div class="wplm-news__head">
-					<h2 class="wplm-news__title" id="wplm-news-title">
+		<div class="wpbn-news" role="dialog" aria-modal="true" aria-labelledby="wpbn-news-title" hidden>
+			<div class="wpbn-news__backdrop"></div>
+			<div class="wpbn-news__box">
+				<div class="wpbn-news__head">
+					<h2 class="wpbn-news__title" id="wpbn-news-title">
 						<?php
 						/* translators: %s: plugin version. */
-						echo esc_html( sprintf( __( 'What\'s new in WP Layer Motion %s', 'wp-layer-motion' ), WPLM_VERSION ) );
+						echo esc_html( sprintf( __( 'What\'s new in WP Banner %s', 'wp-banner' ), WPBN_VERSION ) );
 						?>
 					</h2>
-					<button type="button" class="wplm-news__close" aria-label="<?php esc_attr_e( 'Close', 'wp-layer-motion' ); ?>"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>
+					<button type="button" class="wpbn-news__close" aria-label="<?php esc_attr_e( 'Close', 'wp-banner' ); ?>"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>
 				</div>
-				<div class="wplm-news__body">
+				<div class="wpbn-news__body">
 					<?php foreach ( $entries as $version => $items ) : ?>
 						<?php // The version's heading only when there are several. ?>
 						<?php if ( count( $entries ) > 1 ) : ?>
-							<h3 class="wplm-news__version"><?php echo esc_html( $version ); ?></h3>
+							<h3 class="wpbn-news__version"><?php echo esc_html( $version ); ?></h3>
 						<?php endif; ?>
-						<ul class="wplm-news__list">
+						<ul class="wpbn-news__list">
 							<?php foreach ( $items as $item ) : ?>
 								<li><?php echo esc_html( $item ); ?></li>
 							<?php endforeach; ?>
 						</ul>
 					<?php endforeach; ?>
 				</div>
-				<div class="wplm-news__foot">
-					<a class="wplm-news__all" href="<?php echo esc_url( WPLM_REPOSITORY . 'releases' ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'All releases', 'wp-layer-motion' ); ?></a>
-					<button type="button" class="button button-primary wplm-news__done"><?php esc_html_e( 'Got it', 'wp-layer-motion' ); ?></button>
+				<div class="wpbn-news__foot">
+					<a class="wpbn-news__all" href="<?php echo esc_url( WPBN_REPOSITORY . 'releases' ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'All releases', 'wp-banner' ); ?></a>
+					<button type="button" class="button button-primary wpbn-news__done"><?php esc_html_e( 'Got it', 'wp-banner' ); ?></button>
 				</div>
 			</div>
 		</div>
@@ -244,7 +244,7 @@ class WPLM_Whats_New {
 	 * Seen: not again for this user until the next version.
 	 */
 	public static function mark_seen() {
-		update_user_meta( get_current_user_id(), self::META_SEEN, WPLM_VERSION );
+		update_user_meta( get_current_user_id(), self::META_SEEN, WPBN_VERSION );
 		unset( self::$entries[ get_current_user_id() ] );
 	}
 

@@ -1,5 +1,5 @@
-# Publishes a release with wp-layer-motion.zip for every "vX.Y.Z" tag; sites with
-# the plugin then see the update (wp-layer-motion.php: wplm_updates()). Only
+# Publishes a release with wp-banner.zip for every "vX.Y.Z" tag; sites with
+# the plugin then see the update (wp-banner.php: wpbn_updates()). Only
 # once the tests (tests.yml) have passed for that tag: otherwise no release.
 name: Release
 
@@ -26,10 +26,10 @@ jobs:
       - name: Check that the tag matches the plugin version
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          header=$(grep -m1 -oP '^\s*\*\s*Version:\s*\K\S+' wp-layer-motion.php)
+          header=$(grep -m1 -oP '^\s*\*\s*Version:\s*\K\S+' wp-banner.php)
           stable=$(grep -m1 -oP '^Stable tag:\s*\K\S+' readme.txt)
           if [ "$tag" != "$header" ] || [ "$tag" != "$stable" ]; then
-            echo "::error::Tag v$tag, wp-layer-motion.php Version $header and readme.txt Stable tag $stable must match."
+            echo "::error::Tag v$tag, wp-banner.php Version $header and readme.txt Stable tag $stable must match."
             exit 1
           fi
 
@@ -42,11 +42,11 @@ jobs:
       # files). The plugin's own scripts and stylesheets then minified in the
       # copy that goes into the zip, under the same names (the repository
       # keeps them as written, comments and all).
-      - name: Build wp-layer-motion.zip
+      - name: Build wp-banner.zip
         run: |
           mkdir build
-          git archive --format=tar --prefix=wp-layer-motion/ HEAD | tar -x -C build
-          cd build/wp-layer-motion
+          git archive --format=tar --prefix=wp-banner/ HEAD | tar -x -C build
+          cd build/wp-banner
           for f in assets/js/*.js; do
             npx --yes terser@5.31.6 "$f" --compress --mangle --comments false -o "$f.min"
             mv "$f.min" "$f"
@@ -56,9 +56,9 @@ jobs:
             mv "$f.min" "$f"
           done
           cd ..
-          zip -qr ../wp-layer-motion.zip wp-layer-motion
+          zip -qr ../wp-banner.zip wp-banner
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: wp-layer-motion.zip
+          files: wp-banner.zip
           generate_release_notes: true

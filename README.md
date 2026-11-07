@@ -1,37 +1,38 @@
-# WP Layer Motion
+# WP Banner
 
-Standalone WordPress plugin for layered scroll scenes. No theme dependency. WPBakery integration is optional; use `[wp_layer_motion id="123"]` in any shortcode-compatible editor.
+WordPress plugin for banners drawn from layers that move as the page scrolls, for a sense of depth (the photo at the back, a title in the middle, a transparent cutout of the photo in front). No theme dependency; WPBakery integration is optional. Formerly "WP Layer Motion", then "WP Banner Motion" (both renamed before the first release; the plugin moves their data once and keeps their shortcodes working).
 
-Activate the plugin, open **WP Layer Motion → Add scene**, and add image and text layers. The top row is the frontmost layer: drag rows (or press Alt + Up / Down on a row) to change the depth; the icons in a row hide, duplicate or delete that layer. Select a layer to edit its image, position, scale, opacity, and horizontal / vertical travel. Publish the scene and paste its shortcode (Shortcode box, right column) into a page. The editor follows WP Swiper's design: menu, grey cards, sliders beside numbers, device icons on per-device fields. In the Position window, drag the layer (or click to put its centre there); it is outlined, the others dimmed, and the side frames show the scene on desktop, tablet and mobile at their own heights. If an image layer leaves part of the scene uncovered, that part is hatched and a warning names the devices, also when only its travel uncovers an edge while scrolling.
+## Using it
 
-For the mountain effect, use the original photo as the back layer (travel 0), a text layer in the middle, and a transparent cutout of the same photo in front (vertical travel -60). Keep the two images aligned. Slightly enlarge the foreground or provide extra image area below it to avoid exposed edges during motion. The plugin does not remove backgrounds from images.
+Activate the plugin, open **WP Banner → Add scene**, and add image and text layers. The top row is the frontmost layer: drag rows (or press Alt + Up / Down on a row) to change the depth; the icons in a row hide, duplicate or delete that layer. Publish the scene, then add the **WP Banner** element in WPBakery (under Woodmart's "Theme elements" when the theme is active; "Edit scene" and "Add scene" open in a new tab) or paste `[wp_banner id="123"]` into any shortcode-compatible editor.
 
-The editor provides isolated desktop, tablet and mobile previews, rotation, a black screen background, and a scroll simulation slider. Black screen changes the empty preview background; it does not hide scene content. Preview does not save changes and is redrawn only when Update is pressed (the button turns blue while there are changes it does not show yet). Device rotation changes the actual preview viewport, so responsive breakpoints match the website.
+**Placement.** By default the scene is a block of its own height (Scene settings → Size: px, vh, % of the block around it, or Auto, the free height of the parent column). With **Insert into blocks by class** on, an element standing inside a row, column or block with the scene's class becomes that block's background: as wide and tall as the block, behind its content (a short script right after the scene's markup moves it while the page loads; `frontend.js` does the same for scenes added later). The scene's height is then used only where the element is not inside such a block, or the block has no height of its own.
 
-Scene height is set per device as in WP Swiper: a number and a unit (px; vh, a share of the screen; %, of the block around the scene, which needs its own height; Auto, the free height of the parent column, measured by frontend.js; 500px where none). In the preview, % and Auto use a block as tall as the screen. The scene has no background colour of its own (the preview has a dark screen). Text sizes are configurable per device (the device icons beside the field switch the preview too; older scenes use the desktop text size on tablets). Breakpoints: mobile up to 767px, tablet up to 1024px. Motion respects reduced-motion preferences. Layers stay aligned until the scene top reaches the viewport top (0); travel reaches its full amount when the scene bottom reaches the viewport top (1). Scrolling backwards reverses it. No sticky scrolling is applied.
+**Layers.** Image layers: the image (one of its own for tablet / phone if needed), Image fit (Cover fills the scene; Contain shows the whole image, sized by Scale) and Position (the point kept in view where Cover crops the photo). Their width is always the scene's. Text layers: text with line breaks, tag (div, h1–h3, p), colour, size per device, font and weight, position and width. Scale and Opacity of image layers sit behind switches.
+
+**Motion**, each behind a switch: horizontal and vertical travel (px), Zoom (% added) and Opacity at the end (the layer goes from its Opacity to this one). Layers start moving when the scene's top reaches the top of the screen and reach the full amount when its bottom does; scrolling back reverses it. The image layers that fill the scene (Cover) grow together, around the scene's middle, just enough that their edges never show while they move, so a photo and its cutout stay aligned. Motion respects reduced-motion preferences.
+
+**Per device.** Position, scale, opacity, motion, image fit and image have a value per device: desktop always has one; tablet and mobile follow the larger screen (mobile → tablet → desktop) until they get their own (a green dot on the device icon). Clearing a tablet / mobile number, or its reset button, makes it follow again; on desktop the reset button restores the default. Breakpoints: mobile up to 767px, tablet up to 1024px.
+
+**Preview.** Desktop, tablet and phone frames (or a screen size of your own per device, in a plain frame), turned sideways, a dark screen, a placeholder page under the banner and a scroll simulation slider with Play. It uses the unsaved settings and is redrawn only when Update is pressed (the button turns blue while there are changes it does not show yet).
 
 ## Files
 
-- `wp-layer-motion.php`: plugin registration and loader.
-- `includes/class-wplm-settings.php`: defaults, validation and stored scene data.
-- `includes/class-wplm-admin.php`: editor, saving, authenticated preview.
-- `includes/class-wplm-render.php`: shortcode, markup and optional WPBakery element.
+- `wp-banner.php`: plugin registration, loader, updates, the one-off move of data from the old names.
+- `includes/class-wpbn-settings.php`: defaults, validation and stored scene data.
+- `includes/class-wpbn-admin.php`: editor, saving, authenticated preview.
+- `includes/class-wpbn-render.php`: shortcode and markup.
+- `includes/class-wpbn-wpbakery.php`, `assets/js/wpbakery.js`: the WPBakery element (scene list, Edit / Add scene).
 - `assets/js/admin.js`, `assets/css/admin.css`: layer editor and device previews.
-- `assets/js/frontend.js`, `assets/css/frontend.css`: independent rendering and scroll motion.
-- `includes/class-wplm-whats-new.php`, `assets/js/whats-new.js`, `assets/css/whats-new.css`: the "What's new" window after an update, from the Changelog in `readme.txt` (as WP Swiper's).
+- `assets/js/frontend.js`, `assets/css/frontend.css`: rendering and scroll motion.
+- `includes/class-wpbn-whats-new.php`, `assets/js/whats-new.js`, `assets/css/whats-new.css`: the "What's new" window after an update, from the Changelog in `readme.txt`.
 - `uninstall.php`: deleting the plugin under Plugins removes its scenes, settings and stored state; images stay in the media library.
 - `vendor/plugin-update-checker`: updates from GitHub releases, "View details" and "Check for updates" under the plugin (MIT).
 
-Scenes use the private `wplm_scene` post type and `_wplm_scene` post meta. Only administrators can edit or preview scenes. Only published scenes render publicly. Deactivation preserves scenes; deleting the plugin removes them.
+Scenes use the private `wpbn_scene` post type and `_wpbn_scene` post meta. Only administrators can edit or preview scenes. Only published scenes render publicly. Deactivation preserves scenes; deleting the plugin removes them.
 
-Development checks: `php tests/settings.php` and `node tests/motion.cjs`. These use isolated stubs and do not access the WordPress database.
-
-## Per-device layer settings
-
-Position, width, scale, opacity, horizontal / vertical travel and image fit have a value per device, as in WP Swiper: desktop always has one; tablet and mobile follow the larger screen (mobile → tablet → desktop) until they get their own (a green dot on the device icon). Clearing a tablet / mobile number makes it follow again. The device icons beside a field also switch the preview. Scenes saved with the former "Motion on mobile (%)" get that share of their travel as the mobile travel. Text size and scene height already had a value per device.
-
-Layers are reordered by dragging a row (grab cursor, the row follows the pointer) or with Alt + Up / Down. New layers come from the "Add element" block under the list: it opens on tiles, one per kind of element (Image, Text).
+Development checks: `php tests/settings.php` (run on every push by `.github/workflows/tests.yml`) and the browser tests `node tests/motion.cjs` (local; they need Playwright). These use isolated stubs and do not access the WordPress database.
 
 ## Releases
 
-Author: Relevant AS (https://relevant.no/). A release is a `vX.Y.Z` tag: `.github/workflows/release.yml` runs the checks (`tests.yml`), checks that the tag, the `Version:` header, `WPLM_VERSION` and `readme.txt`'s Stable tag match, and publishes `wp-layer-motion.zip` (dev files left out by `.gitattributes`, scripts and styles minified). Sites with the plugin then get the update under Plugins and, once updated, the "What's new" window with the new Changelog entries. Add each version's changes to `readme.txt` before tagging.
+Author: Relevant AS (https://relevant.no/). A release is a `vX.Y.Z` tag: `.github/workflows/release.yml` runs the checks (`tests.yml`), checks that the tag, the `Version:` header and `readme.txt`'s Stable tag match, and publishes `wp-banner.zip` (dev files left out by `.gitattributes`, scripts and styles minified). Sites with the plugin then get the update under Plugins and, once updated, the "What's new" window with the new Changelog entries. Add each version's changes to `readme.txt` before tagging.

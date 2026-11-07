@@ -1,16 +1,16 @@
 /**
- * WP Layer Motion "What's new" window (class-wplm-whats-new.php): opens by
+ * WP Banner "What's new" window (class-wpbn-whats-new.php): opens by
  * itself on the plugin's screens, from the notice on the Dashboard. Closing
  * it, or dismissing the notice, marks the version as seen for this user.
  */
 ( function ( $ ) {
 	'use strict';
 
-	var settings = window.wplmWhatsNew || {};
+	var settings = window.wpbnWhatsNew || {};
 
 	$( function () {
-		var $modal = $( '.wplm-news' ).appendTo( document.body );
-		var $notice = $( '.wplm-news-notice' );
+		var $modal = $( '.wpbn-news' ).appendTo( document.body );
+		var $notice = $( '.wpbn-news-notice' );
 		var opener = null;
 		var told = false;
 
@@ -30,13 +30,13 @@
 		function open() {
 			opener = document.activeElement;
 			$modal.prop( 'hidden', false );
-			$( document.body ).addClass( 'wplm-news-open' );
-			$modal.find( '.wplm-news__done' ).trigger( 'focus' );
+			$( document.body ).addClass( 'wpbn-news-open' );
+			$modal.find( '.wpbn-news__done' ).trigger( 'focus' );
 		}
 
 		function close() {
 			$modal.prop( 'hidden', true );
-			$( document.body ).removeClass( 'wplm-news-open' );
+			$( document.body ).removeClass( 'wpbn-news-open' );
 			$notice.remove();
 			seen();
 			if ( opener && opener.focus && document.body.contains( opener ) ) {
@@ -44,14 +44,14 @@
 			}
 		}
 
-		$modal.on( 'click', '.wplm-news__done, .wplm-news__close, .wplm-news__backdrop', close );
+		$modal.on( 'click', '.wpbn-news__done, .wpbn-news__close, .wpbn-news__backdrop', close );
 		$( document ).on( 'keydown', function ( e ) {
 			if ( e.key === 'Escape' && ! $modal.prop( 'hidden' ) ) {
 				close();
 			}
 		} );
 
-		$notice.on( 'click', '.wplm-news-open', open );
+		$notice.on( 'click', '.wpbn-news-open', open );
 		// The notice's own close button (WordPress adds it to .is-dismissible).
 		$notice.on( 'click', '.notice-dismiss', seen );
 
