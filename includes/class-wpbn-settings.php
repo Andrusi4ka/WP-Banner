@@ -2,25 +2,40 @@
 defined('ABSPATH') || exit;
 class WPBN_Settings {
     const META = '_wpbn_scene';
-    // Placement: with by_class the scene also goes into every element on the site with the class
-    // "target" (a row, a column, any block), taking that element's size, behind its content.
+    // Placement: "target", a class; the WP Banner element standing inside a row, column or block with it
+    // becomes that block's background, taking its size, behind its content (empty: not used).
     public static function defaults() {
-        return array('height'=>720, 'tablet_height'=>600, 'mobile_height'=>540, 'height_unit'=>'px', 'tablet_height_unit'=>'px', 'mobile_height_unit'=>'px',
-            'by_class'=>false, 'target'=>'', 'layers'=>array());
+        return array('height'=>720, 'tablet_height'=>null, 'mobile_height'=>null, 'height_unit'=>'auto', 'tablet_height_unit'=>null, 'mobile_height_unit'=>null,
+            'target'=>'', 'layers'=>array());
+    }
+    // Placement by class applies only while the (desktop) Height is Auto: the height then comes from the block
+    // around the scene. With another height the switch is greyed in the editor and does nothing; it is kept.
+    public static function placed_by_class($s) {
+        return $s['target'] !== '' && $s['height_unit'] === 'auto';
     }
     // A class as the block's "Extra class name" field takes it: one class, no dot.
     public static function css_class($value) {
         return is_string($value) ? substr(sanitize_html_class(ltrim(trim($value), '.')), 0, 80) : '';
     }
-    // Height per device: a number and its unit. Auto fills the parent column (frontend.js).
-    const UNITS = array('px', 'vh', '%', 'auto');
+    // Height per device: a number and its unit. Auto fills the parent column (frontend.js). Tablet and
+    // mobile without a unit of their own (null) take the larger screen's height and unit (mobile → tablet → desktop).
+    const UNITS = array('auto', 'px', 'vh', '%');
     const HEIGHTS = array('desktop'=>array('height','height_unit'), 'tablet'=>array('tablet_height','tablet_height_unit'), 'mobile'=>array('mobile_height','mobile_height_unit'));
     // Before frontend.js sizes an Auto scene, and where it finds no free height.
     const FALLBACK_HEIGHT = 500;
+    // Each device's height as [number, unit], the inherited ones filled in.
+    public static function heights($s) {
+        $out = array();
+        $last = null;
+        foreach (self::HEIGHTS as $device=>$keys) {
+            $out[$device] = $last = ($s[$keys[1]] ?? null) === null && $last ? $last : array($s[$keys[0]], $s[$keys[1]]);
+        }
+        return $out;
+    }
     public static function css_heights($s) {
         $css = array();
-        foreach (self::HEIGHTS as $device=>$keys) {
-            $css[$device] = $s[$keys[1]] === 'auto' ? self::FALLBACK_HEIGHT.'px' : $s[$keys[0]].$s[$keys[1]];
+        foreach (self::heights($s) as $device=>$h) {
+            $css[$device] = $h[1] === 'auto' ? self::FALLBACK_HEIGHT.'px' : $h[0].$h[1];
         }
         return $css;
     }
@@ -88,14 +103,19 @@ class WPBN_Settings {
     public static function sanitize($input) {
         $input = is_array($input) ? $input : array();
         $out = self::defaults();
-        foreach (self::HEIGHTS as $keys) {
+        $px = array('desktop'=>720.0, 'tablet'=>600.0, 'mobile'=>540.0);
+        foreach (self::HEIGHTS as $device=>$keys) {
             list($key, $unit) = $keys;
-            $out[$unit] = in_array($input[$unit] ?? null, self::UNITS, true) ? $input[$unit] : 'px';
+            // Auto by default on desktop: the height of the block around the scene. Tablet and mobile
+            // follow the larger screen unless they have a unit of their own (then a number too).
+            $out[$unit] = in_array($input[$unit] ?? null, self::UNITS, true) ? $input[$unit] : $out[$unit];
+            if ($out[$unit] === null) { $out[$key] = null; continue; }
             // px: a fixed size; vh and %: a share (100 = all of it). Auto keeps the number for a later switch back.
-            $out[$key] = in_array($out[$unit], array('vh','%'), true) ? self::number($input[$key] ?? null, 100, 1, 200) : self::number($input[$key] ?? null, $out[$key], $out[$unit] === 'px' ? 160 : 1, 2400);
+            $out[$key] = in_array($out[$unit], array('vh','%'), true) ? self::number($input[$key] ?? null, 100, 1, 200) : self::number($input[$key] ?? null, $px[$device], $out[$unit] === 'px' ? 160 : 1, 2400);
         }
         $out['target'] = self::css_class($input['target'] ?? '');
-        $out['by_class'] = !empty($input['by_class']) && $out['target'] !== '';
+        // Scenes saved with the former "Insert into blocks by class" switch off: no class.
+        if (array_key_exists('by_class', $input) && empty($input['by_class'])) { $out['target'] = ''; }
         foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, 40) as $raw) {
             if (!is_array($raw)) { continue; }
             $l = self::layer();

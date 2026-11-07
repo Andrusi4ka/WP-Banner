@@ -53,7 +53,7 @@ class WPBN_Admin {
         $boot['classes'] = array();
         foreach (get_posts(array('post_type'=>'wpbn_scene', 'post_status'=>array('publish','draft','pending','private','future'), 'numberposts'=>200, 'exclude'=>array($post->ID))) as $other) {
             $o = WPBN_Settings::get($other->ID);
-            if ($o['by_class']) { $boot['classes'][$o['target']] = $other->post_title !== '' ? $other->post_title : '#'.$other->ID; }
+            if (WPBN_Settings::placed_by_class($o)) { $boot['classes'][$o['target']] = $other->post_title !== '' ? $other->post_title : '#'.$other->ID; }
         }
         $boot['icons'] = array('position'=>self::icon('position.svg'), 'clone'=>self::icon('clone.svg'), 'reset'=>self::icon('reset.svg'));
         echo '<div id="wpbn-app"><script type="application/json" id="wpbn-boot">'.wp_json_encode($boot, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).'</script>';
@@ -93,11 +93,11 @@ class WPBN_Admin {
     // preview that block is as tall as the screen (a full-height row).
     public static function preview_markup($s) {
         // Placed by class (it fills its block): shown in a block as tall as the screen.
-        if ($s['by_class']) {
+        if (WPBN_Settings::placed_by_class($s)) {
             return '<div class="wpbn-host" style="position:relative;height:100vh">'.WPBN_Render::markup($s, array('fill'=>true)).'</div>';
         }
         $markup = WPBN_Render::markup($s);
-        if (array_intersect(array($s['height_unit'], $s['tablet_height_unit'], $s['mobile_height_unit']), array('%','auto'))) {
+        if (array_intersect(array_column(WPBN_Settings::heights($s), 1), array('%','auto'))) {
             $markup = '<div class="wpbn-preview-parent" style="height:100vh">'.$markup.'</div>';
         }
         return $markup;
@@ -121,7 +121,9 @@ class WPBN_Admin {
         .'<div class="wpbn-page__media"><span class="wpbn-page__picture"></span><div><span class="wpbn-page__subtitle"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span><span class="wpbn-page__button"></span></div></div>'
         .'<div class="wpbn-page__cards"><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span></div></main>';
     // The placeholder page's look; the Dark button gives the body .wpbn-black (admin.js).
-    const PAGE_CSS = 'body{margin:0;background:#fff;--wpbn-ph:#e6e7e9;--wpbn-ph-strong:#d3d5d8;--wpbn-ph-bg:#fff}'
+    // Thin scrollbars, as light or dark as the screen.
+    const PAGE_CSS = 'html{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.28) transparent}html:has(body.wpbn-black){scrollbar-color:rgba(255,255,255,.28) transparent}'
+        .'body{margin:0;background:#fff;--wpbn-ph:#e6e7e9;--wpbn-ph-strong:#d3d5d8;--wpbn-ph-bg:#fff}'
         .'body.wpbn-black{background:#121212;--wpbn-ph:#2a2c2f;--wpbn-ph-strong:#3a3d41;--wpbn-ph-bg:#121212}'
         .'.wpbn-page{box-sizing:border-box;min-height:100vh;max-width:1140px;margin:0 auto;padding:clamp(32px,6vw,72px) clamp(16px,4vw,40px);background:var(--wpbn-ph-bg)}'
         .'.wpbn-page span{display:block;border-radius:6px;background:var(--wpbn-ph)}'

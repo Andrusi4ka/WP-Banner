@@ -20,7 +20,7 @@ class WPBN_Render {
         if (get_post_type($id) !== 'wpbn_scene' || get_post_status($id) !== 'publish') { return ''; }
         self::assets();
         $s = WPBN_Settings::get($id);
-        return self::markup($s, array('host'=>$s['by_class'] ? $s['target'] : ''));
+        return self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : ''));
     }
     // Placed by class: the scene moves into the nearest block around it with that class, as its
     // background, as soon as the browser reads it (so it does not show first where it stands);
@@ -33,15 +33,14 @@ class WPBN_Render {
     // then the height decides, in the unit the scene's height is set in.
     private static function size_for($s, $l, $device, $id) {
         list($screen_w, $screen_h) = self::SCREENS[$device];
-        $keys = WPBN_Settings::HEIGHTS[$device];
+        list($h_number, $unit) = WPBN_Settings::heights($s)[$device];
         $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * 1.15;
         $width_vw = WPBN_Settings::resolved($l, 'width')[$device] * $grow;
         $meta = wp_get_attachment_metadata($id);
         $ratio = !empty($meta['width']) && !empty($meta['height']) ? $meta['width'] / $meta['height'] : 0;
         if (!$ratio) { return round($width_vw).'vw'; }
-        $unit = $s[$keys[1]];
-        $height = $unit === 'px' ? array($s[$keys[0]] * $grow * $ratio, 'px', $s[$keys[0]] * $grow * $ratio)
-            : array(($unit === 'vh' ? $s[$keys[0]] : 100) * $grow * $ratio, 'vh', ($unit === 'vh' ? $s[$keys[0]] : 100) / 100 * $screen_h * $grow * $ratio);
+        $height = $unit === 'px' ? array($h_number * $grow * $ratio, 'px', $h_number * $grow * $ratio)
+            : array(($unit === 'vh' ? $h_number : 100) * $grow * $ratio, 'vh', ($unit === 'vh' ? $h_number : 100) / 100 * $screen_h * $grow * $ratio);
         $by_width = $width_vw / 100 * $screen_w;
         $cover = WPBN_Settings::resolved($l, 'fit')[$device] !== 'contain';
         $use_height = $cover ? $height[2] > $by_width : $height[2] < $by_width;
@@ -84,7 +83,7 @@ class WPBN_Render {
         $h = WPBN_Settings::css_heights($s);
         $style = '--wpbn-height:'.$h['desktop'].';--wpbn-tablet-height:'.$h['tablet'].';--wpbn-mobile-height:'.$h['mobile'].';';
         $auto = array();
-        foreach (WPBN_Settings::HEIGHTS as $device=>$keys) { if (!$fill && $s[$keys[1]] === 'auto') { $auto[] = $device; } }
+        foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
         $html = '<section class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"' : '').'>';
         $loaded = false;
         foreach ($s['layers'] as $i=>$l) {

@@ -133,8 +133,12 @@
         return respRange(base, label, o).replace(/<div class="wpbn-field__head"><label for="[^"]*">[^<]*<\/label>/, '<div class="wpbn-field__head">' + toggle);
     }
     // Placed by class: the scene fills its block.
-    const filling = () => !!scene.by_class;
-    const NEEDS = {byclass: () => !!scene.by_class};
+    // Placement by class only with the desktop Height on Auto (as WPBN_Settings::placed_by_class()).
+    const autoHeight = () => scene.height_unit === 'auto';
+    const filling = () => !!String(scene.target || '').trim() && autoHeight();
+    const NEEDS = {autoheight: autoHeight};
+    // A help text behind an "i" icon, shown on a dark tooltip on hover and keyboard focus (as WP Swiper's).
+    const tip = text => '<span class="wpbn-tip" tabindex="0" role="img" aria-label="' + escape(text) + '" data-tip="' + escape(text) + '"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span></span>';
     const needs = (html, when) => html.replace('<div class="wpbn-field', '<div data-needs="' + when + '" class="wpbn-field');
     function applyStates() {
         $('settings').querySelectorAll('[data-needs]').forEach(el => {
@@ -256,33 +260,55 @@
         '%': 'A share of the height of the block around the scene; that block needs a height of its own (otherwise 500px).',
         auto: 'Fills the free height of the column around the scene; where there is none, 500px. In the preview: the screen height.'
     };
+    // A device's height as [number, unit]: tablet and mobile without a unit of their own take the larger screen's (as WPBN_Settings::heights()).
+    function effHeight(d) {
+        const [key, unitKey] = HEIGHT[d];
+        return scene[unitKey] == null && d !== 'desktop' ? effHeight(UP[d]) : [scene[key], scene[unitKey]];
+    }
+    const UNIT_NAMES = {auto:'Auto', px:'px', vh:'vh', '%':'%'};
     function heightField() {
-        const [key, unitKey] = HEIGHT[device()], unit = scene[unitKey], id = 'wpbn-f-' + key, off = unit === 'auto';
+        const d = device(), [key, unitKey] = HEIGHT[d], own = scene[unitKey] != null, [number, unit] = effHeight(d), id = 'wpbn-f-' + key, off = unit === 'auto';
         const [min, max] = unit === 'px' ? [160, 2400] : unit === 'auto' ? [1, 2400] : [1, 200];
-        return '<div class="wpbn-field wpbn-field--height">' + head(id, 'Height', devices()) + '<div class="wpbn-field__row">'
-            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(scene[key]) + '"' + (off ? ' disabled' : '') + '>'
-            + '<select data-key="' + unitKey + '" aria-label="Height unit">' + ['px', 'vh', '%', 'auto'].map(u => '<option value="' + u + '"' + (u === unit ? ' selected' : '') + '>' + (u === 'auto' ? 'Auto' : u) + '</option>').join('') + '</select>'
-            + '</div>' + note(filling() ? 'Inside a block with the class, the scene takes the block\'s height; this one is used elsewhere, and where the block has no height of its own.' : UNIT_HELP[unit]) + '</div>';
+        const inherit = d === 'desktop' ? '' : '<option value=""' + (own ? '' : ' selected') + '>Inherit</option>';
+        const dots = {tablet:scene.tablet_height_unit != null, mobile:scene.mobile_height_unit != null};
+        return '<div class="wpbn-field wpbn-field--height">' + head(id, 'Height', heightTip() + devices(dots)) + '<div class="wpbn-field__row">'
+            + '<input id="' + id + '" data-height="' + d + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
+            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="height"') + ' aria-label="Height unit">' + inherit + ['auto', 'px', 'vh', '%'].map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
+            + '</div><p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p></div>';
+    }
+    // With a class to fill blocks by: where this height is used, behind an "i" beside Height (its unit's help, under it, gives way).
+    function heightTip() {
+        return tip('Inside a block with the class, the scene takes the block\'s height; this one is used elsewhere, and where the block has no height of its own.').replace('<span class="wpbn-tip"', '<span class="wpbn-tip" id="wpbn-height-tip"' + (filling() ? '' : ' hidden'));
+    }
+    function heightHelp() {
+        const tipEl = $('height-tip'), note = $('height-note');
+        if (tipEl) tipEl.hidden = !filling();
+        if (note) note.hidden = filling();
     }
     // The class to add to a block; a warning when another scene uses it too.
     // Shown only while "Insert into blocks by class" is on (its value is kept while off).
     function targetField() {
-        if (!scene.by_class) return '';
-        return field('target', 'Class', 'text', 'Add it to a row, column or block (in WPBakery, its "Extra class name" field) and put the WP Banner element inside that block. One class, without the dot.')
+        const id = 'wpbn-f-target', help = 'Only with Height on Auto. Add this class to a row, column or block (in WPBakery: its "Extra class name") and put the WP Banner element inside it: the scene becomes that block\'s background, as wide and tall as the block, behind its content. One class, without the dot. Empty: not used.';
+        return needs('<div class="wpbn-field">' + head(id, 'Insert into blocks by class', tip(help)) + '<input id="' + id + '" data-key="target" type="text" value="' + escape(scene.target || '') + '" placeholder="wpbn-scene-' + boot.postId + '"></div>', 'autoheight')
             + '<p class="wpbn-target-warning" id="wpbn-target-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span></span></p>';
     }
     function targetWarning() {
         const box = $('target-warning');
         if (!box) return;
-        const name = String(scene.target || '').trim().replace(/^\./, ''), other = scene.by_class && boot.classes && boot.classes[name];
+        const name = String(scene.target || '').trim().replace(/^\./, ''), other = name && boot.classes && boot.classes[name];
         box.hidden = !other;
         box.lastChild.textContent = other ? 'The scene "' + other + '" uses this class too: both would go into its blocks.' : '';
     }
     // A new unit: a number that makes sense in it (720vh would be seven screens).
+    // Tablet / mobile back to the larger screen: no number either; a unit of its own: a number from the larger screen's.
     function unitChanged(device) {
         const [key, unitKey, fallback] = HEIGHT[device], unit = scene[unitKey];
-        if ((unit === 'vh' || unit === '%') && scene[key] > 200) scene[key] = 100;
-        else if (unit === 'px' && scene[key] < 160) scene[key] = fallback;
+        if (unit == null) scene[key] = null;
+        else {
+            if (scene[key] == null) scene[key] = device === 'desktop' ? fallback : effHeight(UP[device])[0];
+            if ((unit === 'vh' || unit === '%') && scene[key] > 200) scene[key] = 100;
+            else if (unit === 'px' && scene[key] < 160) scene[key] = fallback;
+        }
         settings();
     }
     function settings() {
@@ -294,8 +320,7 @@
         } else if (selected < 0) {
             html = '<legend>Scene settings</legend>'
                 + card('Size', heightField())
-                + card('Placement', check('by_class', 'Insert into blocks by class', 'When the WP Banner element (or its shortcode) stands inside a row, column or block with the class below, the scene becomes that block\'s background: as wide and tall as the block, behind its content. Elsewhere it shows as usual.')
-                    + targetField());
+                + card('Placement', targetField());
         } else {
             const l = scene.layers[selected];
             const d = device();
@@ -334,14 +359,25 @@
     function changed() { sync(); $('refresh').classList.add('is-stale'); }
     app.addEventListener('input', event => {
         const input = event.target;
+        // Height: a number typed on tablet / mobile gives it a unit of its own too (the one it followed);
+        // emptied there, it follows the larger screen again.
+        if (input.dataset.height) {
+            const d = input.dataset.height, [hk, uk] = HEIGHT[d];
+            if (input.value === '' && d !== 'desktop') { scene[uk] = null; scene[hk] = null; settings(); const again = $('f-' + hk); if (again) again.focus(); changed(); return; }
+            if (!Number.isFinite(input.valueAsNumber)) return;
+            if (scene[uk] == null) scene[uk] = effHeight(d)[1];
+            scene[hk] = Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber));
+            refreshDots(input.closest('.wpbn-field'));
+            const dot = input.closest('.wpbn-field').querySelector('[data-field-device="' + d + '"]'); if (dot && d !== 'desktop') dot.classList.add('has-value');
+            changed(); return;
+        }
         const key = input.dataset.key || input.dataset.rangeFor;
         if (!key) return;
         const obj = current();
         if (input.type === 'checkbox') {
             obj[key] = input.checked;
             // Placement: a class ready to copy; the height note follows it.
-            if (key === 'by_class' || /^use_/.test(key)) {
-                if (key === 'by_class' && input.checked && !scene.target) scene.target = 'wpbn-scene-' + boot.postId;
+            if (/^use_/.test(key)) {
                 settings(); const again = $('settings').querySelector('[data-key="' + key + '"]'); if (again) again.focus();
                 list(); changed(); return;
             }
@@ -366,7 +402,7 @@
         } else obj[key] = input.value;
         refreshDots(input.closest('.wpbn-field')); refreshReset(input.closest('.wpbn-field'));
         if (key === 'name' || key === 'color') list();
-        if (key === 'target') targetWarning();
+        if (key === 'target') { targetWarning(); heightHelp(); }
         changed();
     });
     app.addEventListener('change', event => {
@@ -643,7 +679,7 @@
     const SIZES = {desktop:[1280], tablet:[820], mobile:[390]};
     // The scene's height on a device in pixels; % and Auto as in the preview (a block as tall as the screen).
     const SCREEN = {desktop:721, tablet:1101, mobile:844};
-    function sceneHeight(d) { const [key, unitKey] = HEIGHT[d], v = scene[key], u = scene[unitKey]; return u === 'px' ? v : u === 'auto' ? SCREEN[d] : SCREEN[d] * v / 100; }
+    function sceneHeight(d) { const [v, u] = effHeight(d); return u === 'px' ? v : u === 'auto' ? SCREEN[d] : SCREEN[d] * v / 100; }
     const positionModal=document.createElement('div');
     positionModal.className='wpbn-modal wpbn-modal--position';positionModal.hidden=true;
     positionModal.setAttribute('role','dialog');positionModal.setAttribute('aria-modal','true');positionModal.setAttribute('aria-labelledby','wpbn-position-title');

@@ -45,11 +45,16 @@ function motion_of($markup, $index) { preg_match_all('/data-motion="([^"]+)"/', 
 $bad=WPBN_Settings::sanitize(array('height'=>99999,'background'=>'red;position:fixed','label'=>'<b>Mountains</b>','layers'=>array(array('type'=>'script','name'=>'<b>name</b>','text'=>'<script>alert(1)</script>','x'=>-9999,'opacity'=>500,'image'=>array(1),'color'=>array('bad'),'move_y'=>array(1),'hidden'=>true))));
 check($bad['height']===2400, 'Height must be bounded');
 check(!isset($bad['background']) && strpos(WPBN_Render::markup($bad),'background')===false, 'No scene background: the preview has its own page');
-check($bad['height_unit']==='px','Height unit defaults to px');
+check($bad['height_unit']==='auto' && WPBN_Settings::defaults()['mobile_height_unit']===null,'Height unit defaults to Auto; tablet and mobile follow');
+$follow=WPBN_Settings::sanitize(array('height'=>400,'height_unit'=>'px','tablet_height_unit'=>'','mobile_height_unit'=>'vh','mobile_height'=>60));
+check($follow['tablet_height']===null && WPBN_Settings::heights($follow)['tablet']===array(400.0,'px'),'Tablet without a unit of its own follows desktop, number and unit');
+check(WPBN_Settings::heights($follow)['mobile']===array(60.0,'vh'),'Mobile with its own unit keeps it');
+check(WPBN_Settings::css_heights(WPBN_Settings::sanitize(array('height'=>400,'height_unit'=>'px')))===array('desktop'=>'400px','tablet'=>'400px','mobile'=>'400px'),'Heights inherited down to mobile');
+check(WPBN_Settings::sanitize(array('tablet_height_unit'=>'px'))['tablet_height']===600.0,'A unit of its own without a number: the device\'s usual height');
 $units=WPBN_Settings::sanitize(array('height_unit'=>'em;x','tablet_height_unit'=>'vh','tablet_height'=>500,'mobile_height_unit'=>'auto'));
-check($units['height_unit']==='px' && $units['tablet_height']===200,'Units allow-listed, shares bounded');
+check($units['height_unit']==='auto' && $units['tablet_height']===200,'Units allow-listed (unknown: Auto), shares bounded');
 $unitMarkup=WPBN_Render::markup($units);
-check(strpos($unitMarkup,'--wpbn-tablet-height:200vh')!==false && strpos($unitMarkup,'--wpbn-mobile-height:500px')!==false && strpos($unitMarkup,'data-auto="mobile"')!==false,'Units rendered, Auto marked for frontend.js');
+check(strpos($unitMarkup,'--wpbn-tablet-height:200vh')!==false && strpos($unitMarkup,'--wpbn-mobile-height:500px')!==false && strpos($unitMarkup,'data-auto="desktop mobile"')!==false,'Units rendered, Auto marked for frontend.js');
 check(!isset($bad['label']) && strpos(WPBN_Render::markup($bad),'aria-label')===false,'No scene label: scenes are decoration');
 check($bad['layers'][0]['type']==='image' && $bad['layers'][0]['image']===0,'Unexpected layer types and attachment arrays rejected');
 check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'overlay'))))['layers'][0]['type']==='image','Removed layer types (overlay) become image layers');
@@ -97,12 +102,16 @@ $fm=WPBN_Render::markup($fit);
 check(motion_of($fm,0)['fill']===array(true,true,false) && motion_of($fm,1)['fill']===array(false,false,false),'Edges kept hidden for Cover images only, per device');
 
 // Placement by class.
-$pc=WPBN_Settings::sanitize(array('by_class'=>true,'target'=>'.hero row<script>'));
-check($pc['target']==='herorowscript' && $pc['by_class'],'One class, no dot, nothing else');
-check(!WPBN_Settings::sanitize(array('by_class'=>true,'target'=>''))['by_class'],'No class, no placement by class');
+$pc=WPBN_Settings::sanitize(array('target'=>'.hero row<script>','height_unit'=>'auto'));
+check($pc['target']==='herorowscript' && !isset($pc['by_class']),'One class, no dot, nothing else; no switch');
+check(!WPBN_Settings::placed_by_class(WPBN_Settings::sanitize(array('target'=>'','height_unit'=>'auto'))),'No class, no placement by class');
+check(WPBN_Settings::sanitize(array('by_class'=>false,'target'=>'old'))['target']==='','A scene saved with the former switch off has no class');
+check(WPBN_Settings::sanitize(array('by_class'=>true,'target'=>'old'))['target']==='old','A scene saved with it on keeps its class');
 $hm=WPBN_Render::markup($pc, array('host'=>$pc['target']));
 check(strpos($hm,'data-host="herorowscript"')!==false && strpos($hm,'<script>(function(s){')!==false,'A scene placed by class carries its class and the script that makes it the background');
 check(strpos(WPBN_Render::markup($pc),'data-host')===false,'Without a host, no placement script');
+check(WPBN_Settings::placed_by_class($pc) && !WPBN_Settings::placed_by_class(array_merge($pc,array('height_unit'=>'px'))),'Placement by class only with the desktop Height on Auto');
+check(WPBN_Settings::sanitize(array_merge($pc,array('height_unit'=>'px')))['target']==='herorowscript','With another height the class is kept, just not used');
 
 // Per-device values and older scenes.
 $old=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_size'=>96))));

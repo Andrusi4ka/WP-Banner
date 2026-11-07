@@ -251,6 +251,14 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-switch input:checked+.wpbn-switch__track:after{transform:translateX(14px)}
 .wpbn-switch input:focus-visible+.wpbn-switch__track{outline:2px solid var(--wpbn-accent);outline-offset:2px}
 .wpbn-field--check{margin-bottom:10px}
+/* Help text behind an "i" icon: a dark tooltip on hover and keyboard focus (as WP Swiper's). */
+.wpbn-tip{position:relative;display:inline-flex;flex:0 0 auto;color:#a7aaad;cursor:help}
+.wpbn-tip[hidden]{display:none}
+.wpbn-tip .dashicons{width:16px;height:16px;font-size:16px}
+.wpbn-tip:hover,.wpbn-tip:focus-visible{color:var(--wpbn-accent);outline:none}
+.wpbn-tip::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:-8px;z-index:20;width:max-content;max-width:240px;padding:8px 10px;border-radius:4px;background:#1d2327;color:#fff;font-size:12px;font-weight:400;line-height:1.45;white-space:normal;box-shadow:0 2px 8px rgba(0,0,0,.2);opacity:0;visibility:hidden;transition:opacity .1s;pointer-events:none}
+.wpbn-tip:hover::after,.wpbn-tip:focus-visible::after{opacity:1;visibility:visible}
+.wpbn-field.is-disabled .wpbn-tip{opacity:1}
 /* Placement: another scene uses the same class. */
 .wpbn-target-warning{display:flex;align-items:flex-start;gap:6px;margin:-6px 0 12px;padding:8px 10px;border-left:4px solid #dba617;background:#fcf9e8;font-size:12px;line-height:1.45}
 .wpbn-target-warning[hidden]{display:none}
