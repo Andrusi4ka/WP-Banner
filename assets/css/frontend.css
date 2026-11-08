@@ -12,27 +12,66 @@
 .wpbn-scene .wpbn-layer picture{display:contents}
 .wpbn-scene .wpbn-layer img{display:block;width:100%;height:100%;max-width:none;border:0;border-radius:0;object-fit:var(--wpbn-fit,cover);object-position:var(--wpbn-focus,50% 50%)}
 /* A title: as wide as its text, at most its container's width (--wpbn-width), wrapping there. */
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width);height:auto;text-align:center;font-size:var(--wpbn-font);line-height:1.05;overflow-wrap:anywhere}
-/* The title's tag (div, h1, h2, h3, p) without the theme's margins and sizes; a heading keeps the theme's heading font unless the layer sets one. */
-.wpbn-scene .wpbn-layer--text>*{margin:0;padding:0;color:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;text-align:inherit;text-transform:none}
+.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width);height:auto;text-align:center;font-size:var(--wpbn-font);letter-spacing:var(--wpbn-ls,normal);line-height:1.05;overflow-wrap:anywhere}
+/* The title's tag (h1–h5) without the theme's margins and sizes, with the title's spacing, case, style and shadow; a heading keeps the theme's heading font unless the layer sets one. */
+.wpbn-scene .wpbn-layer--text>*{margin:0;padding:0;color:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;text-align:inherit;text-transform:inherit;font-style:inherit;text-shadow:inherit}
+/* A Text layer: its paragraphs and lists, as wide as its text, at most its container's width, wrapping there; without the
+   theme's margins and sizes. Aligned as its editor set (left by default). */
+.wpbn-scene .wpbn-layer--richtext{width:max-content;max-width:var(--wpbn-width);height:auto;text-align:left;font-size:var(--wpbn-font);line-height:1.5;overflow-wrap:anywhere}
+.wpbn-scene .wpbn-layer--richtext p,.wpbn-scene .wpbn-layer--richtext ul,.wpbn-scene .wpbn-layer--richtext ol,.wpbn-scene .wpbn-layer--richtext li{margin:0;padding:0;color:inherit;font-family:inherit;font-size:inherit;line-height:inherit}
+.wpbn-scene .wpbn-layer--richtext :is(p,h1,h2,h3,h4,h5,h6,ul,ol)+:is(p,h1,h2,h3,h4,h5,h6,ul,ol){margin-top:.75em}
+/* Headings: the theme's font, size and weight, without its margins, in the layer's colour (themes give headings one). */
+.wpbn-scene .wpbn-layer--richtext :is(h1,h2,h3,h4,h5,h6){margin:0;padding:0;color:inherit}
+/* Links: clickable (a layer lets clicks through), in the theme's link colour. */
+.wpbn-scene .wpbn-layer--richtext a{pointer-events:auto}
+.wpbn-scene .wpbn-layer--richtext ul,.wpbn-scene .wpbn-layer--richtext ol{padding-left:1.25em}
+.wpbn-scene .wpbn-layer--richtext ul{list-style:disc}
+.wpbn-scene .wpbn-layer--richtext ol{list-style:decimal}
 /* The words in <u> (as Woodmart's titles): the accent color, not underlined; without one of its own, the
    theme's primary color (Woodmart's), and without that, the title's. */
+/* An overlay's Blur: the layers under it (within the scene) blurred, per device. */
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur));backdrop-filter:blur(var(--wpbn-blur))}
+/* An overlay: its own Height per device (a share of the scene, px or vh). */
+.wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh,100%)}
+/* An image object (Fill the scene off): its own Height (Auto: the image's proportions at its width). */
+.wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh,auto)}
+/* A button (as WP Top Info Bar's, WoodMart's size presets): as wide as its text, clickable (a layer lets clicks
+   through), its colour (--wpbn-bc) the fill or the border, its text colour (--wpbn-bt). */
+.wpbn-scene .wpbn-layer--button{width:max-content;max-width:var(--wpbn-width);height:auto}
+/* A Shortcode layer: another plugin's element (a slider…) as wide as its Width, as tall as it is; it can be used
+   (clicked, swiped), unlike the other layers. */
+.wpbn-scene .wpbn-layer--shortcode{height:auto;pointer-events:auto}
+.wpbn-scene .wpbn-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;padding:var(--wpbn-bp,5px 20px);min-height:var(--wpbn-bh,42px);margin:0;font-family:inherit;font-size:var(--wpbn-bf,13px);font-weight:600;line-height:1.2;text-align:center;text-decoration:none;text-transform:uppercase;white-space:nowrap;border:2px solid var(--wpbn-bc);border-radius:0;background:var(--wpbn-bc);color:var(--wpbn-bt);box-shadow:none;transition:filter .15s}
+.wpbn-scene .wpbn-button--rounded{border-radius:5px}
+.wpbn-scene .wpbn-button--round{border-radius:35px}
+.wpbn-scene .wpbn-button--bordered{background:transparent}
+.wpbn-scene .wpbn-button--underline{background:transparent;border:0;border-bottom:3px solid var(--wpbn-bc);border-radius:0}
+.wpbn-scene a.wpbn-button{pointer-events:auto;cursor:pointer}
+.wpbn-scene a.wpbn-button:hover,.wpbn-scene a.wpbn-button:focus{filter:brightness(.9);color:var(--wpbn-bt);text-decoration:none}
+.wpbn-scene a.wpbn-button:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 .wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,currentColor));text-decoration:none}
-/* An image's Gradient: over its box, under nothing else of the scene; on a cutout only over the photo
-   (its own picture as the mask, placed as the image is: Image fit and Position). Clicks go through. */
-.wpbn-scene .wpbn-layer--gradient::after{content:"";position:absolute;inset:0;background:var(--wpbn-gradient);pointer-events:none;-webkit-mask:var(--wpbn-mask,none) var(--wpbn-focus,50% 50%)/var(--wpbn-fit,cover) no-repeat;mask:var(--wpbn-mask,none) var(--wpbn-focus,50% 50%)/var(--wpbn-fit,cover) no-repeat}
 @media(max-width:1024px){
 .wpbn-scene{height:var(--wpbn-tablet-height)}
+.wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
+.wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
+.wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-t,var(--wpbn-width))}
+.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px))}
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)))}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-t,var(--wpbn-left));top:var(--wpbn-top-t,var(--wpbn-top));width:var(--wpbn-width-t,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-t,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-t,var(--wpbn-scale,1));--wpbn-ax:var(--wpbn-anx-t,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-t,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-t,var(--wpbn-fit,cover))}
-.wpbn-scene .wpbn-layer--gradient::after{-webkit-mask:var(--wpbn-mask-t,var(--wpbn-mask,none)) var(--wpbn-focus,50% 50%)/var(--wpbn-fit-t,var(--wpbn-fit,cover)) no-repeat;mask:var(--wpbn-mask-t,var(--wpbn-mask,none)) var(--wpbn-focus,50% 50%)/var(--wpbn-fit-t,var(--wpbn-fit,cover)) no-repeat}
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
+.wpbn-scene .wpbn-layer--richtext{max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
+.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font));letter-spacing:var(--wpbn-tablet-ls,var(--wpbn-ls,normal))}
 }
 @media(max-width:767px){
 .wpbn-scene{height:var(--wpbn-mobile-height)}
+.wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
+.wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
+.wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-m,var(--wpbn-width))}
+.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px))}
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)))}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-m,var(--wpbn-left));top:var(--wpbn-top-m,var(--wpbn-top));width:var(--wpbn-width-m,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-m,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-m,var(--wpbn-scale,1));--wpbn-ax:var(--wpbn-anx-m,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-m,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-m,var(--wpbn-fit,cover))}
-.wpbn-scene .wpbn-layer--gradient::after{-webkit-mask:var(--wpbn-mask-m,var(--wpbn-mask-t,var(--wpbn-mask,none))) var(--wpbn-focus,50% 50%)/var(--wpbn-fit-m,var(--wpbn-fit,cover)) no-repeat;mask:var(--wpbn-mask-m,var(--wpbn-mask-t,var(--wpbn-mask,none))) var(--wpbn-focus,50% 50%)/var(--wpbn-fit-m,var(--wpbn-fit,cover)) no-repeat}
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
+.wpbn-scene .wpbn-layer--richtext{max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
+.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
 }
-@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}}
+@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-button{transition:none}}

@@ -35,6 +35,8 @@ class WPBN_Admin {
         $screen = get_current_screen();
         if (!$screen || $screen->post_type !== 'wpbn_scene' || $screen->base !== 'post') { return; }
         wp_enqueue_media();
+        // The Text layer's editor (WordPress's, wp.editor: admin.js startEditor()).
+        wp_enqueue_editor();
         // Pickr 1.9.1 (MIT), as in WP Swiper: every color field's picker (admin.js colorField()).
         wp_enqueue_style('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/classic.min.css', array(), '1.9.1');
         wp_enqueue_script('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/pickr.min.js', array(), '1.9.1', true);
@@ -51,7 +53,7 @@ class WPBN_Admin {
                 if ($image && !isset($images[$image])) { $images[$image] = wp_get_attachment_image_url($image,'large'); $info[$image] = self::image_info($image); }
             }
         }
-        $boot = array('scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID,
+        $boot = array('scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'overlayColor'=>WPBN_Settings::OVERLAY_COLOR, 'textColors'=>WPBN_Palette::tinymce_map(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID,
             // The color fields' palette: the theme's colors, black, white and greys.
             'palette'=>WPBN_Palette::colors(), 'primary'=>WPBN_Palette::primary(),
             // The Font list (Woodmart's fonts, with each one's weights); null without Woodmart: a text field.
@@ -78,16 +80,15 @@ class WPBN_Admin {
         echo '<select id="wpbn-device" aria-label="Preview device" hidden><option value="desktop">Desktop</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select>';
         echo '<button type="button" class="button" id="wpbn-rotate" aria-pressed="false" aria-label="Turn the tablet or phone sideways" title="Turn the tablet or phone sideways">'.self::icon('rotate.svg').'</button>';
         echo '<button type="button" class="button" id="wpbn-dark" aria-pressed="false" aria-label="Dark screen" title="Dark screen">'.self::icon('light-dark.svg').'</button>';
+        // A screen size of one's own for the device being previewed (admin.js), small, beside the Dark button; empty = the device's usual size.
+        echo '<div class="wpbn-resolution" role="group" aria-labelledby="wpbn-res-label"><span class="wpbn-resolution__label" id="wpbn-res-label">Screen</span>'
+            .'<input type="number" id="wpbn-res-w" min="240" max="3840" step="1" aria-label="Screen width (px)"><span aria-hidden="true">×</span>'
+            .'<input type="number" id="wpbn-res-h" min="240" max="2160" step="1" aria-label="Screen height (px)"><span>px</span></div>';
         echo '<div class="wpbn-toolbar__end"><div class="wpbn-preview-devices" role="group" aria-label="Preview device">';
         foreach (array('desktop'=>array('desktop','Desktop'), 'tablet'=>array('tablet','Tablet'), 'mobile'=>array('smartphone','Mobile')) as $device=>$d) {
             echo '<button type="button" class="wpbn-device-button" data-preview-device="'.$device.'" aria-pressed="'.($device==='desktop'?'true':'false').'"><span class="dashicons dashicons-'.$d[0].'" aria-hidden="true"></span>'.$d[1].'</button>';
         }
         echo '</div><button type="button" class="button" id="wpbn-refresh"><span class="dashicons dashicons-update" aria-hidden="true"></span>Update</button></div></div>';
-        // A screen size of one's own for the device being previewed (admin.js); empty = the device's usual size.
-        echo '<div class="wpbn-resolution" role="group" aria-labelledby="wpbn-res-label"><span class="wpbn-resolution__label" id="wpbn-res-label">Screen</span>'
-            .'<input type="number" id="wpbn-res-w" min="240" max="3840" step="1" aria-label="Screen width (px)"><span aria-hidden="true">×</span>'
-            .'<input type="number" id="wpbn-res-h" min="240" max="2160" step="1" aria-label="Screen height (px)"><span>px</span>'
-            .'<span class="wpbn-resolution__hint" id="wpbn-res-hint" role="status"></span></div>';
         echo '<div id="wpbn-preview-stage"><div id="wpbn-device-shell"><iframe id="wpbn-frame" name="wpbn_preview_frame" title="Banner preview" sandbox="allow-scripts allow-same-origin"></iframe></div></div><div class="wpbn-scrub"><button type="button" class="button" id="wpbn-play" aria-pressed="false" aria-label="Play the scroll" title="Play the scroll"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span></button><label for="wpbn-progress">Scroll simulation</label><input type="range" id="wpbn-progress" min="0" max="100" step="0.1" value="0"></div><p class="description">Preview uses unsaved settings: press Update to see your changes. Publish or update the scene to apply them on the site.</p></div></div></div>';
     }
     public static function save($id) {
@@ -117,10 +118,23 @@ class WPBN_Admin {
         if (!current_user_can('manage_options') || !current_user_can('edit_post',$id) || get_post_type($id)!=='wpbn_scene') { wp_die('Forbidden', '', array('response'=>403)); }
         if (!isset($_POST['scene']) || !is_string($_POST['scene']) || strlen($_POST['scene'])>200000) { wp_die('Invalid scene', '', array('response'=>400)); }
         $s = WPBN_Settings::sanitize(json_decode(wp_unslash($_POST['scene']),true));
+        // A Shortcode layer: the plugins' styles and scripts it loads, as on a page. Their assets are registered as on a
+        // page (wp_enqueue_scripts); what that queues for every page (the theme's) is dropped: only the shortcodes' own.
+        $shortcodes = (bool) array_filter($s['layers'], function ($l) { return $l['type'] === 'shortcode' && !$l['hidden'] && $l['shortcode'] !== ''; });
+        if ($shortcodes) {
+            do_action('wp_enqueue_scripts');
+            wp_styles()->queue = array();
+            wp_scripts()->queue = array();
+        }
         $markup = self::preview_markup($s);
+        $head = $foot = '';
+        if ($shortcodes) {
+            ob_start(); wp_print_styles(); $head = ob_get_clean();
+            ob_start(); wp_print_scripts(); $foot = ob_get_clean();
+        }
         nocache_headers();
         header('Content-Type: text/html; charset='.get_option('blog_charset'));
-        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style></head><body>'.$markup.self::PAGE.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script></body></html>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style>'.$head.'</head><body>'.$markup.self::PAGE.$foot.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script></body></html>';
         exit;
     }
     // Under the scene in the preview: the rest of a page, drawn as grey blocks (a heading, text,

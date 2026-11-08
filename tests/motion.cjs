@@ -104,6 +104,14 @@ const server=http.createServer((req,res)=>{
         await page.click('#wpbn-rotate');await page.waitForTimeout(100);
         assert.ok(await page.locator('#wpbn-preview-stage').evaluate(el=>el.getAnimations().some(a=>a.playState==='running')),'Rotation animates rather than jumping');
         assert.equal(await frame().evaluate(()=>innerWidth),844);
+        // Screen: the phone turned, its width and height swap places in the fields; typed so, it is kept upright.
+        assert.deepEqual([await page.locator('#wpbn-res-w').getAttribute('placeholder'),await page.locator('#wpbn-res-h').getAttribute('placeholder')],['844','390'],'Turned: the fields show the screen sideways');
+        await page.fill('#wpbn-res-w','900');await page.fill('#wpbn-res-h','400');
+        await page.click('#wpbn-rotate');await page.waitForTimeout(50);
+        assert.deepEqual([await page.locator('#wpbn-res-w').inputValue(),await page.locator('#wpbn-res-h').inputValue()],['400','900'],'Turned back: the same size, upright');
+        await page.click('#wpbn-rotate');await page.waitForTimeout(50);
+        assert.deepEqual([await page.locator('#wpbn-res-w').inputValue(),await page.locator('#wpbn-res-h').inputValue()],['900','400'],'Turned again: sideways');
+        await page.fill('#wpbn-res-w','');await page.fill('#wpbn-res-h','');
         await page.click('#wpbn-dark');
         assert.equal(await frame().locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(18, 18, 18)');
         const names=async()=>JSON.parse(await page.locator('#wpbn-data').inputValue()).layers.map(l=>l.name);
@@ -189,8 +197,8 @@ const server=http.createServer((req,res)=>{
         const box=async s=>page.locator(s).boundingBox();
         const sizeBox=await box('#wpbn-f-font_size');
         assert.equal(await page.locator('[id*="line_height"]').count(),0,'No Line height');
-        assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.wpbn-field--device-number')].every(f=>{const icons=f.querySelector('.wpbn-devices').getBoundingClientRect(),label=f.querySelector('label').getBoundingClientRect(),input=f.querySelector('input').getBoundingClientRect(),field=f.getBoundingClientRect();return Math.abs(icons.right-field.right)<1 && icons.bottom<=input.top && icons.left>label.right;})),'The device icons at the right, over the number');
-        assert.equal(await page.locator('.wpbn-field--device-number .wpbn-number-unit__unit').allTextContents().then(t=>t.join()),'px','px after the size');
+        assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.wpbn-field--device-number')].every(f=>{const icons=f.querySelector('.wpbn-devices').getBoundingClientRect(),label=f.querySelector('label').getBoundingClientRect(),input=f.querySelector('input').getBoundingClientRect(),field=f.getBoundingClientRect();return Math.abs(icons.right-field.right)<1 && icons.bottom<=input.top && icons.left>label.right && Math.abs((icons.top+icons.bottom)/2-(label.top+label.bottom)/2)<6;})),'The device icons at the right of the label, on its line, over the number');
+        assert.equal(await page.locator('.wpbn-field--device-number .wpbn-number-unit__unit').allTextContents().then(t=>t.join()),'px,px','px after the size and the spacing');
         await fieldDevice('tablet');
         assert.equal(await page.locator('#wpbn-f-tablet_font_size').inputValue(),'','Tablet: no size of its own');
         assert.equal(await page.locator('#wpbn-f-tablet_font_size').getAttribute('placeholder'),'120','An empty size shows the one it follows');
@@ -292,9 +300,9 @@ const server=http.createServer((req,res)=>{
         await toggle('use_move_x');
         // No name field: the name is given when a layer is added and shows in the list.
         assert.equal(await page.locator('[data-key="name"]').count(),0,'No layer name field');
-        // Layer thumbnails are square; a title shows its own icon (assets/images/title.svg).
+        // Layer thumbnails are square; a title shows its element's icon, dark.
         for (const box of await page.locator('.wpbn-layer-thumb').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.width,r.height];}))) assert.equal(box[0],box[1],'Square thumbnail');
-        await page.waitForFunction(()=>{const img=document.querySelector('.wpbn-layer-thumb--text img');return img&&img.complete&&img.naturalWidth>0&&/assets\/images\/title\.svg$/.test(img.src);});
+        assert.ok(await page.locator('.wpbn-layer-thumb--text .dashicons-editor-textcolor').count()>0 && await page.locator('.wpbn-layer-thumb--text img').count()===0 && await page.locator('.wpbn-layer-thumb--text').first().evaluate(el=>getComputedStyle(el).color)==='rgb(80, 87, 94)','A title: the Title element\'s icon, dark');
         // Opacity at the end: the layer goes from its Opacity to this one.
         await page.click('.wpbn-layer-row:has(.wpbn-layer-thumb--text) [data-select]');
         // The color field, as WP Swiper's: a swatch that opens Pickr with the palette (named), opacity, Cancel and Default.
@@ -455,14 +463,60 @@ const server=http.createServer((req,res)=>{
             assert.ok(Math.abs((edge==='left'?at.left:at.right)-(at.w-at.cw)/2)<1,'X '+(edge==='left'?'0%':'100%')+' on the site: the title at the container '+edge+' edge ('+JSON.stringify(at)+')');
         }
         await page.fill('[data-key="text"]','Discover <u>Norway</u> <b>now</b>');
-        // Gradient (as WP Swiper's): behind its switch; the bar adds a colour, a point is moved or deleted, its colour picked.
-        const gradientOf=async()=>(await textLayer()).gradient;
+        // Gradient: only overlays have one (2026-11-08): no switch for a title or an image.
+        assert.equal(await page.locator('[data-fill], .wpbn-gradient').count(),0,'No Gradient for a title');
+        const imageIndex=(await data()).layers.findIndex(l=>l.type==='image');
+        if (imageIndex>=0) { await page.click('[data-select="'+imageIndex+'"]');assert.equal(await page.locator('[data-fill], .wpbn-gradient').count(),0,'No Gradient for an image');await page.click(titleRow); }
+        // Letter spacing (per device, beside Font size), Case, Style and Shadow (behind its switch).
+        assert.ok(await page.evaluate(()=>{const a=document.querySelector('#wpbn-f-font_size').getBoundingClientRect(),b=document.querySelector('#wpbn-f-letter_spacing').getBoundingClientRect();return b.top>a.bottom && Math.abs(a.left-b.left)<1;}),'Letter spacing under Font size');
+        await page.fill('#wpbn-f-letter_spacing','4');
+        await page.selectOption('#wpbn-f-text_transform','uppercase');await page.selectOption('#wpbn-f-font_style','italic');
+        assert.ok((await textLayer()).letter_spacing===4 && (await textLayer()).text_transform==='uppercase' && (await textLayer()).font_style==='italic','Kept in the layer');
+        assert.deepEqual(await page.locator('#wpbn-font-sample').evaluate(el=>[el.style.textTransform,el.style.fontStyle,!!el.style.letterSpacing]),['uppercase','italic',true],'The font sample follows');
+        assert.equal(await page.locator('#wpbn-f-shadow_x').count(),0,'Shadow: its values hidden while it is off');
+        await toggle('use_shadow');
+        assert.equal(await page.locator('.wpbn-shadow .wpbn-field').count(),4,'On: its color, X, Y and Blur in a row');
+        await page.fill('#wpbn-f-shadow_x','3');await page.fill('#wpbn-f-shadow_y','5');await page.fill('#wpbn-f-shadow_blur','12');
+        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Title style"))').screenshot({path:path.join(__dirname,'title-style.png')});
+        await update();
+        const styled=await frame().locator('.wpbn-layer--text h2').evaluate(el=>{const c=getComputedStyle(el);return [c.letterSpacing,c.textTransform,c.fontStyle,c.textShadow];});
+        assert.ok(styled[0]==='4px' && styled[1]==='uppercase' && styled[2]==='italic' && /3px 5px 12px/.test(styled[3]),'On the site: spacing, case, style and shadow ('+styled.join(' | ')+')');
+        await page.click('[data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_letter_spacing','1');
+        assert.ok((await textLayer()).mobile_letter_spacing===1 && (await textLayer()).tablet_letter_spacing==null,'Its own on mobile');
+        await page.click('[data-field-device="desktop"]');
+        await toggle('use_shadow');await page.selectOption('#wpbn-f-text_transform','none');await page.selectOption('#wpbn-f-font_style','normal');await page.fill('#wpbn-f-letter_spacing','0');
+        await page.click('[data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_letter_spacing','');await page.click('[data-field-device="desktop"]');
+        assert.equal(await page.locator('[data-key="end_opacity"]').count(),0,'Hidden behind its switch');
+        await toggle('use_end_opacity');
+        await page.fill('[data-key="end_opacity"]','0');
+        await update();
+        await frame().waitForFunction(()=>typeof window.wpbnPreviewProgress==='function');
+        await frame().evaluate(()=>window.wpbnPreviewProgress(1));
+        assert.equal(await frame().locator('.wpbn-layer--text').evaluate(el=>getComputedStyle(el).opacity),'0','Faded out by the end');
+        await frame().evaluate(()=>window.wpbnPreviewProgress(0));
+        assert.equal(await frame().locator('.wpbn-layer--text').evaluate(el=>getComputedStyle(el).opacity),'1','Its own opacity at the start');
+        // Overlay: a colour, or its Gradient instead, over the whole scene; it does not move, only its Opacity at the end.
+        await addElement('overlay');
+        const overlayIndex=(await data()).layers.length-1, overlay=async()=>(await data()).layers[overlayIndex];
+        assert.ok((await overlay()).type==='overlay' && (await overlay()).color==='rgba(0,0,0,0.4)' && /^Overlay \d+$/.test((await overlay()).name),'A new overlay: a see-through black');
+        assert.match(await page.locator('[data-select="'+overlayIndex+'"] small').textContent(),/^Overlay/,'Named in the layer list');
+        assert.equal(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay > span').evaluate(el=>el.style.background),'rgba(0, 0, 0, 0.4)','Its thumbnail: its fill');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Fill','Position and size','Motion'],'Fill, Position and size, Motion');
+        assert.ok(await page.locator('label[for="wpbn-f-use_move_y"], label[for="wpbn-f-use_zoom"]').count()===0 && await page.locator('label[for="wpbn-f-use_end_opacity"]').count()===1 && await page.locator('[data-action="position"]').count()===1,'No travel or zoom; Opacity at the end; Position');
+        await update();
+        const covers=async()=>frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {same:Math.abs(r.left-s.left)<1&&Math.abs(r.top-s.top)<1&&Math.abs(r.width-s.width)<1&&Math.abs(r.height-s.height)<1,bg:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage,z:Number(getComputedStyle(el).zIndex)};});
+        let shade=await covers();
+        assert.ok(shade.same && shade.bg==='rgba(0, 0, 0, 0.4)' && shade.z===overlayIndex+1,'On the site: the whole scene in its colour, in front of the layers under it ('+JSON.stringify(shade)+')');
+        // Gradient (as WP Swiper's), in Fill, behind its switch: the bar adds a colour, a point is moved or deleted, its colour picked.
+        const gradientOf=async()=>(await overlay()).gradient;
         assert.equal(await page.locator('.wpbn-gradient').count(),0,'Gradient: its colours hidden while it is off');
-        // In Position and size (last); its i on the switch's line, beside its name.
-        assert.equal(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Position and size")) #wpbn-f-use_gradient').count(),1,'Gradient in Position and size');
-        assert.equal(await page.locator('.wpbn-subheading:text-is("Gradient")').count(),0,'No card of its own');
-        assert.ok(await page.evaluate(()=>{const label=document.querySelector('label[for="wpbn-f-use_gradient"]').getBoundingClientRect(),i=document.querySelector('label[for="wpbn-f-use_gradient"] + .wpbn-tip').getBoundingClientRect();return Math.abs((i.top+i.bottom)/2-(label.top+label.bottom)/2)<3 && i.left>=label.right-1;}),'Its i beside its name');
-        await toggle('use_gradient');
+        // Fill: Color or Gradient, two buttons across the card, at its top; only the chosen one's settings under them.
+        assert.deepEqual(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Fill")) .wpbn-fill-choice button').allTextContents(),['Color','Gradient'],'Color and Gradient buttons in Fill');
+        assert.ok(await page.evaluate(()=>{const c=document.querySelector('.wpbn-fill-choice'),card=c.closest('.wpbn-card'),b=[...c.querySelectorAll('button')].map(x=>x.getBoundingClientRect()),r=c.getBoundingClientRect(),first=card.querySelector('.wpbn-subheading').nextElementSibling;return first===c && Math.abs(b[0].width-b[1].width)<1 && r.width>card.getBoundingClientRect().width-40;}),'At the top, across the card, the two alike');
+        assert.equal(await page.locator('[data-fill="color"]').getAttribute('aria-pressed'),'true','Color chosen to start with');
+        assert.equal(await page.locator('#wpbn-f-color').count(),1,'Color: its colour field');
+        await page.click('[data-fill="gradient"]');
+        assert.ok(await page.locator('[data-fill="gradient"]').getAttribute('aria-pressed')==='true' && await page.locator('#wpbn-f-color').count()===0 && (await overlay()).use_gradient===true,'Gradient: its editor instead of the colour');
         assert.equal(await page.locator('.wpbn-gradient__handle').count(),2,'Two colours to start with');
         const bar=await page.locator('.wpbn-gradient__bar').boundingBox();
         await page.mouse.click(bar.x+bar.width*.5,bar.y+bar.height/2);
@@ -477,36 +531,174 @@ const server=http.createServer((req,res)=>{
         await page.keyboard.press('Escape');
         await page.selectOption('.wpbn-gradient__type','circle');
         assert.ok(/^circle;center center;/.test(await gradientOf()) && await page.locator('.wpbn-gradient__x').isVisible() && await page.locator('.wpbn-gradient__direction').isHidden(),'Radial: where its middle is');
-        await update();
-        const filled=await frame().locator('.wpbn-layer--text h2').evaluate(el=>{const c=getComputedStyle(el);return [c.backgroundImage,c.webkitTextFillColor];});
-        assert.ok(/radial-gradient/.test(filled[0]) && filled[1]==='rgba(0, 0, 0, 0)','A title: its letters filled with the gradient');
         await page.click('.wpbn-gradient__handle[data-stop="1"]');await page.click('.wpbn-gradient__delete');
         assert.equal((await gradientOf()).split(';').length,4,'Delete removes the chosen colour');
         assert.equal(await page.locator('.wpbn-gradient__delete').isDisabled(),true,'Two colours at least');
-        await toggle('use_gradient');
-        assert.ok(await page.locator('.wpbn-gradient').count()===0 && /^circle;/.test(await gradientOf()),'Off: hidden, its colours kept');
-        // Over an image: on its box (a photo: no mask).
-        const imageIndex=(await data()).layers.findIndex(l=>l.type==='image');
-        if (imageIndex>=0) {
-            await page.click('[data-select="'+imageIndex+'"]');await toggle('use_gradient');await update();
-            const over=await frame().locator('.wpbn-layer--gradient').evaluate(el=>getComputedStyle(el,'::after').backgroundImage);
-            assert.match(over,/linear-gradient/,'Over the image: its gradient');
-            await toggle('use_gradient');await page.click(titleRow);
-        }
-        assert.equal(await page.locator('[data-key="end_opacity"]').count(),0,'Hidden behind its switch');
-        await toggle('use_end_opacity');
-        await page.fill('[data-key="end_opacity"]','0');
         await update();
-        await frame().waitForFunction(()=>typeof window.wpbnPreviewProgress==='function');
-        await frame().evaluate(()=>window.wpbnPreviewProgress(1));
-        assert.equal(await frame().locator('.wpbn-layer--text').evaluate(el=>getComputedStyle(el).opacity),'0','Faded out by the end');
-        await frame().evaluate(()=>window.wpbnPreviewProgress(0));
-        assert.equal(await frame().locator('.wpbn-layer--text').evaluate(el=>getComputedStyle(el).opacity),'1','Its own opacity at the start');
+        shade=await covers();
+        assert.ok(/radial-gradient/.test(shade.image),'Its gradient instead of the colour');
+        await page.screenshot({path:path.join(__dirname,'overlay.png'),fullPage:true});
+        assert.match(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay > span').evaluate(el=>el.style.background),/radial-gradient/,'The thumbnail follows');
+        // In the Position window of another layer: drawn over the whole scene.
+        await page.click(titleRow);await page.click('[data-action="position"]');
+        assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-item.is-other').evaluateAll(items=>items.some(el=>/radial-gradient/.test(el.style.background) && el.style.width==='100%' && el.style.height==='100%')),'In the Position window: over the whole scene');
+        await page.click('.wpbn-modal__cancel');
+        await page.click('[data-select="'+overlayIndex+'"]');await page.click('[data-fill="color"]');
+        assert.ok(await page.locator('.wpbn-gradient').count()===0 && /^circle;/.test(await gradientOf()) && await page.locator('#wpbn-f-color').count()===1 && (await overlay()).use_gradient===false,'Color again: its colours kept, the colour field back');
+        // Its size: Container (as a title's, Position beside it) and Height per device (as the scene's: %, px, vh; Inherit).
+        assert.equal(await page.locator('#wpbn-f-container').inputValue(),'full','A new overlay: Full width');
+        assert.deepEqual(await page.locator('[data-key="height_unit"] option').allTextContents(),['%','px','vh'],'Height: %, px or vh (no Auto)');
+        assert.equal(await page.locator('#wpbn-f-height').inputValue(),'100','100% of the scene to start with');
+        await page.fill('#wpbn-f-height','40');await page.selectOption('#wpbn-f-container','theme');
+        await page.click('[data-action="position"]');
+        assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>el.style.height==='40%' && parseFloat(el.style.width)<100),'In the Position window: its height and container');
+        for(let i=0;i<6;i++)await positionStage.press('Shift+ArrowDown');await page.click('.wpbn-modal__apply');
+        assert.ok((await overlay()).height===40 && (await overlay()).y===100 && (await overlay()).container==='theme','Kept: 40%, at the bottom, in the theme container');
+        await update();
+        const band=await frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {h:r.height/s.height,bottom:s.bottom-r.bottom,width:r.width,cw:Math.min(s.width,1222)-30,centre:(r.left+r.right)/2-(s.left+s.right)/2};});
+        assert.ok(Math.abs(band.h-0.4)<0.01 && Math.abs(band.bottom)<1 && Math.abs(band.width-band.cw)<1 && Math.abs(band.centre)<1,'On the site: 40% high, at the bottom, as wide as the container ('+JSON.stringify(band)+')');
+        await page.click('.wpbn-field--height [data-field-device="mobile"]');
+        await page.selectOption('[data-key="mobile_height_unit"]','px');await page.fill('#wpbn-f-mobile_height','120');
+        assert.ok((await overlay()).mobile_height===120 && (await overlay()).mobile_height_unit==='px' && (await overlay()).tablet_height_unit==null,'Its own on mobile, tablet following desktop');
+        // Width per device, as its Height (% of its container, px, vw); Container width per device (Custom).
+        await page.click('.wpbn-field--height [data-field-device="desktop"]');
+        assert.equal(await page.locator('#wpbn-f-width').count(),0,'No Width (%) slider');
+        assert.deepEqual(await page.locator('[data-key="overlay_width_unit"] option').allTextContents(),['%','px','vw'],'Width: %, px or vw');
+        assert.equal(await page.locator('#wpbn-f-overlay_width').inputValue(),'100','All of its container to start with');
+        await page.fill('#wpbn-f-overlay_width','50');await page.selectOption('#wpbn-f-container','custom');
+        assert.ok(await page.locator('.wpbn-field--device-number #wpbn-f-container_width').count()===1,'Container width: per device, as Font size');
+        await page.fill('#wpbn-f-container_width','800');
+        await page.click('[data-action="position"]');for(let i=0;i<6;i++)await positionStage.press('Shift+ArrowLeft');await page.click('.wpbn-modal__apply');
+        await update();
+        const half=await frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),cw=Math.min(s.width-30,800);return {width:r.width,cw,left:r.left-s.left,edge:(s.width-cw)/2};});
+        assert.ok(Math.abs(half.width-half.cw/2)<1 && Math.abs(half.left-half.edge)<1,'Half its 800px container wide, at its left edge (X 0%) ('+JSON.stringify(half)+')');
+        await page.click('.wpbn-field--device-number [data-field-device="tablet"]');await page.fill('#wpbn-f-container_width_tablet','600');
+        await page.selectOption('[data-key="tablet_overlay_width_unit"]','px');await page.fill('#wpbn-f-tablet_overlay_width','300');
+        assert.ok((await overlay()).container_width_tablet===600 && (await overlay()).container_width_mobile==null && (await overlay()).tablet_overlay_width===300 && (await overlay()).tablet_overlay_width_unit==='px' && (await overlay()).mobile_overlay_width_unit==null,'Their own on tablet');
+        await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
+        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Position and size"))').screenshot({path:path.join(__dirname,'overlay-size.png')});
+        // Blur (per device, in Fill, for Color and Gradient alike): the layers under it blurred.
+        assert.ok(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Fill")) .wpbn-field--device-number #wpbn-f-backdrop_blur').count()===1 && await page.locator('#wpbn-f-backdrop_blur').inputValue()==='0','Blur in Fill, 0 to start with');
+        await update();
+        assert.equal(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'none','0: no blur');
+        await page.fill('#wpbn-f-backdrop_blur','12');
+        await page.click('[data-fill="gradient"]');
+        assert.equal(await page.locator('#wpbn-f-backdrop_blur').inputValue(),'12','With Gradient too');
+        await page.click('[data-fill="color"]');
+        await update();
+        assert.equal(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'blur(12px)','On the site: the layers under it blurred');
+        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Fill"))').screenshot({path:path.join(__dirname,'overlay-fill.png')});
+        await page.click('.wpbn-field--device-number:has(#wpbn-f-backdrop_blur) [data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_backdrop_blur','4');
+        assert.ok((await overlay()).mobile_backdrop_blur===4 && (await overlay()).tablet_backdrop_blur==null,'Its own on mobile');
+        await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
+        await page.click('.wpbn-field--height [data-field-device="desktop"]');
+        await page.click('[data-row-action="delete"][data-index="'+overlayIndex+'"]');
+        assert.equal((await data()).layers.some(l=>l.type==='overlay'),false,'Deleted');
+        await page.click(titleRow);
+        // Text: paragraphs and lists in WordPress's editor (here, without WordPress, its plain box), its style, placed as a title is.
+        await addElement('richtext');
+        const textIndex=(await data()).layers.length-1, textOf=async()=>(await data()).layers[textIndex];
+        assert.ok((await textOf()).type==='richtext' && (await textOf()).content==='<p>Your text here.</p>' && (await textOf()).font_size===18 && (await textOf()).container==='theme' && /^Text \d+$/.test((await textOf()).name),'A new text: a paragraph, 18px, in the theme container');
+        assert.ok(await page.locator('[data-select="'+textIndex+'"] .wpbn-layer-thumb--richtext').count()===1 && /^Text/.test(await page.locator('[data-select="'+textIndex+'"] small').textContent()),'In the layer list: Text');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Text style','Position and size','Motion'],'Its cards');
+        assert.ok(await page.locator('#wpbn-f-content').count()===1 && await page.locator('#wpbn-f-font_size').inputValue()==='18' && await page.locator('[data-action="position"]').count()===1 && await page.locator('#wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-f-text_transform, #wpbn-f-accent_color, #wpbn-f-use_scale').count()===0,'Its text box, Font size, Shadow and Position; no Case, Accent color or Scale');
+        assert.match(await page.locator('.wpbn-font__name').textContent(),/^Default/,'Default font: the theme\'s text font');
+        await page.fill('#wpbn-f-content','<p style="text-align: center">Hello <strong>world</strong> <a href="#x">link</a></p><ul><li>One</li></ul><script>alert(1)</script>');
+        assert.match((await textOf()).content,/<strong>world<\/strong>/,'Kept in the layer as typed');
+        assert.match(await page.locator('#wpbn-font-sample').textContent(),/^Hello world link One/,'The font sample: its words');
+        await update();
+        const shown=await frame().locator('.wpbn-layer--richtext').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),c=getComputedStyle(el);return {html:el.innerHTML,size:c.fontSize,left:r.left-s.left,cw:Math.min(s.width,1222)-30,w:s.width,align:getComputedStyle(el.querySelector('p')).textAlign,list:getComputedStyle(el.querySelector('ul')).listStyleType};});
+        assert.ok(/<strong>world<\/strong>/.test(shown.html) && /<a href="#x">link<\/a>/.test(shown.html) && !/script|alert/.test(shown.html) && /<li>One<\/li>/.test(shown.html),'On the site: bold, the link and the list kept; no script ('+shown.html+')');
+        assert.ok(shown.size==='18px' && shown.align==='center' && shown.list==='disc','Its size, the paragraph centred, a bulleted list');
+        await page.click('[data-row-action="delete"][data-index="'+textIndex+'"]');
+        assert.equal((await data()).layers.some(l=>l.type==='richtext'),false,'Text deleted');
+        await page.click(titleRow);
+        // Shortcode: another plugin's element in its place among the layers, its Width per device.
+        await addElement('shortcode');
+        const scIndex=(await data()).layers.length-1, scOf=async()=>(await data()).layers[scIndex];
+        assert.ok((await scOf()).type==='shortcode' && (await scOf()).container==='theme' && /^Shortcode \d+$/.test((await scOf()).name) && await page.locator('[data-select="'+scIndex+'"] .wpbn-layer-thumb--shortcode').count()===1,'A new shortcode layer, in the theme container, its icon in the list');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Position and size','Motion'],'Its cards');
+        assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-height').count()===0,'Its Width; no Scale, no Height');
+        await page.fill('#wpbn-f-shortcode','[wp_swiper id="12"]');
+        await page.fill('#wpbn-f-overlay_width','60');
+        assert.ok((await scOf()).shortcode==='[wp_swiper id="12"]' && (await scOf()).overlay_width===60,'Kept in the layer');
+        await update();
+        const sc=await frame().locator('.wpbn-layer--shortcode').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {html:el.innerHTML,w:r.width,cw:Math.min(s.width,1222)-30,events:getComputedStyle(el).pointerEvents};});
+        assert.ok(/class="demo-slider" data-shortcode="wp_swiper"/.test(sc.html) && Math.abs(sc.w-sc.cw*0.6)<2 && sc.events==='auto','On the site: the shortcode\'s element, 60% of the container, clickable ('+JSON.stringify(sc)+')');
+        await page.click('[data-action="position"]');
+        assert.equal(await page.locator('.wpbn-position-target').first().textContent(),'[wp_swiper id="12"]','The Position window: a box with its shortcode');
+        assert.ok(await page.locator('.wpbn-position-warning').isHidden(),'Not taller than the scene: no warning');
+        // Its height as the preview drew it (120px of the scene's), not a guess, on the device shown.
+        const real=await frame().locator('.wpbn-layer--shortcode').evaluate(el=>el.offsetHeight/el.closest('.wpbn-scene').offsetHeight);
+        const scBox=await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>({share:el.offsetHeight/el.parentElement.offsetHeight,guess:el.classList.contains('is-guess')}));
+        assert.ok(Math.abs(scBox.share-real)<0.02 && !scBox.guess,'The box: the real height ('+JSON.stringify(scBox)+' vs '+real+')');
+        assert.ok(await page.locator('.wpbn-focus__device[data-device="mobile"] .wpbn-position-target.is-guess').count()===1,'Another device: the height from the preview, marked as a guess');
+        await page.keyboard.press('Escape');
+        // An element taller than the scene (a portrait slider): the box as tall, cut by the scene, its label in sight, a warning.
+        await page.fill('#wpbn-f-shortcode','[tall_slider]');
+        await update();
+        await frame().evaluate(()=>{const el=document.querySelector('.wpbn-layer--shortcode .demo-slider');el.style.height=(el.closest('.wpbn-scene').offsetHeight*2.5)+'px';});
+        await page.click('[data-action="position"]');
+        const tall=await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>{const c=el.parentElement.getBoundingClientRect(),l=el.querySelector('.wpbn-position-item__label').getBoundingClientRect();return {share:el.offsetHeight/el.parentElement.offsetHeight,labelIn:l.top>=c.top&&l.bottom<=c.bottom};});
+        assert.ok(tall.share>2.4 && tall.labelIn,'Taller than the scene: as tall, its label inside the scene ('+JSON.stringify(tall)+')');
+        assert.match(await page.locator('.wpbn-position-warning__text').textContent(),/taller than the scene on Desktop/,'A warning');
+        await page.locator('.wpbn-modal__box, .wpbn-modal').first().screenshot({path:path.join(__dirname,'shortcode-position.png')});
+        await page.keyboard.press('ArrowUp');
+        assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>{const c=el.parentElement.getBoundingClientRect(),l=el.querySelector('.wpbn-position-item__label').getBoundingClientRect();return l.top>=c.top&&l.bottom<=c.bottom;}),'Moved: its label stays in sight');
+        // Dragged: it follows the pointer (taller than the scene: smoothly, not to an edge).
+        const dragBy=async (dx,dy)=>{const t=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox(),st=await page.locator('.wpbn-focus__stage').boundingBox();const x=st.x+st.width/2,y=st.y+st.height/2;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx/2,y+dy/2);await page.mouse.move(x+dx,y+dy);await page.mouse.up();return t;};
+        const valueNow=async()=>(await page.locator('.wpbn-focus__value').textContent()).split(' ').map(parseFloat);
+        const [x0,y0]=await valueNow(), before=await dragBy(20,30), after=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox(), [x1,y1]=await valueNow();
+        assert.ok(y1>0 && y1<100 && Math.abs(y1-y0)>0.5 && Math.abs(y1-y0)<15 && Math.abs(after.y-before.y-30)<3,'Taller than the scene: dragged down, it moves down with the pointer, its Y not at an edge ('+[y0,y1,after.y-before.y]+')');
+        assert.ok(x1>0 && x1<100 && Math.abs(after.x-before.x-20)<3,'Across: it follows the pointer ('+[x0,x1,after.x-before.x]+')');
+        await page.keyboard.press('Escape');
+        // As wide as its container (Width 100%): no room across: dragging leaves its X as it is.
+        await page.fill('#wpbn-f-overlay_width','100');
+        await page.click('[data-action="position"]');
+        const [wx0]=await valueNow(); await dragBy(40,0); const [wx1]=await valueNow();
+        assert.equal(wx1,wx0,'As wide as its container: X stays');
+        await page.keyboard.press('Escape');
+        await page.click('[data-row-action="delete"][data-index="'+scIndex+'"]');
+        assert.equal((await data()).layers.some(l=>l.type==='shortcode'),false,'Shortcode deleted');
+        await page.click(titleRow);
+        // Button: as WP Top Info Bar's: text, link, a new window, Background and Corners samples, Size per device, colours.
+        await addElement('button');
+        const buttonIndex=(await data()).layers.length-1, buttonOf=async()=>(await data()).layers[buttonIndex];
+        assert.ok((await buttonOf()).type==='button' && (await buttonOf()).button_text==='Learn more' && (await buttonOf()).container==='theme' && /^Button \d+$/.test((await buttonOf()).name),'A new button: Learn more, in the theme container');
+        assert.ok(await page.locator('[data-select="'+buttonIndex+'"] .wpbn-layer-thumb--button').count()===1,'In the layer list: its icon');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Button style','Position and size','Motion'],'Its cards');
+        assert.ok(await page.locator('#wpbn-f-button_new_tab').isDisabled() && await page.locator('#wpbn-f-use_scale, #wpbn-f-font_size').count()===0,'Open in a new window greyed without a link; no Scale, no Font size');
+        await page.fill('#wpbn-f-button_url','https://example.com/book');
+        assert.ok(!(await page.locator('#wpbn-f-button_new_tab').isDisabled()),'With a link: Open in a new window');
+        await toggle('button_new_tab');
+        await page.fill('#wpbn-f-button_text','Book now');
+        assert.deepEqual(await page.locator('[data-choice="button_style"]').allTextContents(),['Filled','Border','Underline'],'Background: three samples');
+        await page.click('[data-choice="button_shape"][data-value="round"]');
+        assert.equal(await page.locator('[data-choice="button_shape"][data-value="round"]').getAttribute('aria-pressed'),'true','Corners: Round chosen');
+        await page.click('[data-choice="button_style"][data-value="underline"]');
+        assert.ok(await page.locator('[data-choice="button_shape"]').first().isDisabled(),'Underline: Corners greyed');
+        await page.click('[data-choice="button_style"][data-value="bordered"]');
+        await page.selectOption('#wpbn-f-button_size','large');
+        await page.click('[data-field-device="mobile"]');
+        await page.selectOption('#wpbn-f-button_size_mobile','small');
+        assert.ok((await buttonOf()).button_style==='bordered' && (await buttonOf()).button_shape==='round' && (await buttonOf()).button_size==='large' && (await buttonOf()).button_size_mobile==='small' && (await buttonOf()).button_size_tablet==null && (await buttonOf()).button_new_tab===true,'Kept in the layer');
+        await page.click('[data-field-device="desktop"]');
+        await update();
+        const btn=await frame().locator('.wpbn-layer--button a.wpbn-button').evaluate(el=>{const c=getComputedStyle(el);return {text:el.textContent,href:el.getAttribute('href'),target:el.target,rel:el.rel,radius:c.borderTopLeftRadius,bg:c.backgroundColor,border:c.borderTopWidth,h:el.getBoundingClientRect().height,font:c.fontSize,events:c.pointerEvents};});
+        assert.ok(btn.text==='Book now' && btn.href==='https://example.com/book' && btn.target==='_blank' && /noopener/.test(btn.rel),'On the site: a link in a new window ('+JSON.stringify(btn)+')');
+        await page.locator('#wpbn-settings').screenshot({path:path.join(__dirname,'button.png')});await page.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'button-preview.png')});
+        assert.ok(btn.radius==='35px' && btn.bg==='rgba(0, 0, 0, 0)' && btn.border==='2px' && btn.h>=48 && btn.font==='14px' && btn.events==='auto','Round, a border, Large, clickable ('+JSON.stringify(btn)+')');
+        await page.click('[data-action="position"]');
+        assert.equal(await page.locator('.wpbn-position-target').first().textContent(),'Book now','The Position window draws the button');
+        await page.keyboard.press('Escape');
+        await page.click('[data-row-action="delete"][data-index="'+buttonIndex+'"]');
+        assert.equal((await data()).layers.some(l=>l.type==='button'),false,'Button deleted');
+        await page.click(titleRow);
         // The preview: a page under the banner, so it can scroll out of view.
         assert.ok(await frame().locator('.wpbn-page').count()===1 && await frame().evaluate(()=>document.documentElement.scrollHeight>innerHeight*1.5),'A placeholder page under the banner');
         // A screen size of one's own, applied with Update, in a plain frame.
         await page.fill('#wpbn-res-w','1000');await page.fill('#wpbn-res-h','700');
-        assert.match(await page.locator('#wpbn-res-hint').textContent(),/Tablet values/,'The width decides which values show');
+        assert.ok(await page.locator('#wpbn-res-hint').count()===0 && await page.locator('.wpbn-toolbar #wpbn-dark + .wpbn-resolution').count()===1,'Screen: in the bar after the Dark button, no hint');await page.locator('.wpbn-toolbar').screenshot({path:path.join(__dirname,'toolbar.png')});
         await update();
         assert.equal(await frame().evaluate(()=>innerWidth),1000);
         assert.equal(await page.locator('#wpbn-preview-stage').evaluate(el=>el.classList.contains('is-custom')),true,'Own size: a plain frame');
@@ -541,6 +733,13 @@ const server=http.createServer((req,res)=>{
         await page.selectOption('[data-key="height_unit"]','vh');
         assert.equal(await page.locator('#wpbn-f-target').isDisabled(),true,'Another height: greyed');
         assert.equal((await data()).target,'hero','Greyed, the class kept');
+        // Attributes: the scene's own id and classes on its block.
+        assert.ok(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents().then(t=>t.includes('Attributes')),'Scene settings: Attributes');
+        await page.fill('#wpbn-f-css_id','offer');
+        await page.fill('#wpbn-f-css_class','hero-banner dark');
+        assert.ok((await data()).css_id==='offer' && (await data()).css_class==='hero-banner dark','Kept in the scene');
+        await update();
+        assert.ok(await frame().locator('section#offer.wpbn-scene.hero-banner.dark').count()===1,'On the site: the block with its id and classes');
         await page.selectOption('[data-key="height_unit"]','px');
         // Image position (as WP Swiper's): the whole photo, the point kept in view; the box is not moved.
         const photo=await browser.newPage({viewport:{width:1600,height:1000}});photo.on('pageerror',e=>errors.push(e.message));
@@ -565,6 +764,38 @@ const server=http.createServer((req,res)=>{
         assert.deepEqual([photoLayer.focus_x,photoLayer.focus_y,photoLayer.x,photoLayer.y],[25,75,50,50],'The point is saved; the layer stays where it was');
         await photo.click('#wpbn-refresh');
         await photo.waitForFunction(()=>getComputedStyle(document.querySelector('#wpbn-frame').contentDocument?.querySelector('.wpbn-layer img')||document.body).objectPosition==='25% 75%');
+        // Fill the scene off: the image becomes an object: its Container, Width and Height (Auto: its proportions), Position as a title's.
+        const photoData=async()=>JSON.parse(await photo.locator('#wpbn-data').inputValue()).layers[0];
+        assert.ok(await photo.locator('#wpbn-f-fill_scene').isChecked() && await photo.locator('#wpbn-f-overlay_width').count()===0,'An image fills the scene by default: no Width or Height');
+        await photo.click('label[for="wpbn-f-fill_scene"]');
+        let obj=await photoData();
+        assert.ok(obj.fill_scene===false && obj.overlay_width===50 && obj.height_unit==='auto','Off: half its container, Height Auto');
+        assert.ok(await photo.locator('#wpbn-f-overlay_width').count()===1 && await photo.locator('#wpbn-f-height').isDisabled() && await photo.locator('[data-key="height_unit"] option[value="auto"]').count()===1,'Its Width; its Height on Auto (the number greyed)');
+        assert.deepEqual(await photo.locator('.wpbn-position-button').allTextContents(),['Position','Image position'],'Two buttons: where it stands, and the point of its photo in view');
+        assert.ok(await photo.locator('[data-key="fit"]').isDisabled(),'Height Auto: Image fit greyed (nothing is cropped)');await photo.locator('#wpbn-settings .wpbn-card:has(#wpbn-f-fill_scene)').screenshot({path:path.join(__dirname,'image-object.png')});
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const objFrame=photo.frames().find(f=>f.name()==='wpbn_preview_frame');
+        const ob=await objFrame.locator('.wpbn-layer--object').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),i=el.querySelector('img');return {w:r.width/s.width,h:r.height,ratio:i.naturalHeight/i.naturalWidth*r.width,left:(r.left-s.left+r.width/2)/s.width,top:(r.top-s.top+r.height/2)/s.height};});
+        assert.ok(Math.abs(ob.w-0.5)<0.01 && Math.abs(ob.h-ob.ratio)<2 && Math.abs(ob.left-0.5)<0.01 && Math.abs(ob.top-0.5)<0.01,'On the site: half the scene wide, as tall as the image, centred ('+JSON.stringify(ob)+')');
+        // Its Position: the box, placed as a title is (dragged within the scene).
+        await photo.click('[data-action="position"][data-kind="place"]');
+        assert.ok(!(await photo.locator('.wpbn-modal').evaluate(el=>el.classList.contains('is-focus'))) && await photo.locator('.wpbn-modal__what').textContent()==='Position','Position: where the image stands, not the point of its photo');
+        const ps=await photo.locator('.wpbn-focus__stage').boundingBox();
+        await photo.mouse.click(ps.x+2,ps.y+2);
+        assert.ok((await photo.locator('.wpbn-focus__value').textContent()).split(' ').every(v=>parseFloat(v)<1),'Clicked at the corner: flush top left');
+        const tb=await photo.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
+        assert.ok(Math.abs(tb.x-ps.x)<2 && Math.abs(tb.y-ps.y)<2 && Math.abs(tb.width-ps.width/2)<2,'The box drawn at the corner, half as wide');
+        await photo.click('.wpbn-modal__apply');
+        obj=await photoData();
+        assert.ok(obj.x<1 && obj.y<1,'Applied');
+        // A fixed height: Image fit and Image position apply (the box crops the photo).
+        await photo.selectOption('[data-key="height_unit"]','px');
+        assert.ok(!(await photo.locator('[data-key="fit"]').isDisabled()),'A fixed height: Image fit active');
+        await photo.fill('#wpbn-f-height','200');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        assert.equal(Math.round(await objFrame.locator('.wpbn-layer--object').evaluate(el=>el.getBoundingClientRect().height)),200,'Its height: 200px');
+        await photo.click('label[for="wpbn-f-fill_scene"]');
+        assert.ok((await photoData()).fill_scene===true && await photo.locator('#wpbn-f-overlay_width').count()===0,'Back on: it fills the scene again (its object size kept)');
         await photo.close();
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll.');

@@ -6,7 +6,21 @@ class WPBN_Settings {
     // becomes that block's background, taking its size, behind its content (empty: not used).
     public static function defaults() {
         return array('height'=>720, 'tablet_height'=>null, 'mobile_height'=>null, 'height_unit'=>'auto', 'tablet_height_unit'=>null, 'mobile_height_unit'=>null,
-            'target'=>'', 'layers'=>array());
+            'target'=>'', 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
+    }
+    // The scene's own id and classes (Scene settings, Attributes), on its <section>, as WPBakery's "Element ID" and
+    // "Extra class name": an id (a letter first; letters, digits, - and _), classes separated by spaces (a dot dropped).
+    public static function css_id($value) {
+        $value = is_string($value) ? ltrim(trim($value), '#') : '';
+        return preg_match('/^[A-Za-z][\w-]{0,79}$/', $value) ? $value : '';
+    }
+    public static function css_classes($value) {
+        $classes = array();
+        foreach (preg_split('/[\s,]+/', is_string($value) ? $value : '') as $class) {
+            $class = self::css_class($class);
+            if ($class !== '' && !in_array($class, $classes, true)) { $classes[] = $class; }
+        }
+        return substr(implode(' ', $classes), 0, 200);
     }
     // A layer's Container: the box its Position X and Width are shares of, centred in the scene. full: the whole
     // scene; theme: the theme's content width (Woodmart's container, a block theme's content size; WPBN_Container),
@@ -25,14 +39,18 @@ class WPBN_Settings {
     // Height per device: a number and its unit. Auto fills the parent column (frontend.js). Tablet and
     // mobile without a unit of their own (null) take the larger screen's height and unit (mobile → tablet → desktop).
     const UNITS = array('auto', 'px', 'vh', '%');
+    // An overlay's Height: % of the scene (100: all of it), px or vh; its Width: % of its container, px or vw.
+    const LAYER_UNITS = array('%', 'px', 'vh');
+    const WIDTH_UNITS = array('%', 'px', 'vw');
+    const OVERLAY_WIDTHS = array('desktop'=>array('overlay_width','overlay_width_unit'), 'tablet'=>array('tablet_overlay_width','tablet_overlay_width_unit'), 'mobile'=>array('mobile_overlay_width','mobile_overlay_width_unit'));
     const HEIGHTS = array('desktop'=>array('height','height_unit'), 'tablet'=>array('tablet_height','tablet_height_unit'), 'mobile'=>array('mobile_height','mobile_height_unit'));
     // Before frontend.js sizes an Auto scene, and where it finds no free height.
     const FALLBACK_HEIGHT = 500;
     // Each device's height as [number, unit], the inherited ones filled in.
-    public static function heights($s) {
+    public static function heights($s, $map = self::HEIGHTS) {
         $out = array();
         $last = null;
-        foreach (self::HEIGHTS as $device=>$keys) {
+        foreach ($map as $device=>$keys) {
             $out[$device] = $last = ($s[$keys[1]] ?? null) === null && $last ? $last : array($s[$keys[0]], $s[$keys[1]]);
         }
         return $out;
@@ -52,16 +70,64 @@ class WPBN_Settings {
         'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100));
     const MOTION = array('move_x', 'move_y', 'zoom');
     const FITS = array('cover','contain');
-    const TYPES = array('image', 'text');
+    // overlay: a colour or a Gradient over the whole scene, over the layers under it (e.g. a photo shaded under
+    // the title); it does not move, only its Opacity at the end (effective()).
+    // richtext: "Text" in the editor (text is the title's key): paragraphs and lists from WordPress's editor (rich_text()).
+    // button: a button as WP Top Info Bar's (its text, link, Background, Corners, Size per device, colours).
+    // shortcode: another plugin's element (a slider…) by its shortcode, as wide as its Width, in its place among the layers.
+    const TYPES = array('image', 'text', 'overlay', 'richtext', 'button', 'shortcode');
+    // Title, Text, Button and Shortcode: placed by their Position within their container (their own point there), at 100% scale and opacity.
+    public static function textual($l) { return in_array($l['type'], array('text', 'richtext', 'button', 'shortcode'), true); }
+    // An image layer with "Fill the scene" on (default; as before 2026-11-08): it fills the scene (Cover / Contain, Scale).
+    // Off: an object, as an overlay: its Container, Width and Height per device (Height Auto: the image's proportions),
+    // placed by its Position as a title is; Image fit and the point in view within its box.
+    public static function fills($l) { return $l['type'] === 'image' && !empty($l['fill_scene']); }
+    public static function object($l) { return $l['type'] === 'image' && empty($l['fill_scene']); }
+    // Placed by their Position as a title is (their own point there, 0–100% within their container).
+    public static function anchored($l) { return self::textual($l) || $l['type'] === 'overlay' || self::object($l); }
+    // An overlay, a shortcode and an image object have a Width of their own (OVERLAY_WIDTHS), not their content's.
+    public static function sized($l) { return $l['type'] === 'overlay' || $l['type'] === 'shortcode' || self::object($l); }
+    // A Shortcode layer's text: as a post's (wp_kses_post), without this plugin's own shortcodes (a banner in itself).
+    const OWN_SHORTCODES = '/\[\/?(wp_banner|wp_banner_motion|wp_layer_motion)\b[^\]]*\]/i';
+    public static function shortcode($text) {
+        return trim(substr(preg_replace(self::OWN_SHORTCODES, '', wp_kses_post((string) $text)), 0, 5000));
+    }
+    // A button's Background, Corners and Size (WoodMart's size presets, as WP Top Info Bar's: padding, height, font size).
+    const BUTTON_STYLES = array('filled', 'bordered', 'underline');
+    const BUTTON_SHAPES = array('square', 'rounded', 'round');
+    const BUTTON_SIZES = array('extra-small'=>array('5px 10px', '28px', '11px'), 'small'=>array('5px 14px', '36px', '12px'), 'default'=>array('5px 20px', '42px', '13px'),
+        'large'=>array('5px 28px', '48px', '14px'), 'extra-large'=>array('5px 40px', '56px', '16px'));
+    // Its link: a page address, a path or #anchor, mailto: or tel:.
+    const BUTTON_PROTOCOLS = array('http', 'https', 'mailto', 'tel');
+    // A new overlay's colour (the editor's; color is also a title's colour).
+    const OVERLAY_COLOR = 'rgba(0,0,0,0.4)';
     // A text layer is the banner's title: a heading (h2 unless it is the page's h1, or a lower one).
     const TAGS = array('h1', 'h2', 'h3', 'h4', 'h5');
+    // A title's Case (CSS text-transform) and its Shadow's colour to start with.
+    const CASES = array('none', 'uppercase', 'lowercase', 'capitalize');
+    const SHADOW_COLOR = 'rgba(0,0,0,0.5)';
     public static function layer() {
-        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'color'=>'#ffffff', 'accent_color'=>'', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
+        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'content'=>'', 'shortcode'=>'', 'color'=>'#ffffff', 'accent_color'=>'', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
             'tag'=>'h2', 'font_family'=>'', 'font_weight'=>800,
+            // A title's Letter spacing (px, per device as Font size), Case (text-transform), Style (italic) and Shadow.
+            'letter_spacing'=>0, 'tablet_letter_spacing'=>null, 'mobile_letter_spacing'=>null, 'text_transform'=>'none', 'font_style'=>'normal',
+            'use_shadow'=>false, 'shadow_color'=>self::SHADOW_COLOR, 'shadow_x'=>0, 'shadow_y'=>2, 'shadow_blur'=>10,
+            // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
+            'height'=>100, 'height_unit'=>'%', 'tablet_height'=>null, 'tablet_height_unit'=>null, 'mobile_height'=>null, 'mobile_height_unit'=>null,
+            // Its Blur (px, per device as Font size): the layers under it blurred (backdrop-filter); 0: none.
+            'backdrop_blur'=>0, 'tablet_backdrop_blur'=>null, 'mobile_backdrop_blur'=>null,
+            // Its Width per device, kept as its Height (widths()): 100% of its container.
+            'overlay_width'=>100, 'overlay_width_unit'=>'%', 'tablet_overlay_width'=>null, 'tablet_overlay_width_unit'=>null, 'mobile_overlay_width'=>null, 'mobile_overlay_width_unit'=>null,
+            // An image layer fills the scene; off: an object (fills(), object()).
+            'fill_scene'=>true,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>0,
-            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200,
-            // Gradient (WPBN_Gradient): over an image, a title's letters filled with it; only with its switch on.
+            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
+            // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
             'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
+            // A button (as WP Top Info Bar's): its text, link (a new window or not), Background, Corners, Size per device
+            // (tablet and mobile null: the larger screen's), Fill / border color and Text color.
+            'button_text'=>'Learn more', 'button_url'=>'', 'button_new_tab'=>false, 'button_style'=>'filled', 'button_shape'=>'square',
+            'button_size'=>'default', 'button_size_tablet'=>null, 'button_size_mobile'=>null, 'button_color'=>'#2271b1', 'button_text_color'=>'#ffffff',
             'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false);
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         return $l;
@@ -85,10 +151,18 @@ class WPBN_Settings {
         // 2026-11-08; the value kept is not used).
         $l['width'] = 100; $l['width_tablet'] = null; $l['width_mobile'] = null;
         // A title has no Scale and no Opacity (2026-11-08): 100% (the values kept are not used). Its Position is
-        // within its container (0–100%: frontend.css places it so).
-        if ($l['type'] === 'text') {
+        // within its container (0–100%: frontend.css places it so); an overlay's too.
+        if (self::textual($l)) {
             foreach (array('scale', 'opacity') as $key) { $l[$key] = 100; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+        }
+        if (self::anchored($l)) {
             foreach (array('x', 'y') as $key) { foreach (array('', '_tablet', '_mobile') as $suffix) { if ($l[$key.$suffix] !== null) { $l[$key.$suffix] = max(0, min(100, $l[$key.$suffix])); } } }
+        }
+        // An overlay: as wide as its Container, its own Height, placed by its Position as a title is; it stays there:
+        // at 100% scale and opacity, no travel or zoom (its edges would show); only its Opacity at the end (the values
+        // kept are not used).
+        if ($l['type'] === 'overlay') {
+            foreach (array('scale'=>100, 'opacity'=>100, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         }
         foreach (self::OPTIONAL as $key=>$o) {
             list($flag, $off, $image_only) = $o;
@@ -105,12 +179,22 @@ class WPBN_Settings {
         foreach ($start as $device=>$value) { $fade[] = empty($l['use_end_opacity']) ? 0 : $end[$device] - $value; }
         return $fade;
     }
+    // A title's letter spacing on each device (px), the inherited ones filled in.
+    public static function spacings($l) { return self::inherited($l, 'letter_spacing'); }
+    // An overlay's Blur on each device (px), the inherited ones filled in.
+    public static function blurs($l) { return self::inherited($l, 'backdrop_blur'); }
+    // A title's Shadow as CSS text-shadow; '' with its switch off.
+    public static function shadow($l) {
+        return empty($l['use_shadow']) ? '' : $l['shadow_x'].'px '.$l['shadow_y'].'px '.$l['shadow_blur'].'px '.$l['shadow_color'];
+    }
     // A title's font size on each device (px), the inherited ones filled in.
-    public static function fonts($l) {
-        $tablet = $l['tablet_font_size'] ?? null;
-        $tablet = $tablet === null ? $l['font_size'] : $tablet;
-        $mobile = $l['mobile_font_size'] ?? null;
-        return array('desktop'=>$l['font_size'], 'tablet'=>$tablet, 'mobile'=>$mobile === null ? $tablet : $mobile);
+    public static function fonts($l) { return self::inherited($l, 'font_size'); }
+    // A value per device kept as $key, tablet_$key and mobile_$key (null: the larger screen's), the inherited ones filled in.
+    private static function inherited($l, $key) {
+        $tablet = $l['tablet_'.$key] ?? null;
+        $tablet = $tablet === null ? $l[$key] : $tablet;
+        $mobile = $l['mobile_'.$key] ?? null;
+        return array('desktop'=>$l[$key], 'tablet'=>$tablet, 'mobile'=>$mobile === null ? $tablet : $mobile);
     }
     // The image on each device: tablet and mobile 0 = the larger screen's.
     public static function images($l) {
@@ -151,6 +235,34 @@ class WPBN_Settings {
         }
         return $open ? $out.'</u>' : $out;
     }
+    /*
+     * A Text layer's HTML, as WP Swiper's descriptions keep theirs: paragraphs, headings (h1–h6) and line breaks,
+     * bold, italic, underline, a colour (a span the editor styles), links (href, target, rel; one opening in another
+     * tab gets "noopener"), bulleted and numbered lists; paragraphs, headings and list items aligned (their
+     * text-align only). Only tags or the editor's empty paragraph: ''.
+     */
+    const RICH_TAGS = array('p'=>array('style'=>true), 'h1'=>array('style'=>true), 'h2'=>array('style'=>true), 'h3'=>array('style'=>true),
+        'h4'=>array('style'=>true), 'h5'=>array('style'=>true), 'h6'=>array('style'=>true), 'br'=>array(), 'strong'=>array(), 'b'=>array(), 'em'=>array(), 'i'=>array(), 'u'=>array(),
+        'span'=>array('style'=>true), 'a'=>array('href'=>true, 'target'=>true, 'rel'=>true), 'ul'=>array(), 'ol'=>array(), 'li'=>array('style'=>true));
+    const RICH_STYLES = array('color', 'text-decoration', 'text-decoration-line', 'text-align');
+    public static function rich_text($html) {
+        $html = preg_replace_callback('#<(p|h[1-6]|li)\b([^>]*)>#i', function ($m) {
+            return '<'.strtolower($m[1]).(preg_match('/text-align\s*:\s*(left|center|right|justify)/i', $m[2], $a) ? ' style="text-align: '.strtolower($a[1]).'"' : '').'>';
+        }, (string) $html);
+        $only = function () { return WPBN_Settings::RICH_STYLES; };
+        add_filter('safe_style_css', $only, 999);
+        $html = trim(wp_kses($html, self::RICH_TAGS));
+        remove_filter('safe_style_css', $only, 999);
+        // A link opening in another tab: "noopener" in its rel (as WP Swiper's noopener()).
+        $html = preg_replace_callback('#<a\s[^>]*\btarget="[^"]*"[^>]*>#i', function ($m) {
+            if (preg_match('#\brel="([^"]*)"#i', $m[0], $rel)) {
+                return preg_match('#(^|\s)noopener(\s|$)#i', $rel[1]) ? $m[0] : str_replace($rel[0], 'rel="'.trim($rel[1].' noopener').'"', $m[0]);
+            }
+            return substr($m[0], 0, -1).' rel="noopener">';
+        }, $html);
+        $text = preg_replace('/[\s\x{00A0}]+/u', '', html_entity_decode(wp_strip_all_tags($html), ENT_QUOTES, 'UTF-8'));
+        return (string) $text === '' ? '' : $html;
+    }
     private static function choice($value, $allowed, $fallback) {
         return in_array($value, $allowed, true) ? $value : $fallback;
     }
@@ -168,6 +280,8 @@ class WPBN_Settings {
             $out[$key] = in_array($out[$unit], array('vh','%'), true) ? self::number($input[$key] ?? null, 100, 1, 200) : self::number($input[$key] ?? null, $px[$device], $out[$unit] === 'px' ? 160 : 1, 2400);
         }
         $out['target'] = self::css_class($input['target'] ?? '');
+        $out['css_id'] = self::css_id($input['css_id'] ?? '');
+        $out['css_class'] = self::css_classes($input['css_class'] ?? '');
         // Scenes saved with the former "Insert into blocks by class" switch off: no class.
         if (array_key_exists('by_class', $input) && empty($input['by_class'])) { $out['target'] = ''; }
         foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, 40) as $raw) {
@@ -176,9 +290,14 @@ class WPBN_Settings {
             if (is_string($raw['name'] ?? null)) { $l['name'] = sanitize_text_field($raw['name']); }
             // Text keeps its line breaks and its <u> (the accent words, as in Woodmart's titles).
             if (is_string($raw['text'] ?? null)) { $l['text'] = self::title_text($raw['text']); }
+            // A Text layer's paragraphs and lists (its editor's HTML, cleaned).
+            if (is_string($raw['content'] ?? null)) { $l['content'] = self::rich_text($raw['content']); }
+            // A Shortcode layer's shortcode.
+            if (is_string($raw['shortcode'] ?? null)) { $l['shortcode'] = self::shortcode($raw['shortcode']); }
             $l['type'] = self::choice($raw['type'] ?? null, self::TYPES, 'image');
             foreach (array('image', 'image_tablet', 'image_mobile') as $key) { $l[$key] = is_scalar($raw[$key] ?? null) ? absint($raw[$key]) : 0; }
-            $l['color'] = self::color($raw['color'] ?? null, '#ffffff');
+            // A title's colour; an overlay's fill.
+            $l['color'] = self::color($raw['color'] ?? null, $l['type'] === 'overlay' ? self::OVERLAY_COLOR : '#ffffff');
             // The words in <u>: '' = the theme's primary color (Woodmart's), or the title's color without it.
             $l['accent_color'] = self::color($raw['accent_color'] ?? null, '');
             $l['hidden'] = !empty($raw['hidden']);
@@ -195,6 +314,19 @@ class WPBN_Settings {
             $family = is_string($raw['font_family'] ?? null) ? trim($raw['font_family']) : '';
             $l['font_family'] = preg_match('/^var\(--wd-(title|text|alternative)-font\)$/', $family) ? $family : substr(trim(preg_replace('/[^\w \-,\'"]/u', '', $family)), 0, 120);
             $l['font_weight'] = (int) round(self::number($raw['font_weight'] ?? null, 800, 100, 900) / 100) * 100;
+            // Letter spacing (px, to 0.1): tablet and mobile empty follow the larger screen.
+            $l['letter_spacing'] = round(self::number($raw['letter_spacing'] ?? null, 0, -20, 100), 1);
+            foreach (array('tablet_letter_spacing', 'mobile_letter_spacing') as $key) {
+                $value = $raw[$key] ?? null;
+                $l[$key] = $value === null || $value === '' ? null : round(self::number($value, 0, -20, 100), 1);
+            }
+            $l['text_transform'] = self::choice($raw['text_transform'] ?? null, self::CASES, 'none');
+            $l['font_style'] = self::choice($raw['font_style'] ?? null, array('normal', 'italic'), 'normal');
+            $l['use_shadow'] = !empty($raw['use_shadow']);
+            $l['shadow_color'] = self::color($raw['shadow_color'] ?? null, self::SHADOW_COLOR);
+            foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200)) as $key=>$range) {
+                $l[$key] = round(self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]), 1);
+            }
             foreach (self::RESPONSIVE as $key=>$range) {
                 $l[$key] = self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]);
                 foreach (array('_tablet','_mobile') as $suffix) {
@@ -229,6 +361,47 @@ class WPBN_Settings {
             $from_scene = $l['type'] === 'text' && !array_key_exists('container', $raw) && isset($input['container']);
             $l['container'] = self::choice($from_scene ? $input['container'] : ($raw['container'] ?? null), self::CONTAINERS, 'full');
             $l['container_width'] = (int) round(self::number($from_scene ? ($input['container_width'] ?? null) : ($raw['container_width'] ?? null), 1200, 320, 3000));
+            // Its own on tablet / mobile; empty follows the larger screen.
+            foreach (array('_tablet', '_mobile') as $suffix) {
+                $value = $raw['container_width'.$suffix] ?? null;
+                $l['container_width'.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 1200, 320, 3000));
+            }
+            // Fill the scene (an image layer); off: an object. Layers saved before: on.
+            $l['fill_scene'] = array_key_exists('fill_scene', $raw) ? !empty($raw['fill_scene']) : true;
+            // An overlay's Height: px, vh or % of the scene (no Auto); tablet and mobile without a unit follow the larger screen.
+            // An image object's too, or Auto (as tall as the image at its width), its default.
+            $height_units = $l['type'] === 'image' ? array_merge(array('auto'), self::LAYER_UNITS) : self::LAYER_UNITS;
+            foreach (self::HEIGHTS as $device=>$keys) {
+                list($key, $unit) = $keys;
+                $l[$unit] = in_array($raw[$unit] ?? null, $height_units, true) ? $raw[$unit] : ($device === 'desktop' ? ($l['type'] === 'image' ? 'auto' : '%') : null);
+                if ($l[$unit] === null) { $l[$key] = null; continue; }
+                $range = array('%'=>array(100, 100), 'vh'=>array(100, 200), 'px'=>array(300, 2400), 'auto'=>array(100, 2400));
+                $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
+            }
+            // An overlay's Blur (px): tablet and mobile empty follow the larger screen.
+            $l['backdrop_blur'] = (int) round(self::number($raw['backdrop_blur'] ?? null, 0, 0, 100));
+            foreach (array('tablet_backdrop_blur', 'mobile_backdrop_blur') as $key) {
+                $value = $raw[$key] ?? null;
+                $l[$key] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
+            }
+            // An overlay's Width, as its Height: %, px or vw.
+            foreach (self::OVERLAY_WIDTHS as $device=>$keys) {
+                list($key, $unit) = $keys;
+                $l[$unit] = in_array($raw[$unit] ?? null, self::WIDTH_UNITS, true) ? $raw[$unit] : ($device === 'desktop' ? '%' : null);
+                if ($l[$unit] === null) { $l[$key] = null; continue; }
+                $range = array('%'=>array(100, 100), 'vw'=>array(100, 100), 'px'=>array(600, 3000));
+                $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
+            }
+            // A button's text, link and look.
+            if (is_string($raw['button_text'] ?? null)) { $l['button_text'] = substr(sanitize_text_field($raw['button_text']), 0, 200); }
+            $l['button_url'] = is_string($raw['button_url'] ?? null) ? esc_url_raw(trim($raw['button_url']), self::BUTTON_PROTOCOLS) : '';
+            $l['button_new_tab'] = !empty($raw['button_new_tab']);
+            $l['button_style'] = self::choice($raw['button_style'] ?? null, self::BUTTON_STYLES, 'filled');
+            $l['button_shape'] = self::choice($raw['button_shape'] ?? null, self::BUTTON_SHAPES, 'square');
+            $l['button_size'] = self::choice($raw['button_size'] ?? null, array_keys(self::BUTTON_SIZES), 'default');
+            foreach (array('_tablet', '_mobile') as $suffix) { $l['button_size'.$suffix] = self::choice($raw['button_size'.$suffix] ?? null, array_keys(self::BUTTON_SIZES), null); }
+            $l['button_color'] = self::color($raw['button_color'] ?? null, '#2271b1');
+            $l['button_text_color'] = self::color($raw['button_text_color'] ?? null, '#ffffff');
             $l['use_gradient'] = !empty($raw['use_gradient']);
             $l['gradient'] = WPBN_Gradient::sanitize($raw['gradient'] ?? null);
             // An image's point kept in view where its box crops it (object-position): one for every device.

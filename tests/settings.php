@@ -11,6 +11,11 @@ function absint($n) { return abs((int)$n); }
 function esc_attr($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function esc_html($s) { return esc_attr($s); }
 function esc_url($s) { return esc_attr($s); }
+// A post's HTML (no scripts); a shortcode as another plugin's would show it (a box with its text), a banner inside drawn too.
+function wp_kses_post($s) { return preg_replace('#<(script|style)\b.*?</\1>#is', '', (string) $s); }
+function do_shortcode($s) { return preg_replace_callback('/\[([a-z_]+)([^\]]*)\]/', function ($m) { return $m[1] === 'inner_banner' ? WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]'))))) : '<div class="demo-slider" data-shortcode="'.esc_attr($m[1]).'" style="height:120px">'.esc_html(trim($m[0])).'</div>'; }, $s); }
+// As WordPress's: '' for a link in another protocol (javascript:); a path, #anchor or one of those protocols kept.
+function esc_url_raw($s, $protocols = null) { $s = trim((string) $s); return preg_match('/^([a-z][a-z0-9+.-]*):/i', $s, $m) && !in_array(strtolower($m[1]), $protocols ?: array('http', 'https'), true) ? '' : str_replace(array('"', "'", '<', '>', ' '), '', $s); }
 function wp_json_encode($s, $flags=0) { return json_encode($s,$flags); }
 function wp_get_attachment_image_url($id, $size) { return $id ? '/assets/images/preview/desktop.svg' : false; }
 function wp_get_attachment_image_srcset($id, $size) { return false; }
@@ -25,9 +30,37 @@ function get_attached_file($id) { return '/uploads/mountains-cutout.png'; }
 function wp_basename($p) { return basename($p); }
 function size_format($b,$d=0) { return round($b/1024).' KB'; }
 function wpbn_asset($file) { return '1'; }
+// Filters, and wp_kses() as WordPress keeps markup: the allowed tags with their allowed attributes, a style only with
+// the properties safe_style_css lets through (the Text layer's HTML, WPBN_Settings::rich_text()).
+$GLOBALS['wpbn_filters'] = array();
+function add_filter($name, $cb, $priority = 10) { $GLOBALS['wpbn_filters'][$name][] = $cb; }
+function remove_filter($name, $cb, $priority = 10) { $GLOBALS['wpbn_filters'][$name] = array_values(array_filter($GLOBALS['wpbn_filters'][$name] ?? array(), function ($c) use ($cb) { return $c !== $cb; })); }
+function apply_filters($name, $value) { foreach ($GLOBALS['wpbn_filters'][$name] ?? array() as $cb) { $value = $cb($value); } return $value; }
+function wp_strip_all_tags($s) { return trim(strip_tags(preg_replace('#<(script|style)\b.*?</\1>#is', '', $s))); }
+function wp_kses($html, $tags) {
+    $html = preg_replace('#<(script|style)\b.*?</\1>#is', '', $html);
+    return preg_replace_callback('#<(/?)([a-z0-9]+)([^>]*)>#i', function ($m) use ($tags) {
+        $tag = strtolower($m[2]);
+        if (!isset($tags[$tag])) { return ''; }
+        if ($m[1]) { return '</'.$tag.'>'; }
+        $attrs = '';
+        if (!empty($tags[$tag]['style']) && preg_match('/style\s*=\s*"([^"]*)"/i', $m[3], $style)) {
+            $safe = apply_filters('safe_style_css', array());
+            $keep = array();
+            foreach (explode(';', $style[1]) as $decl) { $prop = strtolower(trim(explode(':', $decl)[0])); if ($prop !== '' && in_array($prop, $safe, true)) { $keep[] = trim($decl); } }
+            if ($keep) { $attrs = ' style="'.esc_attr(implode('; ', $keep)).'"'; }
+        }
+        foreach ($tags[$tag] as $name => $on) {
+            if ($name === 'style' || !preg_match('/\b'.$name.'\s*=\s*"([^"]*)"/i', $m[3], $v)) { continue; }
+            if ($name === 'href' && preg_match('/^\s*(javascript|data|vbscript):/i', $v[1])) { continue; }
+            $attrs .= ' '.$name.'="'.esc_attr($v[1]).'"';
+        }
+        return '<'.$tag.$attrs.'>';
+    }, $html);
+}
 require_once __DIR__.'/../includes/class-wpbn-settings.php';
 require_once __DIR__.'/../includes/class-wpbn-gradient.php';
-// A see-through photo (a cutout, PNG): attachment 2; any other: JPEG (the Gradient's mask).
+
 function get_post_mime_type($id) { return (int) $id === 2 ? 'image/png' : 'image/jpeg'; }
 require_once __DIR__.'/../includes/class-wpbn-render.php';
 require_once __DIR__.'/../includes/class-wpbn-container.php';
@@ -46,7 +79,7 @@ eval('namespace XTS\Admin\Modules\Options\Google_Fonts; class Google_Fonts {
     public static $all_google_fonts = array();
     private static $loaded = array();
     public static function get_instance() { return new self(); }
-    public function enqueue_inline_fonts($fonts, $id) { foreach ($fonts as $f) { $key = $f["font-family"]."@".$f["font-weight"]; if (isset(self::$loaded[$key])) { continue; } self::$loaded[$key] = true; echo "<link rel=\"stylesheet\" id=\"xts-google-fonts-inline-".$id."-css\" href=\"https://fonts.googleapis.com/css2?family=".str_replace(" ", "+", $f["font-family"]).":wght@".$f["font-weight"]."\">"; } }
+    public function enqueue_inline_fonts($fonts, $id) { foreach ($fonts as $f) { $key = $f["font-family"]."@".$f["font-weight"].$f["font-style"]; if (isset(self::$loaded[$key])) { continue; } self::$loaded[$key] = true; echo "<link rel=\"stylesheet\" id=\"xts-google-fonts-inline-".$id."-css\" href=\"https://fonts.googleapis.com/css2?family=".str_replace(" ", "+", $f["font-family"]).($f["font-style"] === "italic" ? ":ital,wght@1," : ":wght@").$f["font-weight"]."\">"; } }
 }');
 $variants = function ($ids) { return array('variants'=>array_map(function ($id) { return array('id'=>$id); }, $ids)); };
 XTS\Admin\Modules\Options\Google_Fonts\Google_Fonts::$all_google_fonts = array('Playfair Display'=>$variants(array('400','700','900','400italic')), 'Exo 2'=>$variants(array('100','300','500')), 'Roboto'=>$variants(array('300','400','700')));
@@ -82,7 +115,7 @@ $unitMarkup=WPBN_Render::markup($units);
 check(strpos($unitMarkup,'--wpbn-tablet-height:200vh')!==false && strpos($unitMarkup,'--wpbn-mobile-height:500px')!==false && strpos($unitMarkup,'data-auto="desktop mobile"')!==false,'Units rendered, Auto marked for frontend.js');
 check(!isset($bad['label']) && strpos(WPBN_Render::markup($bad),'aria-label')===false,'No scene label: scenes are decoration');
 check($bad['layers'][0]['type']==='image' && $bad['layers'][0]['image']===0,'Unexpected layer types and attachment arrays rejected');
-check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'overlay'))))['layers'][0]['type']==='image','Removed layer types (overlay) become image layers');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'video'))))['layers'][0]['type']==='image','Unknown layer types become image layers');
 check($bad['layers'][0]['x']===-100 && $bad['layers'][0]['opacity']===100,'Geometry bounded');
 check(count(WPBN_Settings::sanitize(array('layers'=>array_fill(0,100,array())))['layers'])===40,'Layer count bounded');
 
@@ -210,7 +243,7 @@ check(strpos($withFont,'font-family:&quot;Exo 2&quot;')!==false,'A Google font\'
 check(substr_count($withFont,'family=Exo+2:wght@300')===1 && strpos($withFont,'<link')===0 && strpos($withFont,'inline-9-css')!==false,'A Google font loaded once, before the scene');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_weight'=>900))))),'family=Playfair+Display:wght@900')!==false,'No font of its own: the theme\'s title font, loaded at the title\'s weight');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_family'=>'Georgia, serif'))))),'<link')===false,'A system font: nothing to load');
-// Gradient (as WP Swiper's): checked and kept in order; over an image (on a cutout, masked by it); a title's letters filled.
+// Gradient (as WP Swiper's): checked and kept in order; an overlay's fill.
 check(WPBN_Gradient::sanitize('circle;left top;#F00@100;rgba(0, 0, 255, 0.5)@20;bad@50;#0f0@x')==='circle;left top;rgba(0,0,255,0.5)@20;#ff0000@100','A gradient: colours checked, bad points left out, in order');
 foreach (array('', 'linear;middle;#000@0;#fff@100', 'conic;left;#000@0;#fff@100', 'linear;left;#000@0', 'linear;left;#000@0;#fff@100;x</style>') as $bad) {
     check(WPBN_Gradient::sanitize($bad)===($bad==='linear;left;#000@0;#fff@100;x</style>' ? 'linear;left;#000000@0;#ffffff@100' : WPBN_Gradient::DEFAULT_VALUE),'Not a gradient (or its junk left out): '.$bad);
@@ -219,15 +252,118 @@ check(count(WPBN_Gradient::parse('linear;left;'.implode(';', array_fill(0, 14, '
 check(WPBN_Gradient::css('linear;left;#000@0;#fff@100')==='linear-gradient(to right, #000000 0%, #ffffff 100%)' && WPBN_Gradient::css('ellipse;center bottom;#000@0;#fff@100')==='radial-gradient(ellipse at center bottom, #000000 0%, #ffffff 100%)','Its CSS: linear starting at the left goes to the right; radial at its middle');
 $lay=function ($l) { return WPBN_Settings::sanitize(array('layers'=>array($l)))['layers'][0]; };
 check($lay(array())['use_gradient']===false && $lay(array())['gradient']===WPBN_Gradient::DEFAULT_VALUE,'Off, with its default colours');
+// A title's Letter spacing (per device), Case, Style and Shadow.
+$styled=$lay(array('type'=>'text','letter_spacing'=>'2.46','tablet_letter_spacing'=>'','mobile_letter_spacing'=>-50,'text_transform'=>'uppercase','font_style'=>'italic','use_shadow'=>1,'shadow_color'=>'rgba(0,0,0,0.25)','shadow_x'=>3,'shadow_y'=>'4','shadow_blur'=>500));
+check($styled['letter_spacing']===2.5 && $styled['tablet_letter_spacing']===null && $styled['mobile_letter_spacing']===-20.0 && WPBN_Settings::spacings($styled)===array('desktop'=>2.5,'tablet'=>2.5,'mobile'=>-20.0),'Letter spacing: to 0.1px, bounded, tablet following desktop');
+check($styled['text_transform']==='uppercase' && $styled['font_style']==='italic' && WPBN_Settings::shadow($styled)==='3px 4px 200px rgba(0,0,0,0.25)','Case, Style and Shadow kept (Blur bounded)');
+$plain=$lay(array('type'=>'text','text_transform'=>'small-caps','font_style'=>'oblique','shadow_color'=>'red','shadow_x'=>9));
+check($plain['letter_spacing']==0 && $plain['text_transform']==='none' && $plain['font_style']==='normal' && $plain['shadow_color']===WPBN_Settings::SHADOW_COLOR && WPBN_Settings::shadow($plain)==='','Defaults: no spacing, as typed, upright, no shadow (its values kept)');
+$html=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_family'=>'Playfair Display','font_weight'=>900)+$styled))), array('id'=>7));
+check(strpos($html,'--wpbn-ls:2.5px;--wpbn-tablet-ls:2.5px;--wpbn-mobile-ls:-20px;text-transform:uppercase;font-style:italic;text-shadow:3px 4px 200px rgba(0,0,0,0.25);')!==false,'Rendered: spacing per device, case, style, shadow');
+check(strpos($html,'family=Playfair+Display:ital,wght@1,900')!==false,'An italic Google font loaded in italic');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text'))))),'text-transform')===false,'None of them by default');
+// Only overlays have a Gradient (2026-11-08): an image's or a title's, saved before, is kept but not drawn.
 $graded=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(
-    array('type'=>'image','image'=>1,'use_gradient'=>true,'gradient'=>'linear;top;#000@0;#fff@100'),
-    array('type'=>'image','image'=>2,'image_mobile'=>1,'use_gradient'=>true),
+    array('type'=>'image','image'=>2,'use_gradient'=>true,'gradient'=>'linear;top;#000@0;#fff@100'),
     array('type'=>'text','use_gradient'=>true,'gradient'=>'linear;left;#ff0000@0;#0000ff@100','font_family'=>'Exo 2'),
-    array('type'=>'image','image'=>1,'gradient'=>'linear;top;#000@0;#fff@100'),
 ))));
-check(substr_count($graded,'wpbn-layer--gradient')===2 && strpos($graded,'--wpbn-gradient:linear-gradient(to bottom, #000000 0%, #ffffff 100%);--wpbn-mask:none;--wpbn-mask-t:none;--wpbn-mask-m:none;')!==false,'Over a photo: its gradient, no mask');
-check(strpos($graded,'--wpbn-mask:url(&quot;/assets/images/preview/desktop.svg&quot;);--wpbn-mask-t:url(&quot;/assets/images/preview/desktop.svg&quot;);--wpbn-mask-m:none;')!==false,'Over a cutout: masked by it on each device where it is one');
-check(strpos($graded,'font-family:&quot;Exo 2&quot;;background-image:linear-gradient(to right, #ff0000 0%, #0000ff 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;')!==false,'A title: its letters filled with the gradient');
+check($lay(array('type'=>'image','use_gradient'=>true,'gradient'=>'linear;left;#000@0;#fff@100'))['gradient']==='linear;left;#000000@0;#ffffff@100','An image\'s gradient kept');
+check(strpos($graded,'gradient')===false && strpos($graded,'mask')===false && strpos($graded,'background-clip')===false,'Not drawn over an image or in a title\'s letters');
+// Overlay: a colour or its Gradient over the whole scene; it does not move, only its Opacity at the end.
+$over=$lay(array('type'=>'overlay','x'=>10,'y_mobile'=>80,'move_y'=>-200,'use_move_y'=>true,'zoom'=>50,'use_zoom'=>true,'scale'=>200,'use_scale'=>true,'container'=>'theme','end_opacity'=>0,'use_end_opacity'=>true));
+check($over['type']==='overlay' && $over['color']===WPBN_Settings::OVERLAY_COLOR && $over['move_y']==-200,'An overlay: its default colour, its values kept');
+$fixed=WPBN_Settings::effective($over);
+check($fixed['x']==10 && $fixed['y']==50 && $fixed['y_mobile']==80 && $fixed['move_y']==0 && $fixed['zoom']==0 && $fixed['scale']==100 && $fixed['opacity']==100 && $fixed['container']==='theme','It keeps its Container and Position, does not move');
+check($lay(array('type'=>'overlay','x'=>-40,'y'=>150))['x']==-40 && WPBN_Settings::effective($lay(array('type'=>'overlay','x'=>-40,'y'=>150)))['x']==0 && WPBN_Settings::effective($lay(array('type'=>'overlay','y'=>150)))['y']==100,'Its Position within its container (0–100%)');
+// Its Height per device, as the scene's: 100% of the scene by default; px, vh or %; tablet and mobile follow.
+check(WPBN_Settings::heights($over)==array('desktop'=>array(100.0,'%'),'tablet'=>array(100.0,'%'),'mobile'=>array(100.0,'%')),'Its Height: the whole scene to start with');
+$tall=$lay(array('type'=>'overlay','height'=>'240','height_unit'=>'px','tablet_height'=>500,'tablet_height_unit'=>'%','mobile_height'=>5000,'mobile_height_unit'=>'vh','tablet_height_x'=>1));
+check(WPBN_Settings::heights($tall)==array('desktop'=>array(240.0,'px'),'tablet'=>array(100.0,'%'),'mobile'=>array(200.0,'vh')),'px, % (at most the scene) and vh, bounded');
+check($lay(array('type'=>'overlay','height_unit'=>'auto','tablet_height'=>40))['height_unit']==='%' && $lay(array('type'=>'overlay','tablet_height'=>40))['tablet_height']===null,'No Auto; a number without a unit follows the larger screen');
+check(WPBN_Settings::fade($fixed)==array(-100,-100,-100),'Its Opacity at the end applies');
+check($lay(array('type'=>'overlay','color'=>'nope'))['color']===WPBN_Settings::OVERLAY_COLOR && $lay(array('type'=>'text','color'=>'nope'))['color']==='#ffffff','A bad colour: an overlay\'s default, a title\'s white');
+$shaded=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(
+    array('type'=>'overlay','color'=>'rgba(0,0,0,0.5)'),
+    array('type'=>'overlay','color'=>'#ff0000','use_gradient'=>true,'gradient'=>'linear;top;#000@0;#fff@100'),
+    array('type'=>'overlay','color'=>'#00ff00','gradient'=>'linear;top;#000@0;#fff@100'),
+))));
+check(substr_count($shaded,'wpbn-layer--overlay')===3 && strpos($shaded,'background:rgba(0,0,0,0.5);')!==false && strpos($shaded,'background:linear-gradient(to bottom, #000000 0%, #ffffff 100%);')!==false && strpos($shaded,'background:#00ff00;')!==false,'Its colour, or its gradient with the switch on');
+check(strpos($shaded,'wpbn-layer--gradient')===false && strpos($shaded,'&quot;fill&quot;:[false,false,false]')!==false && strpos($shaded,'--wpbn-left:50%;')!==false && strpos($shaded,'--wpbn-oh:100%;--wpbn-oh-t:100%;--wpbn-oh-m:100%;')!==false,'No masked gradient, not grown at the edges, centred, the scene\'s height');
+$band=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($tall,array('container'=>'custom','container_width'=>900,'y'=>100))))));
+check(strpos($band,'--wpbn-cw:min(100% - 30px, 900px);')!==false && strpos($band,'--wpbn-anx:0.5;')!==false && strpos($band,'--wpbn-any:1;')!==false && strpos($band,'--wpbn-oh:240px;--wpbn-oh-t:100%;--wpbn-oh-m:200vh;')!==false,'In a container, at the bottom (Y 100%), its height per device');
+// Container width per device (Custom): tablet and mobile empty follow the larger screen; X and Width use each device's.
+$wide=$lay(array('type'=>'text','container'=>'custom','container_width'=>1400,'container_width_tablet'=>'','container_width_mobile'=>100));
+check($wide['container_width_tablet']===null && $wide['container_width_mobile']===320 && WPBN_Settings::resolved($wide,'container_width')===array('desktop'=>1400,'tablet'=>1400,'mobile'=>320),'Container width: its own on mobile (at least 320px), tablet following');
+$cwHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($wide))));
+check(strpos($cwHtml,'--wpbn-cw:min(100% - 30px, 1400px);--wpbn-cw-m:min(100% - 30px, 320px);')!==false && strpos($cwHtml,'--wpbn-cw-t:')===false,'Its own width on mobile only where it differs');
+check(strpos($cwHtml,'--wpbn-left-m:calc((100% - var(--wpbn-cw-m, var(--wpbn-cw-t, var(--wpbn-cw)))) / 2 + var(--wpbn-cw-m, var(--wpbn-cw-t, var(--wpbn-cw))) * 0.5);')!==false,'Mobile X: a share of the mobile container');
+// An overlay's Blur per device (backdrop-filter): none by default; tablet and mobile follow the larger screen.
+$blurred=$lay(array('type'=>'overlay','backdrop_blur'=>'12.4','tablet_backdrop_blur'=>'','mobile_backdrop_blur'=>500));
+check($blurred['backdrop_blur']===12 && $blurred['tablet_backdrop_blur']===null && $blurred['mobile_backdrop_blur']===100 && WPBN_Settings::blurs($blurred)===array('desktop'=>12,'tablet'=>12,'mobile'=>100),'Blur: whole px, bounded, tablet following');
+$blurHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($blurred, array('type'=>'overlay')))));
+check(substr_count($blurHtml,'wpbn-layer--blur')===1 && strpos($blurHtml,'--wpbn-blur:12px;--wpbn-blur-t:12px;--wpbn-blur-m:100px;')!==false,'Rendered per device; none at 0');
+// Text (richtext): paragraphs, headings, line breaks, bold, italic, underline, a colour, links, lists, alignment; no scripts.
+check(WPBN_Settings::rich_text('<p style="text-align: center; font-size: 90px" class="x">Hi <strong>you</strong><br><span style="color: #ff0000; position: fixed">red</span></p><h2 class="z" style="text-align:right;font-size:9px">Big</h2><h7>No</h7><ul><li style="text-align:right">One</li></ul><a href="https://x.test" onclick="y()">link</a><a href="javascript:alert(1)">bad</a><script>alert(1)</script>')==='<p style="text-align: center">Hi <strong>you</strong><br><span style="color: #ff0000">red</span></p><h2 style="text-align: right">Big</h2>No<ul><li style="text-align: right">One</li></ul><a href="https://x.test">link</a><a>bad</a>','Text: only its tags and styles kept (headings, links; no script links)');
+check(WPBN_Settings::rich_text('<p><a href="/x" target="_blank">a</a> <a href="/y" target="_blank" rel="nofollow">b</a></p>')==='<p><a href="/x" target="_blank" rel="noopener">a</a> <a href="/y" target="_blank" rel="nofollow noopener">b</a></p>','A link to another tab: noopener');
+check(WPBN_Settings::rich_text('<p>&nbsp;</p>')==='' && WPBN_Settings::rich_text('<p> </p><ul><li></li></ul>')==='','Only the editor\'s empty paragraph: nothing');
+$txt=$lay(array('type'=>'richtext','content'=>'<p>Hello <em>there</em></p>','x'=>140,'scale'=>200,'use_scale'=>true,'font_size'=>18,'color'=>'#222222','use_shadow'=>true));
+check($txt['type']==='richtext' && $txt['content']==='<p>Hello <em>there</em></p>' && WPBN_Settings::effective($txt)['x']==100 && WPBN_Settings::effective($txt)['scale']==100,'A text: placed within its container, at 100% scale');
+$txtHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($txt))));
+check(strpos($txtHtml,'class="wpbn-layer wpbn-layer--richtext"')!==false && strpos($txtHtml,'><p>Hello <em>there</em></p></div>')!==false && strpos($txtHtml,'--wpbn-font:18px;')!==false && strpos($txtHtml,'color:#222222;')!==false && strpos($txtHtml,'text-shadow:0px 2px 10px rgba(0,0,0,0.5);')!==false && strpos($txtHtml,'--wpbn-anx:1;')!==false,'Rendered: its HTML, size, colour, shadow, placed as a title');
+check(strpos(WPBN_Admin::theme_css(),'.wpbn-layer--richtext{font-family:var(--wd-text-font)}')!==false,'The preview: Text in the theme\'s text font');
+check(count(WPBN_Palette::tinymce_map())===2*count(WPBN_Palette::colors()) && WPBN_Palette::tinymce_map()[1]===WPBN_Palette::colors()[0]['name'] && strpos(WPBN_Palette::tinymce_map()[0],'#')===false,'The editor\'s Text color palette: the plugin\'s');
+// An image layer: Fill the scene (on by default, and for layers saved before); off: an object with its Width and Height (Auto).
+$img=$lay(array('type'=>'image','image'=>3));
+check($img['fill_scene']===true && $img['height_unit']==='auto' && WPBN_Settings::fills($img) && !WPBN_Settings::anchored($img),'An image fills the scene by default');
+$objL=$lay(array('type'=>'image','image'=>3,'fill_scene'=>false,'overlay_width'=>40,'tablet_overlay_width'=>300,'tablet_overlay_width_unit'=>'px','height_unit'=>'auto','mobile_height'=>50,'mobile_height_unit'=>'vh','x'=>120,'y'=>-10,'container'=>'theme'));
+check(WPBN_Settings::object($objL) && WPBN_Settings::anchored($objL) && WPBN_Settings::sized($objL) && WPBN_Settings::effective($objL)['x']==100 && WPBN_Settings::effective($objL)['y']==0,'Off: an object, placed within its container');
+$objHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($objL))));
+check(strpos($objHtml,'class="wpbn-layer wpbn-layer--image wpbn-layer--object"')!==false && strpos($objHtml,'--wpbn-oh:auto;--wpbn-oh-t:auto;--wpbn-oh-m:50vh;')!==false && strpos($objHtml,'--wpbn-width:calc(var(--wpbn-cw) * 0.4);')!==false && strpos($objHtml,'--wpbn-width-t:300px;')!==false && strpos($objHtml,'--wpbn-anx:1;')!==false,'Rendered: its Height (Auto), Width per device, placed as a title');
+check(strpos($objHtml,'&quot;fill&quot;:[false,false,false]')!==false,'Not grown to hide edges (it does not fill the scene)');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($img)))),'wpbn-layer--object')===false,'Filling: as before');
+check($lay(array('type'=>'overlay','height_unit'=>'auto'))['height_unit']==='%','An overlay has no Auto height');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh,auto)}')!==false,'Its height on the site');
+// Scene settings, Attributes: its own id and classes on its block.
+$attr=WPBN_Settings::sanitize(array('css_id'=>' #offer-1 ','css_class'=>'.hero  big-banner, hero bad"class <x>'));
+check($attr['css_id']==='offer-1' && $attr['css_class']==='hero big-banner badclass x','Element ID and Extra class name cleaned ('.$attr['css_class'].')');
+check(WPBN_Settings::sanitize(array('css_id'=>'1abc'))['css_id']==='' && WPBN_Settings::sanitize(array('css_id'=>'a b'))['css_id']==='' && WPBN_Settings::sanitize(array())['css_id']==='','An id must start with a letter, without spaces');
+$attrHtml=WPBN_Render::markup($attr);
+check(strpos($attrHtml,'<section id="offer-1" class="wpbn-scene hero big-banner badclass x"')!==false,'Rendered on the scene\'s block');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array())),'<section class="wpbn-scene"')!==false,'None: no id, no extra class');
+// Shortcode: another plugin's element in the layer's place, its Width per device, placed as a title; not this plugin's own.
+$sc=$lay(array('type'=>'shortcode','shortcode'=>' [wp_swiper id="12"]<script>x()</script>[wp_banner id="3"] ','overlay_width'=>80,'mobile_overlay_width'=>360,'mobile_overlay_width_unit'=>'px','x'=>130,'scale'=>200,'use_scale'=>true,'container'=>'theme'));
+check($sc['shortcode']==='[wp_swiper id="12"]' && WPBN_Settings::effective($sc)['x']==100 && WPBN_Settings::effective($sc)['scale']==100,'A shortcode: kept without scripts or a banner in itself; placed within its container at 100% scale');
+$scHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($sc))));
+check(strpos($scHtml,'class="wpbn-layer wpbn-layer--shortcode"')!==false && strpos($scHtml,'<div class="demo-slider" data-shortcode="wp_swiper" style="height:120px">[wp_swiper id=&quot;12&quot;]</div></div>')!==false,'Rendered: the shortcode\'s output in the layer');
+check(strpos($scHtml,'--wpbn-width:calc(var(--wpbn-cw) * 0.8);')!==false && strpos($scHtml,'--wpbn-width-m:360px;')!==false && strpos($scHtml,'--wpbn-anx:1;')!==false,'Its Width per device (% of its container, px), placed as a title');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'  '))))),'wpbn-layer--shortcode')===false,'Without a shortcode: not drawn');
+$nested=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[inner_banner]')))));
+check(substr_count($nested,'wpbn-layer--shortcode')===1 && strpos($nested,'demo-slider')===false,'A banner its shortcode shows: no Shortcode layers of its own (no endless nesting)');
+check(strpos($fcss=file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--shortcode{height:auto;pointer-events:auto}')!==false,'It can be clicked and swiped');
+// Button (as WP Top Info Bar's): text, link, a new window, Background, Corners, Size per device, colours; placed as a title.
+$btn=$lay(array('type'=>'button','button_text'=>' Book <b>now</b> ','button_url'=>'https://x.test/book','button_new_tab'=>1,'button_style'=>'bordered','button_shape'=>'round','button_size'=>'large','button_size_tablet'=>'nope','button_size_mobile'=>'small','button_color'=>'#ff0000','button_text_color'=>'rgba(0,0,0,0.5)','x'=>150,'scale'=>200,'use_scale'=>true));
+check($btn['type']==='button' && $btn['button_text']==='Book now' && $btn['button_url']==='https://x.test/book' && $btn['button_new_tab']===true && $btn['button_style']==='bordered' && $btn['button_shape']==='round' && $btn['button_size']==='large' && $btn['button_size_tablet']===null && $btn['button_size_mobile']==='small' && $btn['button_color']==='#ff0000' && $btn['button_text_color']==='rgba(0,0,0,0.5)','A button: its settings kept (a size not on the list: follows the larger screen)');
+check(WPBN_Settings::effective($btn)['x']==100 && WPBN_Settings::effective($btn)['scale']==100 && WPBN_Settings::textual($btn),'A button: placed within its container, at 100% scale');
+$plain=$lay(array('type'=>'button'));
+check($plain['button_text']==='Learn more' && $plain['button_url']==='' && $plain['button_style']==='filled' && $plain['button_shape']==='square' && $plain['button_size']==='default' && $plain['button_color']==='#2271b1' && $plain['button_text_color']==='#ffffff','A new button: Learn more, filled, square, Default size, WP Top Info Bar\'s colours');
+check($lay(array('type'=>'button','button_url'=>'javascript:alert(1)'))['button_url']==='' && $lay(array('type'=>'button','button_url'=>'/contact/'))['button_url']==='/contact/' && $lay(array('type'=>'button','button_url'=>'tel:+380501234567'))['button_url']==='tel:+380501234567','Its link: no javascript:; paths, mailto: and tel: kept');
+$btnHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($btn))));
+check(strpos($btnHtml,'class="wpbn-layer wpbn-layer--button"')!==false && strpos($btnHtml,'<a class="wpbn-button wpbn-button--bordered wpbn-button--round" href="https://x.test/book" target="_blank" rel="noopener noreferrer">Book now</a>')!==false,'Rendered: a link in a new window, its Background and Corners');
+check(strpos($btnHtml,'--wpbn-bc:#ff0000;--wpbn-bt:rgba(0,0,0,0.5);')!==false && strpos($btnHtml,'--wpbn-bp:5px 28px;--wpbn-bh:48px;--wpbn-bf:14px;--wpbn-bp-t:5px 28px;')!==false && strpos($btnHtml,'--wpbn-bp-m:5px 14px;--wpbn-bh-m:36px;--wpbn-bf-m:12px;')!==false && strpos($btnHtml,'--wpbn-anx:1;')!==false,'Its colours, its Size per device (tablet following desktop), placed as a title');
+$noLink=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'button','button_text'=>'Hi')))));
+check(strpos($noLink,'<span class="wpbn-button wpbn-button--filled wpbn-button--square">Hi</span>')!==false,'Without a link: a span');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'button','button_text'=>'  ','button_url'=>'/x'))))),'wpbn-layer--button')===false,'Without text: not drawn');
+$fcss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
+check(strpos($fcss,'.wpbn-scene a.wpbn-button{pointer-events:auto')!==false && strpos($fcss,'--wpbn-bp-m,var(--wpbn-bp')!==false,'A link button can be clicked; its size per device');
+// No Width (%) setting: titles and images as wide as their container. An overlay: its own Width per device
+// (as its Height: % of its container, px or vw).
+check(WPBN_Settings::effective($lay(array('type'=>'text','width'=>60)))['width']==100 && WPBN_Settings::effective($lay(array('type'=>'image','width'=>60)))['width']==100,'Titles and images as wide as their container');
+$ow=$lay(array('type'=>'overlay','overlay_width'=>50,'overlay_width_unit'=>'%','tablet_overlay_width'=>9000,'tablet_overlay_width_unit'=>'px','mobile_overlay_width'=>150,'mobile_overlay_width_unit'=>'vw'));
+check(WPBN_Settings::heights($ow, WPBN_Settings::OVERLAY_WIDTHS)==array('desktop'=>array(50,'%'),'tablet'=>array(3000,'px'),'mobile'=>array(100,'vw')),'An overlay\'s Width: %, px or vw per device, bounded');
+check(WPBN_Settings::heights($lay(array('type'=>'overlay','overlay_width_unit'=>'vh','tablet_overlay_width'=>40)), WPBN_Settings::OVERLAY_WIDTHS)==array('desktop'=>array(100,'%'),'tablet'=>array(100,'%'),'mobile'=>array(100,'%')),'All of its container by default; a number without a unit follows');
+$owHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ow,array('container'=>'custom','container_width'=>900))))));
+check(strpos($owHtml,'--wpbn-width:calc(var(--wpbn-cw) * 0.5);--wpbn-width-t:3000px;--wpbn-width-m:100vw;')!==false && substr_count($owHtml,'--wpbn-width:')===1,'Rendered: a share of its container, px, vw');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'overlay','overlay_width'=>30))))),'--wpbn-width:30%;')!==false,'Full width: a share of the scene');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.

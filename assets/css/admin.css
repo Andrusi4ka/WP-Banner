@@ -42,9 +42,10 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-layer-row:hover .wpbn-layer-select,.wpbn-layer-row.is-active .wpbn-layer-select{color:var(--wpbn-accent)}
 .wpbn-layer-thumb{display:flex;flex:0 0 36px;align-items:center;justify-content:center;width:36px;height:36px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
 .wpbn-layer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-/* A title: its own icon (assets/images/title.svg), with its own frame. */
-.wpbn-layer-thumb--text{border:0;border-radius:0;background:none}
-.wpbn-layer-thumb--text img{object-fit:contain}
+/* A title, a text and a button: the icon their element has under Add element, dark (an image's empty one stays light). */
+.wpbn-layer-thumb--text,.wpbn-layer-thumb--richtext,.wpbn-layer-thumb--button,.wpbn-layer-thumb--shortcode{color:#50575e}
+/* An overlay: its fill over the checkerboard (a see-through one shows as such). */
+.wpbn-layer-thumb--overlay>span{display:block;width:100%;height:100%}
 .wpbn-layer-label{min-width:0;overflow-wrap:anywhere}
 .wpbn-layer-label small{display:block;color:#646970;font-weight:400;font-size:11px}
 .wpbn-layer-row.is-hidden .wpbn-layer-thumb,.wpbn-layer-row.is-hidden .wpbn-layer-label{opacity:.5}
@@ -132,13 +133,16 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-preview{position:sticky;top:46px;min-width:0;padding:12px 16px 16px;border:1px solid #dcdcde;border-radius:4px;background:#f6f7f7}
 .wpbn-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
 .wpbn-preview-title{font-weight:600}
-.wpbn-toolbar #wpbn-dark{margin-right:auto}
+.wpbn-toolbar .wpbn-resolution{margin-right:auto}
 .wpbn-toolbar__end{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .wpbn-preview-devices{display:flex;gap:4px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
 .wpbn-device-button{display:inline-flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;min-width:0;padding:4px 10px;border:1px solid transparent;border-radius:4px;background:none;color:#50575e;font:inherit;cursor:pointer}
 .wpbn-device-button:hover{color:#1d2327}
 .wpbn-device-button[aria-pressed=true]{border-color:var(--wpbn-accent);background:#fff;color:var(--wpbn-accent);font-weight:600}
 .wpbn-preview-devices .dashicons{width:16px;height:16px;font-size:16px}
+/* An overlay's fill: Color or Gradient, two buttons across the card, styled as the preview's devices. */
+.wpbn-fill-choice{display:flex;gap:4px;margin-bottom:14px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
+.wpbn-fill-choice .wpbn-device-button{flex:1 1 0;min-height:32px}
 #wpbn-rotate,#wpbn-dark{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
 #wpbn-rotate svg{display:block;width:22px;height:auto}
 #wpbn-dark svg{display:block;width:20px;height:20px}
@@ -268,10 +272,11 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-target-warning .dashicons{flex:0 0 auto;width:16px;height:16px;font-size:16px;color:#dba617}
 
 /* A screen size of one's own for the previewed device, above the preview. */
-.wpbn-resolution{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-4px 0 12px;font-size:12px}
-.wpbn-resolution__label{font-weight:600;font-size:13px;margin-right:2px}
-.wpbn-resolution input[type=number]{width:84px;min-height:30px}
-.wpbn-resolution__hint{color:#646970;margin-left:4px}
+/* Screen: its own size, small, in the bar after the Dark button. */
+.wpbn-resolution{display:flex;align-items:center;gap:4px;color:#50575e;font-size:12px}
+.wpbn-resolution__label{margin-right:2px}
+.wpbn-resolution input[type=number]{width:62px;min-height:26px;height:26px;padding:0 4px;font-size:12px;line-height:1;-moz-appearance:textfield}
+.wpbn-resolution input[type=number]::-webkit-inner-spin-button,.wpbn-resolution input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 /* Shown in a plain frame (the device drawings have fixed proportions). */
 /* Light, as the screen; dark with the Dark button. */
 #wpbn-plain-frame{display:none;position:absolute;box-sizing:border-box;border:1px solid #dcdcde;border-radius:10px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.08)}
@@ -306,6 +311,11 @@ body.wpbn-modal-open{overflow:hidden}
 /* Fields side by side, sharing the row (a title's Font and Weight). */
 .wpbn-row{display:flex;gap:0 12px}
 .wpbn-row>.wpbn-field{flex:1 1 0;min-width:0}
+/* A title's Shadow: its colour, then X, Y and Blur, closer together. */
+.wpbn-shadow{gap:0 8px}
+.wpbn-shadow>.wpbn-field:first-child{flex:0 0 auto}
+#wpbn-app .wpbn-shadow .wpbn-number-unit input[type=number]{padding:0 6px}
+.wpbn-shadow .wpbn-number-unit__unit{padding:0 6px}
 /* A title's Font (with Woodmart, admin.js fontField()): as tall as a select; a list with a search box
    under it, in groups, wider than the field when it is narrow. */
 .wpbn-font{position:relative}
@@ -357,3 +367,21 @@ body.wpbn-modal-open{overflow:hidden}
 #wpbn-app .wpbn-gradient__delete{padding:0;border:0;background:none;color:#d63638;cursor:pointer}
 #wpbn-app .wpbn-gradient__delete:hover,#wpbn-app .wpbn-gradient__delete:focus{color:#b32d2e}
 #wpbn-app .wpbn-gradient__delete:disabled{color:#a7aaad;cursor:default}
+
+/* A button's Background and Corners: a sample of each to pick (as WP Top Info Bar's). */
+.wpbn-button-choices{display:flex;gap:8px}
+.wpbn-button-choice{display:flex;flex:1 1 0;min-width:0;min-height:64px;align-items:center;justify-content:center;padding:10px;border:1px solid #8c8f94;border-radius:2px;background:#fff;color:#3c434a;font:inherit;cursor:pointer}
+.wpbn-button-choice[aria-pressed=true]{border-color:var(--wpbn-accent);box-shadow:0 1px 4px rgba(34,113,177,.2)}
+.wpbn-button-choice:hover:not(:disabled){border-color:var(--wpbn-accent)}
+.wpbn-button-choice:focus-visible{outline:2px solid var(--wpbn-accent);outline-offset:2px}
+.wpbn-button-choice__sample{display:inline-flex;align-items:center;justify-content:center;width:100%;min-height:36px;padding:6px;box-sizing:border-box;background:#f2f2f2;font-size:11px;font-weight:600;text-transform:uppercase}
+.wpbn-button-choice__sample--rounded{border-radius:5px}
+.wpbn-button-choice__sample--round{border-radius:35px}
+.wpbn-button-choice__sample--bordered{border:2px solid #d2d2d2;background:transparent}
+.wpbn-button-choice__sample--underline{border-bottom:3px solid #8c8f94;background:transparent}
+/* A Shortcode layer in the Position window: a dashed box with its shortcode (its element is not drawn there). */
+.wpbn-position-item.is-shortcode{display:block;box-sizing:border-box;border:1px dashed currentColor;background:rgba(127,127,127,.18);color:#50575e;overflow:hidden}
+/* Its shortcode on one line, in the middle of the part of the box the scene shows (admin.js placeLabel()). */
+.wpbn-position-item__label{position:absolute;left:4px;right:4px;transform:translateY(-50%);font:11px/1.3 monospace;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Its height not measured on that device yet (the preview shows another one, or no Update since): a lighter box. */
+.wpbn-position-item.is-shortcode.is-guess{border-style:dotted;opacity:.75}

@@ -4,8 +4,7 @@
  * kept as "linear;top;rgba(0,0,0,0)@0;rgba(0,0,0,0.6)@100": its type (linear, or radial:
  * circle / ellipse), where it starts (linear: left, right, top, bottom) or its middle
  * (radial: "left|center|right top|center|bottom"), then 2 to STOPS colours with their
- * positions (0–100). Over an image layer (only over what is not see-through in a cutout);
- * a title's letters are filled with it.
+ * positions (0–100). An overlay layer's fill (instead of its colour); only overlays have one.
  */
 defined('ABSPATH') || exit;
 class WPBN_Gradient {

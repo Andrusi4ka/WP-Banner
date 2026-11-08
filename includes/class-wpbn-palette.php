@@ -47,6 +47,12 @@ class WPBN_Palette {
         return array(array('color'=>'#000000', 'name'=>'Black'), array('color'=>'#444444', 'name'=>'Dark gray'), array('color'=>'#888888', 'name'=>'Gray'),
             array('color'=>'#cccccc', 'name'=>'Light gray'), array('color'=>'#ffffff', 'name'=>'White'));
     }
+    // The palette for the Text editor's "Text color" button (TinyMCE's forecolor_map, as WP Swiper's): hex without #, name.
+    public static function tinymce_map() {
+        $map = array();
+        foreach (self::colors() as $entry) { $map[] = strtoupper(substr($entry['color'], 1)); $map[] = $entry['name']; }
+        return $map;
+    }
     // The palette: the theme's colors, then the basic ones; each color once (its first name), a nameless one named by itself.
     public static function colors() {
         $all = array();

@@ -93,11 +93,11 @@ class WPBN_Fonts {
         return preg_match('/[,\'"(]/', $family) ? $family : '"'.$family.'"';
     }
     // The theme's font variables as the site has them, for the editor's preview (it has none of the theme's
-    // styles); titles without a font of their own take the title font there too, as headings do on the site.
+    // styles); titles without a font of their own take the title font there too, as headings do on the site, Text the text font.
     public static function theme_css() {
         $vars = '';
         foreach (self::faces() as $value=>$face) { $vars .= substr($value, 4, -1).':'.$face['css'].';'; }
-        return $vars === '' ? '' : ':root{'.$vars.'}.wpbn-scene .wpbn-layer--text>*{font-family:var(--wd-title-font)}';
+        return $vars === '' ? '' : ':root{'.$vars.'}.wpbn-scene .wpbn-layer--text>*{font-family:var(--wd-title-font)}.wpbn-scene .wpbn-layer--richtext{font-family:var(--wd-text-font)}';
     }
     // The theme's fonts as the browser gets them, by their variable: [css: the family, google: the Google font
     // to load ('' none)]. For the preview page and the editor's font sample (which have none of the theme's styles).
@@ -116,14 +116,14 @@ class WPBN_Fonts {
         return $faces;
     }
     // The <link> that loads a Google font at its weight (once a page: Woodmart leaves out what it has loaded already); '' otherwise.
-    public static function link($family, $weight, $id) {
+    public static function link($family, $weight, $id, $style = '') {
         $family = self::resolve($family);
         $google = self::google();
         if ($family === '' || !isset($google[$family])) { return ''; }
         $instance = call_user_func(array(self::GOOGLE, 'get_instance'));
         if (!is_object($instance) || !method_exists($instance, 'enqueue_inline_fonts')) { return ''; }
         ob_start();
-        $instance->enqueue_inline_fonts(array(array('font-family'=>$family, 'font-weight'=>(string) $weight, 'font-style'=>'')), absint($id));
+        $instance->enqueue_inline_fonts(array(array('font-family'=>$family, 'font-weight'=>(string) $weight, 'font-style'=>$style)), absint($id));
         return (string) ob_get_clean();
     }
 }

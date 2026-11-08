@@ -38,18 +38,18 @@ class WPBN_Container {
      * The container a layer stands in (its container and container_width), as admin.js container()
      * works it out: its content width at a scene width W is min(W - side, width) - inner. Null: the whole scene.
      */
-    public static function of($l) {
+    public static function of($l, $device = 'desktop') {
         if ($l['container'] === 'full') { return null; }
         $theme = $l['container'] === 'theme' ? self::theme() : null;
         if ($theme) { return array('width'=>$theme['width'], 'side'=>$theme['side'], 'inner'=>$theme['inner']); }
         // Custom, or no theme container: the width set, 15px kept clear on each side of a narrower screen.
-        return array('width'=>$l['container_width'], 'side'=>30, 'inner'=>0);
+        return array('width'=>WPBN_Settings::resolved($l, 'container_width')[$device], 'side'=>30, 'inner'=>0);
     }
-    // The content width as CSS (--wpbn-cw); '' for the whole scene.
-    public static function css($l) {
+    // The content width as CSS (--wpbn-cw) on a device (Custom's width may be its own there); '' for the whole scene.
+    public static function css($l, $device = 'desktop') {
         if ($l['container'] === 'full') { return ''; }
         $theme = $l['container'] === 'theme' ? self::theme() : null;
-        if (!$theme) { return 'min(100% - 30px, '.$l['container_width'].'px)'; }
+        if (!$theme) { return 'min(100% - 30px, '.WPBN_Settings::resolved($l, 'container_width')[$device].'px)'; }
         $side = isset($theme['pad']) ? ' - '.$theme['pad'] : '';
         return $theme['inner'] ? 'calc(min(100%'.$side.', '.$theme['var'].') - '.$theme['inner'].'px)' : 'min(100%'.$side.', '.$theme['var'].')';
     }

@@ -10,9 +10,24 @@
     // The kinds of element "Add element" offers (a tile each in the settings column): icon, name, what it is for.
     const ELEMENTS = {
         image: ['format-image', 'Image', 'A photo, or a transparent cutout in front of the title.'],
-        text: ['editor-textcolor', 'Title', 'The banner\'s title, between the image layers (behind a cutout, for the mountain effect).']
+        text: ['editor-textcolor', 'Title', 'The banner\'s title, between the image layers (behind a cutout, for the mountain effect).'],
+        richtext: ['editor-paragraph', 'Text', 'Paragraphs and headings under or beside the title: bold, italic, underline, colors, alignment, lists and links.'],
+        shortcode: ['shortcode', 'Shortcode', 'Another plugin\'s element by its shortcode, e.g. a slider: [wp_swiper id="12"]. It takes its place among the layers.'],
+        button: ['button', 'Button', 'A button with a link, e.g. "Learn more" under the title.'],
+        overlay: ['image-filter', 'Overlay', 'A color or gradient over the scene (or a band of it), over the layers under it: e.g. the photo shaded under the title.']
     };
-    const TYPE_NAMES = {image:'Image', text:'Title'};
+    // richtext: the Text element (text is the Title's key).
+    const TYPE_NAMES = {image:'Image', text:'Title', overlay:'Overlay', richtext:'Text', button:'Button', shortcode:'Shortcode'};
+    // Title, Text and Button (WPBN_Settings::textual()): as wide as their content, at 100% scale and opacity.
+    const textual = l => l.type === 'text' || l.type === 'richtext' || l.type === 'button' || l.type === 'shortcode';
+    // A button's Size: WoodMart's presets (WPBN_Settings::BUTTON_SIZES): side padding, height, font size (px).
+    const BUTTON_SIZES = {'extra-small':['Extra Small', 10, 28, 11], small:['Small', 14, 36, 12], default:['Default', 20, 42, 13], large:['Large', 28, 48, 14], 'extra-large':['Extra Large', 40, 56, 16]};
+    // An overlay does not move (WPBN_Settings::effective()): only its Opacity at the end. Its Container, Position and Height are its own.
+    const OVERLAY_FIXED = {scale:100, opacity:100, move_x:0, move_y:0, zoom:0};
+    // Placed as a title is: its Position also its own point there (0% flush left / top, 100% right / bottom), within its container.
+    // An image layer with Fill the scene off (WPBN_Settings::object()): an object with its own Width and Height, placed as a title.
+    const imageObject = l => l.type === 'image' && l.fill_scene === false;
+    const anchored = l => textual(l) || l.type === 'overlay' || imageObject(l);
     // A field with its help behind an "i" beside the label (the dark tooltip), instead of under it.
     const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
     // adding: the settings column shows the elements to add instead of a layer's settings.
@@ -44,8 +59,9 @@
     function eff(l, base, d) {
         // Every layer is as wide as its container (WPBN_Settings::effective()).
         if (base === 'width') return 100;
-        // A title has no Scale and no Opacity (WPBN_Settings::effective()).
-        if (l.type === 'text' && (base === 'scale' || base === 'opacity')) return 100;
+        // A title or a text has no Scale and no Opacity (WPBN_Settings::effective()).
+        if (textual(l) && (base === 'scale' || base === 'opacity')) return 100;
+        if (l.type === 'overlay' && base in OVERLAY_FIXED) return OVERLAY_FIXED[base];
         if (switched(l, base) && !l[OPTIONAL[base][0]]) return OPTIONAL[base][1] === null ? eff(l, 'opacity', d) : OPTIONAL[base][1];
         while (d !== 'desktop' && (l[dkey(base, d)] === null || l[dkey(base, d)] === undefined)) d = UP[d];
         return l[dkey(base, d)];
@@ -234,7 +250,7 @@
     });
 
     /*
-     * A layer's Gradient, as WP Swiper's (its editor as WoodMart's; WPBN_Gradient checks it again): its
+     * An overlay's Gradient, as WP Swiper's (its editor as WoodMart's; WPBN_Gradient checks it again): its
      * type and where it starts (or its middle); the gradient as a bar, its colours' points under it: a
      * click on the bar adds one (the colour there), a point is dragged along it (or moved with the arrow
      * keys; Delete removes it); the chosen one's colour (the colour block, with opacity) and Delete.
@@ -242,6 +258,7 @@
      */
     const GRADIENT_STOPS = 10;
     const GRADIENT_DEFAULT = boot.layer.gradient;
+    const OVERLAY_COLOR = boot.overlayColor || 'rgba(0,0,0,0.4)';
     let gradientChosen = 0;
     function parseGradient(value) {
         const parts = String(value || '').split(';');
@@ -262,6 +279,13 @@
     const gradientValue = g => g.type + ';' + g.where + ';' + gradientSorted(g).map(stop => stop.color + '@' + gradientPosition(stop.at)).join(';');
     // The bar: the colours left to right, whatever the type.
     const gradientBar = g => 'linear-gradient(to right, ' + gradientSorted(g).map(stop => stop.color + ' ' + gradientPosition(stop.at) + '%').join(', ') + ')';
+    // As CSS (WPBN_Gradient::css(): "left" starts on the left, towards the right); '' if it is not one.
+    function gradientCss(value) {
+        const g = parseGradient(value);
+        if (!g) return '';
+        const points = gradientSorted(g).map(stop => stop.color + ' ' + gradientPosition(stop.at) + '%').join(', ');
+        return g.type === 'linear' ? 'linear-gradient(to ' + {left:'right', right:'left', top:'bottom', bottom:'top'}[g.where] + ', ' + points + ')' : 'radial-gradient(' + g.type + ' at ' + g.where + ', ' + points + ')';
+    }
     // The colour the gradient has at a position (a new point's).
     function gradientColorAt(g, at) {
         const stops = gradientSorted(g);
@@ -272,11 +296,11 @@
         const mix = (x, y) => Math.round(x + (y - x) * share);
         return colorValue('#' + [1, 3, 5].map(i => ('0' + mix(parseInt(a.hex.substr(i, 2), 16), parseInt(b.hex.substr(i, 2), 16)).toString(16)).slice(-2)).join(''), mix(a.alpha, b.alpha));
     }
-    // The switch, its "i" beside its name (on the switch's line, as the switches with sliders have it).
-    function gradientToggle(l) {
-        const id = 'wpbn-f-use_gradient', help = (l.type === 'image' ? 'Over the image; on a cutout (PNG, WebP), only over the picture, not its see-through parts.' : 'The title\'s letters filled with it (Color and Accent color then do not show).')
-            + ' Click the bar to add a color, drag a color along it, pick one to change or delete it.';
-        return '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_gradient"' + (l.use_gradient ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>Gradient</span></label>' + tip(help) + '</div></div>';
+    // An overlay's fill: Color or Gradient, two buttons across the card (as the preview's devices); only the chosen
+    // one's settings show under them (use_gradient; the other's values are kept).
+    function fillChoice(l) {
+        return '<div class="wpbn-fill-choice" role="group" aria-label="Fill">' + [['color', 'Color'], ['gradient', 'Gradient']].map(([fill, name]) =>
+            '<button type="button" class="wpbn-device-button" data-fill="' + fill + '" aria-pressed="' + (!!l.use_gradient === (fill === 'gradient')) + '">' + name + '</button>').join('') + '</div>';
     }
     const SIDES = {left:'Left', right:'Right', top:'Top', bottom:'Bottom'};
     const options = (list, chosen) => Object.entries(list).map(([value, text]) => '<option value="' + value + '"' + (value === chosen ? ' selected' : '') + '>' + text + '</option>').join('');
@@ -284,7 +308,7 @@
         const g = parseGradient(l.gradient) || parseGradient(GRADIENT_DEFAULT), linear = g.type === 'linear', at = linear ? ['center', 'center'] : g.where.split(' ');
         gradientChosen = Math.min(gradientChosen, g.stops.length - 1);
         const chosen = parseColor(g.stops[gradientChosen].color);
-        return '<div class="wpbn-field wpbn-gradient">' + head('wpbn-f-gradient', 'Gradient colors') + '<div class="wpbn-gradient__selects">'
+        return '<div class="wpbn-field wpbn-gradient">' + head('wpbn-f-gradient', 'Gradient colors', tip('Click the bar to add a color, drag a color along it, pick one to change or delete it.')) + '<div class="wpbn-gradient__selects">'
             + '<select class="wpbn-gradient__type" id="wpbn-f-gradient" aria-label="Gradient type">' + options({linear:'Linear', circle:'Radial - Circle', ellipse:'Radial - Ellipse'}, g.type) + '</select>'
             + '<select class="wpbn-gradient__direction" aria-label="Starts at"' + (linear ? '' : ' hidden') + '>' + options(SIDES, linear ? g.where : 'left') + '</select>'
             + '<select class="wpbn-gradient__x" aria-label="Middle across"' + (linear ? ' hidden' : '') + '>' + options({center:'Center', left:'Left', right:'Right'}, at[0]) + '</select>'
@@ -317,6 +341,7 @@
         const chosen = g.stops[gradientChosen], sorted = gradientSorted(g);
         gradientChosen = Math.max(0, sorted.indexOf(chosen));
         current().gradient = gradientValue({type:g.type, where:g.where, stops:sorted});
+        if (current().type === 'overlay') list();
         changed();
     }
     const gradientNow = () => parseGradient(current().gradient) || parseGradient(GRADIENT_DEFAULT);
@@ -401,7 +426,8 @@
     const FONTS = boot.fonts && Array.isArray(boot.fonts.groups) ? boot.fonts : null;
     const WEIGHT_NAMES = {100:'100 Thin', 200:'200 Extra-light', 300:'300 Light', 400:'400 Regular', 500:'500 Medium', 600:'600 Semi-bold', 700:'700 Bold', 800:'800 Extra-bold', 900:'900 Black'};
     // Empty Font: the theme's title font (h1–h6 take it).
-    const DEFAULT_FONT = 'var(--wd-title-font)';
+    // A layer without a font of its own: a title the theme's title font, a text the theme's text font (as on the site).
+    const defaultFont = () => current() && current().type === 'richtext' ? 'var(--wd-text-font)' : 'var(--wd-title-font)';
     // value => [name, weights as digits ("4" = 400)].
     const FONT_INDEX = {};
     if (FONTS) {
@@ -409,12 +435,12 @@
         Object.entries(FONTS.google || {}).forEach(([name, weights]) => { if (!FONT_INDEX[name]) FONT_INDEX[name] = [name, weights]; });
     }
     function fontName(value) {
-        if (value === '') return 'Default' + (FONT_INDEX[DEFAULT_FONT] ? ' · ' + FONT_INDEX[DEFAULT_FONT][0].replace(/^[^·]*· /, '') : '');
+        if (value === '') return 'Default' + (FONT_INDEX[defaultFont()] ? ' · ' + FONT_INDEX[defaultFont()][0].replace(/^[^·]*· /, '') : '');
         return FONT_INDEX[value] ? FONT_INDEX[value][0] : value;
     }
     // The weights a font has (100–900); all for one not in the list (typed before there was a list).
     function fontWeights(value) {
-        const entry = FONT_INDEX[value === '' ? DEFAULT_FONT : value];
+        const entry = FONT_INDEX[value === '' ? defaultFont() : value];
         return (entry ? entry[1] : '123456789').split('').map(d => Number(d) * 100);
     }
     const nearestWeight = (weights, w) => weights.reduce((best, x) => Math.abs(x - w) < Math.abs(best - w) || (Math.abs(x - w) === Math.abs(best - w) && x > best) ? x : best, weights[0]);
@@ -456,7 +482,7 @@
      */
     const FONT_FACES = boot.fontFaces || {};
     function sampleFace(value) {
-        const v = value === '' ? DEFAULT_FONT : value;
+        const v = value === '' ? defaultFont() : value;
         if (FONT_FACES[v]) return FONT_FACES[v];
         if (FONTS && FONTS.google && FONTS.google[v] !== undefined) return {css:'"' + v + '"', google:v};
         return {css:v, google:''};
@@ -469,7 +495,7 @@
         document.head.append(link);
     }
     // The title's text as the site shows it: no tags (only <u> stays there, as a colour).
-    const sampleText = l => String(l.text || '').replace(/<[^>]*>/g, '').replace(/\s*\n\s*/g, ' ').trim() || 'Aa Bb Cc 123';
+    const sampleText = l => String((l.type === 'richtext' ? String(l.content || '').replace(/<\/(p|h[1-6]|li)>/gi, ' ') : l.text) || '').replace(/<[^>]*>/g, '').replace(/\s*\n\s*/g, ' ').trim() || 'Aa Bb Cc 123';
     // family: a font from the list being looked at (hovered, or reached with the arrow keys), at the
     // weight nearest the title's that it has; none: the title's own.
     function refreshFontSample(family) {
@@ -481,6 +507,11 @@
         if (face.google) loadGoogleFont(face.google, weight);
         el.style.fontFamily = face.css;
         el.style.fontWeight = weight;
+        // As the title has them: Case, Style and Letter spacing (in proportion to its size).
+        el.style.textTransform = l.text_transform || 'none';
+        el.style.fontStyle = l.font_style || 'normal';
+        const size = fontFor(l, device());
+        el.style.letterSpacing = size ? (inlineFor(l, 'spacing', device()) / size) + 'em' : '';
         el.textContent = sampleText(l);
     }
     let fontBox = null;
@@ -570,8 +601,25 @@
     const INLINE = {
         font: {keys:{desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'}, label:'Font size', unit:'px', min:8, max:{desktop:500, tablet:500, mobile:250}, step:1,
             tip:'The icons choose the device. Tablet and mobile: empty takes the larger screen\'s size (shown in grey).'},
+        spacing: {keys:{desktop:'letter_spacing', tablet:'tablet_letter_spacing', mobile:'mobile_letter_spacing'}, label:'Letter spacing', unit:'px', min:-20, max:{desktop:100, tablet:100, mobile:100}, step:0.1,
+            tip:'Space added between the letters; negative brings them closer. The icons choose the device. Tablet and mobile: empty takes the larger screen\'s (shown in grey).'},
+        // An overlay's Blur: the layers under it blurred (backdrop-filter), per device.
+        blur: {keys:{desktop:'backdrop_blur', tablet:'tablet_backdrop_blur', mobile:'mobile_backdrop_blur'}, label:'Blur', unit:'px', min:0, max:{desktop:100, tablet:100, mobile:100}, step:1,
+            tip:'Blurs the layers under this one, where it covers them (frosted glass); 0: none. With a see-through color or gradient they show blurred through it. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'},
+        // Container width (Custom, or Theme container in a theme without one), per device.
+        cwidth: {keys:{desktop:'container_width', tablet:'container_width_tablet', mobile:'container_width_mobile'}, label:'Container width', unit:'px', min:320, max:{desktop:3000, tablet:3000, mobile:3000}, step:1,
+            tip:'On a narrower screen it keeps 15px clear on each side. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'}
     };
-    const FONT_KEYS = INLINE.font.keys;
+    // A title's Shadow: its switch with an "i"; on, its color, offset (X right, Y down) and Blur in a row (WPBN_Settings::shadow()).
+    function shadowField(l) {
+        const id = 'wpbn-f-use_shadow';
+        const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_shadow"' + (l.use_shadow ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>Shadow</span></label>'
+            + tip('A shadow behind the letters: its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).') + '</div></div>';
+        if (!l.use_shadow) return toggle;
+        const px = (key, label, min, max) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<span class="wpbn-number-unit"><input id="wpbn-f-' + key + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(l[key]) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>';
+        return toggle + '<div class="wpbn-row wpbn-shadow">' + colorField('shadow_color', 'Color', {alpha:true, def:boot.layer.shadow_color})
+            + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>';
+    }
     function inlineFor(l, kind, d) { const key = INLINE[kind].keys[d]; return d === 'desktop' || l[key] != null ? l[key] : inlineFor(l, kind, UP[d]); }
     const fontFor = (l, d) => inlineFor(l, 'font', d);
     // One number for the device being edited, its unit after it (px for sizes); the device icons at the
@@ -600,9 +648,9 @@
     // A layer's Container (as WPBN_Container::of()): the box its Position X and Width are shares of, centred
     // in the scene, at a scene width w; null: the whole scene. Theme container: the theme's (boot.themeContainer);
     // without one, or Custom: the width set (container_width), 15px kept clear on each side of a narrower scene.
-    function container(w, l) {
+    function container(w, l, d) {
         if (!l || !l.container || l.container === 'full') return null;
-        const t = l.container === 'theme' && boot.themeContainer ? boot.themeContainer : {width:l.container_width, side:30, inner:0};
+        const t = l.container === 'theme' && boot.themeContainer ? boot.themeContainer : {width:inlineFor(l, 'cwidth', d || 'desktop'), side:30, inner:0};
         const cw = Math.max(1, Math.min(w - t.side, t.width) - t.inner);
         return {left:(w - cw) / 2, width:cw};
     }
@@ -615,14 +663,20 @@
             + (l.type === 'image' ? ' (a photo and its cutout fill it: keep them both on Full width).' : '.');
         return withTip(select('container', 'Container', {theme:'Theme container', full:'Full width', custom:'Custom'}), help);
     }
-    // Container (and Position beside it, for a title), then its width for Custom.
+    // Container (and Position beside it, for a title or an overlay), then its width for Custom.
     function containerField(l) {
-        return (l.type === 'text' ? containerPositionField(l) : containerSelect(l))
+        return (anchored(l) ? containerPositionField(l) : containerSelect(l))
             // Container width: only for Custom (or Theme container in a theme without one, which uses it).
-            + (customWidth() ? withTip('<div class="wpbn-field">' + head('wpbn-f-container_width', 'Container width') + '<span class="wpbn-number-unit"><input id="wpbn-f-container_width" data-key="container_width" type="number" min="320" max="3000" step="1" value="' + escape(l.container_width) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>',
-                'On a narrower screen it keeps 15px clear on each side.') : '');
+            + (customWidth() ? deviceNumberField(l, 'cwidth') : '');
     }
-    const NEEDS = {autoheight: autoHeight};
+    // A button: Open in a new window with a link only; Corners not for Underline.
+    // An image object: Image fit and its photo's point in view only where its box can crop it (not with Height Auto).
+    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto', autoheight: autoHeight, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline'};
+    // A button's Background or Corners: a sample of each, the chosen one pressed (as WP Top Info Bar's).
+    function buttonChoice(l, key, label, list) {
+        return '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<div class="wpbn-button-choices" role="group" aria-label="' + label + '">'
+            + Object.entries(list).map(([value, name], i) => '<button type="button" class="wpbn-button-choice"' + (i ? '' : ' id="wpbn-f-' + key + '"') + ' data-choice="' + key + '" data-value="' + value + '" aria-pressed="' + (l[key] === value) + '"><span class="wpbn-button-choice__sample wpbn-button-choice__sample--' + value + '">' + name + '</span></button>').join('') + '</div></div>';
+    }
     // A help text behind an "i" icon, shown on a dark tooltip on hover and keyboard focus (as WP Swiper's).
     const tip = text => '<span class="wpbn-tip" tabindex="0" role="img" aria-label="' + escape(text) + '" data-tip="' + escape(text) + '"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span></span>';
     const needs = (html, when) => html.replace('<div class="wpbn-field', '<div data-needs="' + when + '" class="wpbn-field');
@@ -630,7 +684,7 @@
         $('settings').querySelectorAll('[data-needs]').forEach(el => {
             const on = !!(NEEDS[el.dataset.needs] && NEEDS[el.dataset.needs]());
             el.classList.toggle('is-disabled', !on);
-            el.querySelectorAll('input,select,textarea').forEach(control => { control.disabled = !on; });
+            el.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = !on; });
         });
     }
     // The image on a device: tablet and mobile 0 = the larger screen's.
@@ -661,19 +715,20 @@
     // Position: an outline button (its icon and name) and the value under it. For an image it is the
     // point kept in view (one for every device, as in WP Swiper); for text, where it stands on this device.
     // Position's button, and its value for under it (an image: the point in view; text: where it stands on this device).
-    function positionParts(layer) {
-        const d = device(), image = layer.type === 'image' && !!images[layer.image];
+    // place: where the layer stands (an image object's box), not the point of its photo in view.
+    function positionParts(layer, place) {
+        const d = device(), image = layer.type === 'image' && !!images[layer.image] && !place;
         const mine = !image && d !== 'desktop' && (layer[dkey('x', d)] != null || layer[dkey('y', d)] != null);
         const value = image ? escape(layer.focus_x) + '% ' + escape(layer.focus_y) + '%' : escape(eff(layer, 'x', d)) + '% ' + escape(eff(layer, 'y', d)) + '%';
         return {
-            button: '<button type="button" class="button wpbn-position-button" data-action="position">' + icons.position + '<span>Position</span></button>',
+            button: '<button type="button" class="button wpbn-position-button" data-action="position" data-kind="' + (place ? 'place' : 'focus') + '">' + icons.position + '<span>' + (image && imageObject(layer) ? 'Image position' : 'Position') + '</span></button>',
             value: '<p class="wpbn-position-value">' + value + (mine ? ' <button type="button" class="button-link wpbn-position-reset" data-action="position-inherit">Use ' + DEVICES[UP[d]][1] + '\'s</button>' : '') + '</p>'
         };
     }
     // A title: Container with Position at its right, as tall, Position's value over the button (the same
     // grid as Image fit's, in admin.css).
     function containerPositionField(layer) {
-        const p = positionParts(layer), html = containerSelect(layer);
+        const p = positionParts(layer, true), html = containerSelect(layer);
         return html.slice(0, html.lastIndexOf('</div>')).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"') + p.button + p.value + '</div>';
     }
     // An image layer: Image fit (its label and device icons over the select) and Position beside it,
@@ -683,6 +738,8 @@
         return respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'}, p.button + p.value).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"');
     }
 
+    // An overlay's fill as CSS: its gradient (with its switch on) or its colour.
+    const overlayFill = l => (l.use_gradient && gradientCss(l.gradient)) || l.color || 'transparent';
     // Layers: the front one at the top, as in Photoshop. Each row selects its
     // layer; its icons hide, copy or remove it; drag (or Alt + arrows) reorders.
     function list() {
@@ -692,8 +749,16 @@
         for (let i = scene.layers.length - 1; i >= 0; i--) {
             const l = scene.layers[i], name = escape(l.name);
             // Not draggable: the browser's own image drag would stop the row's.
-            const thumb = l.type === 'text'
-                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--text" aria-hidden="true"><img src="' + escape(boot.assetBase + 'assets/images/title.svg') + '" alt="" draggable="false"></span>'
+            const thumb = l.type === 'overlay'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--overlay" aria-hidden="true"><span style="background:' + escape(overlayFill(l)) + '"></span></span>'
+                : l.type === 'shortcode'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--shortcode" aria-hidden="true"><span class="dashicons dashicons-shortcode"></span></span>'
+                : l.type === 'button'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--button" aria-hidden="true"><span class="dashicons dashicons-button"></span></span>'
+                : l.type === 'richtext'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--richtext" aria-hidden="true"><span class="dashicons dashicons-editor-paragraph"></span></span>'
+                : l.type === 'text'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--text" aria-hidden="true"><span class="dashicons dashicons-editor-textcolor"></span></span>'
                 : '<span class="wpbn-layer-thumb" aria-hidden="true">' + (images[l.image] ? '<img src="' + escape(images[l.image]) + '" alt="" draggable="false">' : '<span class="dashicons dashicons-format-image"></span>') + '</span>';
             const row = document.createElement('div');
             row.className = 'wpbn-layer-row' + (i === selected && !adding ? ' is-active' : '') + (l.hidden ? ' is-hidden' : '');
@@ -750,20 +815,36 @@
         auto: 'Fills the free height of the column around the scene; where there is none, 500px. In the preview: the screen height.'
     };
     // A device's height as [number, unit]: tablet and mobile without a unit of their own take the larger screen's (as WPBN_Settings::heights()).
-    function effHeight(d) {
-        const [key, unitKey] = HEIGHT[d];
-        return scene[unitKey] == null && d !== 'desktop' ? effHeight(UP[d]) : [scene[key], scene[unitKey]];
+    // An overlay's Width per device, kept as its Height is (WPBN_Settings::OVERLAY_WIDTHS): % of its container, px or vw.
+    const WIDTH = {desktop:['overlay_width','overlay_width_unit',100], tablet:['tablet_overlay_width','tablet_overlay_width_unit',100], mobile:['mobile_overlay_width','mobile_overlay_width_unit',100]};
+    const SIZE = {height:HEIGHT, width:WIDTH};
+    // A device's size as [number, unit]: tablet and mobile without a unit of their own take the larger screen's (as WPBN_Settings::heights()).
+    function effSize(kind, d, obj) {
+        const [key, unitKey] = SIZE[kind][d];
+        return obj[unitKey] == null && d !== 'desktop' ? effSize(kind, UP[d], obj) : [obj[key], obj[unitKey]];
     }
-    const UNIT_NAMES = {auto:'Auto', px:'px', vh:'vh', '%':'%'};
-    function heightField() {
-        const d = device(), [key, unitKey] = HEIGHT[d], own = scene[unitKey] != null, [number, unit] = effHeight(d), id = 'wpbn-f-' + key, off = unit === 'auto';
-        const [min, max] = unit === 'px' ? [160, 2400] : unit === 'auto' ? [1, 2400] : [1, 200];
+    const effHeight = (d, obj) => effSize('height', d, obj || scene);
+    const UNIT_NAMES = {auto:'Auto', px:'px', vh:'vh', vw:'vw', '%':'%'};
+    // An overlay's Height and Width (WPBN_Settings::LAYER_UNITS, WIDTH_UNITS): no Auto; in %, at most all of the scene / its container.
+    const LAYER_UNITS = {height:['%', 'px', 'vh'], width:['%', 'px', 'vw']};
+    const LAYER_UNIT_HELP = {
+        height:{'%':'A share of the scene\'s height: 100 is all of it.', px:'A fixed height.', vh:'A share of the screen height: 100 is the whole screen.'},
+        width:{'%':'A share of its container: 100 is all of it.', px:'A fixed width.', vw:'A share of the screen width: 100 is the whole screen.'},
+        // An image object's Height: Auto, the image's own proportions at its Width.
+        image:{auto:'As tall as the image at its width (its own proportions): nothing is cropped.', '%':'A share of the scene\'s height: 100 is all of it.', px:'A fixed height.', vh:'A share of the screen height: 100 is the whole screen.'}
+    };
+    // The scene's Height, or (obj: an overlay) the layer's Height or Width (kind), as the scene's Height: the number,
+    // its unit, Inherit on tablet / mobile.
+    function heightField(obj, kind) {
+        const layer = !!obj, o = obj || scene, k = kind || 'height', label = k === 'width' ? 'Width' : 'Height';
+        const d = device(), [key, unitKey] = SIZE[k][d], own = o[unitKey] != null, [number, unit] = effSize(k, d, o), id = 'wpbn-f-' + key, off = unit === 'auto';
+        const [min, max] = unit === 'px' ? [layer ? 1 : 160, k === 'width' ? 3000 : 2400] : unit === 'auto' ? [1, 2400] : [1, layer && (unit === '%' || k === 'width') ? 100 : 200];
         const inherit = d === 'desktop' ? '' : '<option value=""' + (own ? '' : ' selected') + '>Inherit</option>';
-        const dots = {tablet:scene.tablet_height_unit != null, mobile:scene.mobile_height_unit != null};
-        return '<div class="wpbn-field wpbn-field--height">' + head(id, 'Height', heightTip() + devices(dots)) + '<div class="wpbn-field__row">'
-            + '<input id="' + id + '" data-height="' + d + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
-            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="height"') + ' aria-label="Height unit">' + inherit + ['auto', 'px', 'vh', '%'].map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
-            + '</div><p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p></div>';
+        const dots = {tablet:o[SIZE[k].tablet[1]] != null, mobile:o[SIZE[k].mobile[1]] != null};
+        return '<div class="wpbn-field wpbn-field--height">' + head(id, label, (layer ? '' : heightTip()) + devices(dots)) + '<div class="wpbn-field__row">'
+            + '<input id="' + id + '" data-height="' + d + '" data-size="' + k + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
+            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? (o.type === 'image' && k === 'height' ? ['auto'].concat(LAYER_UNITS.height) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
+            + '</div>' + (layer ? '<p class="description">' + LAYER_UNIT_HELP[o.type === 'image' && k === 'height' ? 'image' : k][unit] + '</p>' : '<p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p>') + '</div>';
     }
     // With a class to fill blocks by: where this height is used, behind an "i" beside Height (its unit's help, under it, gives way).
     function heightTip() {
@@ -790,15 +871,48 @@
     }
     // A new unit: a number that makes sense in it (720vh would be seven screens).
     // Tablet / mobile back to the larger screen: no number either; a unit of its own: a number from the larger screen's.
-    function unitChanged(device) {
-        const [key, unitKey, fallback] = HEIGHT[device], unit = scene[unitKey];
-        if (unit == null) scene[key] = null;
+    function unitChanged(device, kind) {
+        // The scene's Height, or an overlay's Height or Width (no minimum in px; in % and vw, at most all of it).
+        const o = current(), layer = o !== scene, k = kind || 'height';
+        const [key, unitKey, fallback] = SIZE[k][device], unit = o[unitKey];
+        if (unit == null) o[key] = null;
         else {
-            if (scene[key] == null) scene[key] = device === 'desktop' ? fallback : effHeight(UP[device])[0];
-            if ((unit === 'vh' || unit === '%') && scene[key] > 200) scene[key] = 100;
-            else if (unit === 'px' && scene[key] < 160) scene[key] = fallback;
+            if (o[key] == null) o[key] = device === 'desktop' ? (layer ? 100 : fallback) : effSize(k, UP[device], o)[0];
+            if ((unit === 'vh' || unit === '%' || unit === 'vw') && o[key] > (layer && (unit === '%' || unit === 'vw') ? 100 : 200)) o[key] = 100;
+            else if (unit === 'px' && o[key] < 160 && !layer) o[key] = fallback;
         }
         settings();
+    }
+    /*
+     * The Text layer's editor: WordPress's (wp.editor, TinyMCE and its Text tab), as WP Swiper's slide descriptions:
+     * the tag (Paragraph, Heading 1–6), bold, italic, underline, Text color (the palette: WPBN_Palette::tinymce_map()),
+     * alignment, lists, Link / Unlink, Clear formatting, Undo, Redo (WPBN_Settings::rich_text() keeps the same). Started each time the fields are
+     * drawn, removed before they are drawn again. Without it (or the visual editor), the plain box (data-key content).
+     */
+    const EDITOR_ID = 'wpbn-f-content';
+    const wpEditor = () => window.wp && window.wp.editor && window.wp.editor.initialize ? window.wp.editor : null;
+    function stopEditor() {
+        if (!wpEditor() || !document.getElementById(EDITOR_ID)) return;
+        try { wpEditor().remove(EDITOR_ID); } catch (e) { /* not started */ }
+    }
+    function storeContent(html) {
+        const l = current();
+        if (!l || l.type !== 'richtext' || l.content === html) return;
+        l.content = html; refreshFontSample(); changed();
+    }
+    function startEditor() {
+        if (!wpEditor() || !document.getElementById(EDITOR_ID)) return;
+        const map = Array.isArray(boot.textColors) ? boot.textColors : [];
+        wpEditor().initialize(EDITOR_ID, {
+            tinymce: window.tinymce ? Object.assign(map.length ? {forecolor_map:map, forecolor_cols:8, forecolor_rows:Math.ceil((map.length / 2 + 1) / 8)} : {}, {
+                toolbar1: 'formatselect,bold,italic,underline,forecolor,alignleft,aligncenter,alignright,bullist,numlist,link,unlink,removeformat,undo,redo',
+                toolbar2: '', height: 160,
+                block_formats: 'Paragraph=p;Heading 1=h1;Heading 2=h2;Heading 3=h3;Heading 4=h4;Heading 5=h5;Heading 6=h6',
+                setup: editor => editor.on('input change keyup undo redo ExecCommand', () => storeContent(editor.getContent()))
+            }) : false,
+            quicktags: {buttons: 'strong,em,link,ul,ol,li'},
+            mediaButtons: false
+        });
     }
     function settings() {
         let html;
@@ -809,43 +923,82 @@
         } else if (selected < 0) {
             html = '<legend>Scene settings</legend>'
                 + card('Size', heightField())
-                + card('Placement', targetField());
+                + card('Placement', targetField())
+                // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name).
+                + card('Attributes', '<div class="wpbn-row">' + withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
+                    + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class above, which places the banner in a block.') + '</div>');
         } else {
             const l = scene.layers[selected];
             const d = device();
             // No name field: a layer's name is given when it is added ("Title 2", "Image 3"; a copy adds "copy") and shows in the layer list.
             let first = '', cards = '';
             if (l.type === 'image') first += picker(l);
-            else {
+            else if (l.type === 'overlay') {
+                // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
+                first += fillChoice(l) + (l.use_gradient ? gradientField(l)
+                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'The layers under this one in the list are shaded, those above it are not. A see-through color lets them show through. Its size: Position and size.'))
+                    // Blur, for Color and Gradient alike.
+                    + deviceNumberField(l, 'blur');
+            } else if (l.type === 'shortcode') {
+                first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It is shown in this layer\'s place: layers above it in the list cover it. It can be clicked and swiped. Its Width: Position and size; its height is its own. Update shows it in the preview.');
+            } else if (l.type === 'button') {
+                // As WP Top Info Bar's: its text and link, then its look.
+                first += field('button_text', 'Text', 'text')
+                    + withTip(field('button_url', 'Link', 'text'), 'A page address (https://…), a path on this site (/contact/), an anchor (#form), mailto: or tel:. Empty: a button that is not a link.')
+                    + needs(check('button_new_tab', 'Open in a new window'), 'link');
+                const sizes = {};
+                Object.entries(BUTTON_SIZES).forEach(([value, [name]]) => { sizes[value] = name; });
+                cards += card('Button style', buttonChoice(l, 'button_style', 'Background', {filled:'Filled', bordered:'Border', underline:'Underline'})
+                    + needs(buttonChoice(l, 'button_shape', 'Corners', {square:'Square', rounded:'Rounded', round:'Round'}), 'corners')
+                    + withTip(respSelect('button_size', 'Size', sizes), 'WoodMart\'s button sizes: its padding, height and font size. The icons choose the device; tablet and mobile can follow the larger screen.')
+                    + '<div class="wpbn-colors">' + withTip(colorField('button_color', 'Fill / border color', {alpha:true, def:'#2271b1'}), 'Filled: the button\'s color; Border and Underline: their line\'s.')
+                    + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>');
+            } else if (l.type === 'richtext') {
+                // WordPress's editor, as WP Swiper's slide texts (startEditor() after the fields are drawn); a plain box without it.
+                first += withTip('<div class="wpbn-field wpbn-richtext">' + head(EDITOR_ID, 'Text') + '<textarea id="' + EDITOR_ID + '" data-key="content" rows="6">' + escape(l.content || '') + '</textarea></div>',
+                    'Paragraph or heading (the first list), bold, italic, underline, a color, alignment, lists and links. Enter starts a paragraph, Shift + Enter a new line. Headings keep the theme\'s font and size; links can be clicked on the banner.');
+                cards += card('Text style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: the theme\'s (they follow Theme Settings), custom, Adobe, system and Google fonts. A Google font is loaded with the banner. Default: the theme\'s text font.')
+                        : withTip(field('font_family', 'Font', 'text'), 'Empty: the page\'s text font. As CSS takes it, e.g. "Open Sans", sans-serif; the font must be loaded on the site.'))
+                    + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
+                    + deviceNumberField(l, 'font')
+                    + withTip(colorField('color', 'Color', {alpha:true, def:boot.layer.color}), 'The text\'s color; words colored in the editor keep theirs.')
+                    + shadowField(l));
+            } else {
                 first += withTip(textarea('text', 'Title'), 'Enter starts a new line. Wrap words in <u></u> to show them in the Accent color, e.g. Discover <u>Norway</u>.')
                     + withTip(select('tag', 'Heading', {h1:'h1', h2:'h2', h3:'h3', h4:'h4', h5:'h5'}), 'h1 if the banner\'s title is the page\'s title (one h1 per page); otherwise h2, or a lower one (h3–h5) under other headings. The title takes the theme\'s heading font unless a font is set below.');
                 // Font and Weight on one row with the font sample under them, then Font size, then Color and Accent color.
                 cards += card('Title style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: the theme\'s (they follow Theme Settings), custom, Adobe, system and Google fonts. A Google font is loaded with the banner. Default: the theme\'s title font.')
                         : withTip(field('font_family', 'Font', 'text'), 'Empty: the theme\'s heading font. As CSS takes it, e.g. "Playfair Display", serif; the font must be loaded on the site.'))
                     + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
-                    + deviceNumberField(l, 'font') + '<div class="wpbn-colors">' + colorField('color', 'Color', {alpha:true, def:boot.layer.color})
-                    + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title, as in Woodmart\'s titles. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>');
+                    // Font size and Letter spacing (per device; each a row of its own: the device icons beside the label), Case and Style, the colours, then Shadow.
+                    + deviceNumberField(l, 'font') + deviceNumberField(l, 'spacing')
+                    + '<div class="wpbn-row">' + select('text_transform', 'Case', {none:'Normal', uppercase:'UPPERCASE', lowercase:'lowercase', capitalize:'Capitalize'}) + select('font_style', 'Style', {normal:'Normal', italic:'Italic'}) + '</div>'
+                    + '<div class="wpbn-colors">' + colorField('color', 'Color', {alpha:true, def:boot.layer.color})
+                    + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title, as in Woodmart\'s titles. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>'
+                    + shadowField(l));
             }
             html = '<legend>Layer settings</legend>'
                 + (d === 'desktop' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.</span></p>')
-                + card('Layer', first) + cards
-                + card('Position and size', containerField(l) + (l.type === 'image' ? fitPositionField(l) : '')
+                + card(l.type === 'overlay' ? 'Fill' : 'Layer', first) + cards
+                + (l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l)) + card('Motion', optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'})) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
+                    + containerField(l)
+                    // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
+                    + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
                     // Scale and Opacity: image layers only (a title has neither).
-                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : 'Zoom: the image fills the scene and grows by this much (the edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100}))
-                    // Gradient: last in the card (an image's after Scale and Opacity).
-                    + gradientToggle(l) + (l.use_gradient ? gradientField(l) : ''))
+                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : 'Zoom: the image fills the scene and grows by this much (the edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100})))
                 + card('Motion', optionalRange(l, 'move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400})
                     + optionalRange(l, 'move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative values move the layer up.'})
                     + optionalRange(l, 'zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
-                    + optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out.'}));
+                    + optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out.'})));
         }
         // The picker and the Font list belong to fields about to be redrawn.
-        closePicker(); closeFonts();
+        closePicker(); closeFonts(); stopEditor();
         $('settings').innerHTML = '<fieldset class="wpbn-section">' + html + '</fieldset>';
         applyStates();
         targetWarning();
         refreshFontSample();
         drawGradient();
+        startEditor();
         $('scene-settings').setAttribute('aria-current', String(!adding && selected < 0));
         $('add-toggle').setAttribute('aria-current', String(adding));
     }
@@ -866,16 +1019,18 @@
             else return;
             // The green dots: tablet / mobile with a value of their own.
             input.closest('.wpbn-field').querySelectorAll('[data-field-device]').forEach(b => b.classList.toggle('has-value', b.dataset.fieldDevice !== 'desktop' && l[INLINE[kind].keys[b.dataset.fieldDevice]] != null));
+            refreshFontSample();
             changed(); return;
         }
         // Height: a number typed on tablet / mobile gives it a unit of its own too (the one it followed);
         // emptied there, it follows the larger screen again.
         if (input.dataset.height) {
-            const d = input.dataset.height, [hk, uk] = HEIGHT[d];
-            if (input.value === '' && d !== 'desktop') { scene[uk] = null; scene[hk] = null; settings(); const again = $('f-' + hk); if (again) again.focus(); changed(); return; }
+            // The scene's, or an overlay's.
+            const d = input.dataset.height, kind = input.dataset.size || 'height', [hk, uk] = SIZE[kind][d], o = current();
+            if (input.value === '' && d !== 'desktop') { o[uk] = null; o[hk] = null; settings(); const again = $('f-' + hk); if (again) again.focus(); changed(); return; }
             if (!Number.isFinite(input.valueAsNumber)) return;
-            if (scene[uk] == null) scene[uk] = effHeight(d)[1];
-            scene[hk] = Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber));
+            if (o[uk] == null) o[uk] = effSize(kind, d, o)[1];
+            o[hk] = Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber));
             refreshDots(input.closest('.wpbn-field'));
             const dot = input.closest('.wpbn-field').querySelector('[data-field-device="' + d + '"]'); if (dot && d !== 'desktop') dot.classList.add('has-value');
             changed(); return;
@@ -886,7 +1041,10 @@
         if (input.type === 'checkbox') {
             obj[key] = input.checked;
             // Placement: a class ready to copy; the height note follows it.
-            if (/^use_/.test(key)) {
+            // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
+            if (key === 'fill_scene' && !input.checked && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
+                && ['tablet', 'mobile'].every(dv => obj[WIDTH[dv][1]] == null && obj[HEIGHT[dv][1]] == null)) { obj.overlay_width = 50; obj.height_unit = 'auto'; }
+            if (/^use_/.test(key) || key === 'fill_scene') {
                 settings(); const again = $('settings').querySelector('[data-key="' + key + '"]'); if (again) again.focus();
                 list(); changed(); return;
             }
@@ -912,26 +1070,44 @@
         refreshDots(input.closest('.wpbn-field')); refreshReset(input.closest('.wpbn-field'));
         if (key === 'target') { targetWarning(); heightHelp(); }
         // The font sample shows the title's text.
-        if (key === 'text') refreshFontSample();
+        if (key === 'text' || key === 'content') refreshFontSample();
+        // A button's link: Open in a new window applies with one.
+        if (key === 'button_url') applyStates();
+        // An overlay's thumbnail shows its fill.
+        if (key === 'color' && obj.type === 'overlay') list();
         changed();
     });
     app.addEventListener('change', event => {
         if (!event.target.matches('select[data-key]')) return;
         const key = event.target.dataset.key;
         current()[key] = event.target.value === '' && event.target.dataset.inherit ? null : event.target.value;
-        if (key === 'font_weight') refreshFontSample();
+        if (key === 'font_weight' || key === 'text_transform' || key === 'font_style') refreshFontSample();
         // Container: its width field shows for Custom only.
         if (key === 'container') { settings(); $('settings').querySelector('[data-key="container"]').focus(); }
         refreshDots(event.target.closest('.wpbn-field'));
         // Image fit: Scale's help follows it.
         if (selected >= 0 && /^fit/.test(key)) { settings(); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
-        if (selected < 0 && /height_unit$/.test(key)) { unitChanged(device()); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
+        if (/(height|overlay_width)_unit$/.test(key)) { unitChanged(device(), /width/.test(key) ? 'width' : 'height'); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
         changed();
     });
     app.addEventListener('click', event => {
         const button = event.target.closest('button');
         if (!button || !app.contains(button)) return;
         if (button.dataset.previewDevice) { setDevice(button.dataset.previewDevice); return; }
+        // An overlay's fill: Color or Gradient.
+        if (button.dataset.fill) {
+            const l = current(), gradient = button.dataset.fill === 'gradient';
+            if (!!l.use_gradient !== gradient) { l.use_gradient = gradient; closePicker(); settings(); list(); changed(); }
+            const again = $('settings').querySelector('[data-fill="' + button.dataset.fill + '"]'); if (again) again.focus();
+            return;
+        }
+        // A button's Background or Corners.
+        if (button.dataset.choice) {
+            const l = current();
+            if (l[button.dataset.choice] !== button.dataset.value) { l[button.dataset.choice] = button.dataset.value; settings(); changed(); }
+            const again = $('settings').querySelector('[data-choice="' + button.dataset.choice + '"][data-value="' + button.dataset.value + '"]'); if (again) again.focus();
+            return;
+        }
         if (button.dataset.fieldDevice) { setDevice(button.dataset.fieldDevice, true); return; }
         if (button.dataset.select !== undefined) { adding = false; selected = Number(button.dataset.select); list(); settings(); focusRow(selected); return; }
         if (button.dataset.rowAction) { rowAction(button.dataset.rowAction, Number(button.dataset.index)); return; }
@@ -949,7 +1125,11 @@
             const type = button.dataset.add;
             if (scene.layers.length >= 40) return;
             // A new title in the theme's container (it lines up with the page); a new image fills the whole scene.
-            const layer = Object.assign({}, boot.layer, {type, name:(type === 'text' ? 'Title' : 'Image') + ' ' + (scene.layers.length + 1), container:type === 'text' ? 'theme' : 'full'});
+            const layer = Object.assign({}, boot.layer, {type, name:TYPE_NAMES[type] + ' ' + (scene.layers.length + 1), container:type === 'text' || type === 'button' || type === 'shortcode' ? 'theme' : 'full'});
+            // A new overlay: a see-through black (the photo under it shaded) or, with its Gradient, darker towards the bottom.
+            if (type === 'overlay') layer.color = OVERLAY_COLOR;
+            // A new text: a paragraph to start from, at a reading size and weight, in the theme's container.
+            if (type === 'richtext') Object.assign(layer, {content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'});
             // A new layer does not move; turning a motion on starts it from 0.
             layer.move_y = 0;
             scene.layers.push(layer); selected = scene.layers.length - 1;
@@ -1036,8 +1216,37 @@
     });
     document.addEventListener('pointercancel', endSort);
     layersBox.addEventListener('click', event => { if (skipClick) { event.stopPropagation(); event.preventDefault(); } }, true);
+    /*
+     * A Shortcode layer's real height, as the preview draws it (the editor cannot draw another plugin's element):
+     * a share of the scene's height, per device, for the Position window's box. Measured when the preview has loaded
+     * and when the Position window opens (the element may have grown since: its images, its script). Not saved.
+     * The preview's layers by their order when it was asked for (WPBN_Render: z-index = place in the list + 1).
+     */
+    const measured = new WeakMap();
+    let previewLayers = [], previewDevice = 'desktop';
+    function measureShortcodes() {
+        let doc = null;
+        try { doc = $('frame').contentDocument; } catch (e) { return; }
+        if (!doc) return;
+        doc.querySelectorAll('.wpbn-layer--shortcode').forEach(el => {
+            const layer = previewLayers[Number(el.style.zIndex) - 1], sceneEl = el.closest('.wpbn-scene');
+            if (!layer || layer.type !== 'shortcode' || !sceneEl || !sceneEl.offsetHeight) return;
+            const sizes = measured.get(layer) || {};
+            sizes[previewDevice] = el.offsetHeight / sceneEl.offsetHeight;
+            measured.set(layer, sizes);
+        });
+    }
+    // Its height (% of the scene) on a device: measured there, else on another device; none yet: null.
+    function shortcodeHeight(layer, d) {
+        const sizes = measured.get(layer);
+        if (!sizes) return null;
+        const share = sizes[d] != null ? sizes[d] : sizes.desktop != null ? sizes.desktop : sizes.tablet != null ? sizes.tablet : sizes.mobile;
+        // Taller than the scene: as tall (the Position window cuts it as the scene does).
+        return share == null ? null : {height:share * 100, own:sizes[d] != null};
+    }
     // POST to the isolated frame: no draft content is stored by preview.
     function preview() {
+        previewLayers = scene.layers.slice(); previewDevice = device();
         sync(); $('refresh').classList.remove('is-stale'); stopPlay(); $('frame').dataset.state='loading';
         const form = document.createElement('form');
         form.method='post'; form.action=boot.endpoint; form.target='wpbn_preview_frame'; form.hidden=true;
@@ -1066,21 +1275,21 @@
     const valuesFor = w => w <= 767 ? 'mobile' : w <= 1024 ? 'tablet' : 'desktop';
     // What was typed is kept as typed ([width or null, height or null]); an empty one is the device's usual value.
     const sizeOf = (list, d) => list[d] ? [list[d][0] ?? SCREENS[d][0], list[d][1] ?? SCREENS[d][1]] : null;
+    // A tablet or phone turned sideways: the fields show its screen as turned (width × height swapped); the size is
+    // kept upright ([width, height] of the device held upright), so turning it back shows it as typed.
+    const sideways = d => d !== 'desktop' && !!turned[d];
     function sizeFields() {
-        const d = $('device').value, own = draftSizes[d], [w, h] = SCREENS[d];
-        $('res-w').placeholder = w; $('res-h').placeholder = h;
-        $('res-w').value = own && own[0] !== null ? own[0] : ''; $('res-h').value = own && own[1] !== null ? own[1] : '';
-        sizeHint();
-    }
-    function sizeHint() {
-        const d = $('device').value, own = sizeOf(draftSizes, d), width = own ? own[0] : SCREENS[d][0], shows = valuesFor(width);
-        $('res-hint').textContent = DEVICES[d][1] + ': ' + (own ? 'own size' : 'usual size') + ' · ' + DEVICES[shows][1] + ' values' + (shows !== d ? ' (by its width)' : '');
+        const d = $('device').value, own = draftSizes[d], [w, h] = SCREENS[d], turn = sideways(d);
+        const shown = [own && own[0] !== null ? own[0] : '', own && own[1] !== null ? own[1] : ''], hints = [w, h], limits = [SIZE_LIMITS.w, SIZE_LIMITS.h];
+        if (turn) { shown.reverse(); hints.reverse(); limits.reverse(); }
+        [$('res-w'), $('res-h')].forEach((input, i) => { input.placeholder = hints[i]; input.value = shown[i]; input.min = limits[i][0]; input.max = limits[i][1]; });
     }
     function sizeInput() {
         const d = $('device').value, read = (input, [min, max]) => input.value === '' || !Number.isFinite(input.valueAsNumber) ? null : Math.round(Math.min(max, Math.max(min, input.valueAsNumber)));
-        const w = read($('res-w'), SIZE_LIMITS.w), h = read($('res-h'), SIZE_LIMITS.h);
+        const turn = sideways(d), wide = turn ? $('res-h') : $('res-w'), tall = turn ? $('res-w') : $('res-h');
+        const w = read(wide, SIZE_LIMITS.w), h = read(tall, SIZE_LIMITS.h);
         if (w === null && h === null) delete draftSizes[d]; else draftSizes[d] = [w, h];
-        sizeHint(); $('refresh').classList.add('is-stale');
+        $('refresh').classList.add('is-stale');
     }
     ['res-w', 'res-h'].forEach(id => { $(id).addEventListener('input', sizeInput); $(id).addEventListener('change', () => { sizeInput(); sizeFields(); }); });
     function applySizes() {
@@ -1181,7 +1390,7 @@
     // Update redraws the preview at the scroll simulation's current point; Play plays the scroll.
     $('refresh').onclick=()=>{applySizes();resize();preview();};
     $('progress').oninput=()=>{stopPlay();frameState();};
-    $('frame').onload=()=>{resize();frameState();$('frame').dataset.state='done';};
+    $('frame').onload=()=>{resize();frameState();measureShortcodes();$('frame').dataset.state='done';};
     new ResizeObserver(resize).observe($('preview-stage'));
     addEventListener('resize',resize);
     document.getElementById('post').addEventListener('submit',sync);
@@ -1197,6 +1406,16 @@
     // The scene's height on a device in pixels; % and Auto as in the preview (a block as tall as the screen).
     // The height: the one of the device whose values the screen's width shows (as the preview: a desktop of
     // one's own 1000px wide shows the tablet's).
+    // An overlay's Height on a device as a share of the scene's (its px and vh in the window's screen).
+    // Its Width as a share of the scene's (% of its container; px and vw in the window's screen).
+    function overlayWidth(layer, d) { const [v, u] = effSize('width', d, layer); return u === '%' ? v * boxOf(d, layer).width / 100 : u === 'vw' ? v : v / sceneWidth(d) * 100; }
+    function overlayHeight(layer, d) { const [v, u] = effHeight(d, layer), h = sceneHeight(d); return Math.min(100, u === '%' ? v : (u === 'vh' ? screenOf(d)[1] * v / 100 : v) / h * 100); }
+    // An image object's Height as a share of the scene's; Auto: the image's proportions at its Width.
+    function imageObjectHeight(layer, d) {
+        const [v, u] = effHeight(d, layer), h = sceneHeight(d);
+        if (u === 'auto') { const info = imageInfo[imageFor(layer, d)] || {}, ratio = info.width && info.height ? info.height / info.width : 2 / 3; return overlayWidth(layer, d) / 100 * sceneWidth(d) * ratio / h * 100; }
+        return (u === '%' ? v / 100 * h : u === 'vh' ? screenOf(d)[1] * v / 100 : v) / h * 100;
+    }
     function sceneHeight(d) { const [w, screen] = screenOf(d), [v, u] = effHeight(valuesFor(w)); return u === 'px' ? v : u === 'auto' ? screen : screen * v / 100; }
     const positionModal=document.createElement('div');
     positionModal.className='wpbn-modal wpbn-modal--position';positionModal.hidden=true;
@@ -1213,17 +1432,19 @@
     let positionLayer=null, positionDraft=null, positionReturn=null, dragging=null;
     const canvasDevice=canvas=>canvas.parentElement===focusStage ? $('device').value : canvas.closest('.wpbn-focus__device').dataset.device;
     // A title's X and Width (shares of its container) as shares of the scene, on a device; and back.
-    const boxOf=(d,layer)=>{const w=sceneWidth(d), c=container(w,layer);return c ? {left:c.left/w*100, width:c.width/w*100} : {left:0, width:100};};
+    const boxOf=(d,layer)=>{const w=sceneWidth(d), c=container(w,layer,d);return c ? {left:c.left/w*100, width:c.width/w*100} : {left:0, width:100};};
     const inScene=(layer,d,x)=>boxOf(d,layer).left+x*boxOf(d,layer).width/100;
     const fromScene=(layer,d,x)=>(x-boxOf(d,layer).left)/boxOf(d,layer).width*100;
     // A layer's point placed at its Position (as frontend.css ax, ay): an image's centre; a title's own Position
     // (0% its left / top edge, 100% its right / bottom), so it stays within its container.
-    const anchorAt=(layer,x,y,scale)=>'translate('+(layer.type==='text' ? -x : -50)+'%,'+(layer.type==='text' ? -y : -50)+'%) scale('+scale+')';
+    const anchorAt=(layer,x,y,scale)=>'translate('+(anchored(layer) ? -x : -50)+'%,'+(anchored(layer) ? -y : -50)+'%) scale('+scale+')';
     const focusImage=positionModal.querySelector('.wpbn-focus__image');
     // The layer as it would be with the draft applied: an image's point in view, or the text's place on the device being edited.
     let positionDevice='desktop';
     // An image layer with its photo: the point in view. Without a photo there is nothing to crop: placed as text is.
-    const focusMode=()=>!!positionLayer && positionLayer.type==='image' && !!images[positionLayer.image];
+    // positionKind: 'place' (an image object's box: where it stands) or 'focus' (the point of the photo in view).
+    let positionKind='focus';
+    const focusMode=()=>!!positionLayer && positionLayer.type==='image' && !!images[positionLayer.image] && positionKind!=='place';
     const withDraft=()=>Object.assign({},positionLayer,focusMode() ? {focus_x:positionDraft[0],focus_y:positionDraft[1]} : {[dkey('x',positionDevice)]:positionDraft[0],[dkey('y',positionDevice)]:positionDraft[1]});
     // The layer's box in scene pixels at a scroll progress (0 start, 1 end), as frontend.css draws it.
     function layerBox(layer, d, progress) {
@@ -1235,7 +1456,7 @@
     // Hatched bands where the layer does not reach (images only: text never fills the scene).
     function drawGaps(canvas) {
         canvas.querySelectorAll('.wpbn-position-gap').forEach(gap=>gap.remove());
-        if(positionLayer.type==='text')return;
+        if(anchored(positionLayer))return;
         const b=layerBox(withDraft(),canvasDevice(canvas),0);
         const pct=(v,of)=>Math.max(0,Math.min(100,v/of*100));
         const top=pct(b.top,b.h), bottom=pct(b.bottom,b.h), left=pct(b.left,b.w), right=pct(b.right,b.w);
@@ -1248,9 +1469,20 @@
     function warn() {
         const box=positionModal.querySelector('.wpbn-position-warning'), layer=withDraft();
         // Edges uncovered at rest. While scrolling the site grows the layers that fill the scene, so their edges never show.
-        const found=positionLayer.type==='text' ? [] : Object.keys(DEVICES).filter(d=>uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
-        box.hidden=!found.length;
-        box.querySelector('.wpbn-position-warning__text').textContent=found.length ? 'This layer does not cover the whole scene on '+found.join(', ')+' (hatched). Raise the Scale or the Width to cover it.' : '';
+        const found=anchored(positionLayer) ? [] : Object.keys(DEVICES).filter(d=>uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
+        // A shortcode's element taller than the scene (as the preview drew it): the scene cuts it.
+        const tall=positionLayer.type==='shortcode' ? Object.keys(DEVICES).filter(d=>{const real=shortcodeHeight(positionLayer,d);return real&&real.own&&real.height>100.5;}).map(d=>DEVICES[d][1]) : [];
+        box.hidden=!found.length&&!tall.length;
+        box.querySelector('.wpbn-position-warning__text').textContent=found.length ? 'This layer does not cover the whole scene on '+found.join(', ')+' (hatched). Raise the Scale or the Width to cover it.'
+            : tall.length ? 'The element is taller than the scene on '+tall.join(', ')+' (as the preview drew it): the scene cuts it. Lower its Width, or its height in its own plugin\'s settings.' : '';
+    }
+    // A shortcode's label in the middle of the part of its box inside the scene (a box taller than the scene shows
+    // only a part of it). y: its Position Y (its own point there, as a title's).
+    function placeLabel(item,y) {
+        const label=item.querySelector('.wpbn-position-item__label'), h=Number(item.dataset.share);
+        if(!label||!h)return;
+        const top=y-y/100*h, middle=(Math.max(0,top)+Math.min(100,top+h))/2;
+        label.style.top=((middle-top)/h*100)+'%';
     }
     function showPosition() {
         const [x,y]=positionDraft, layer=withDraft();
@@ -1260,7 +1492,7 @@
         positionModal.querySelectorAll('.wpbn-position-canvas').forEach(canvas=>{
             const target=canvas.querySelector('.wpbn-position-target'), d=canvasDevice(canvas);
             if(target && focusMode()){const img=target.querySelector('img');if(img)img.style.objectPosition=x+'% '+y+'%';}
-            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),eff(layer,'scale',d)/100);}
+            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),eff(layer,'scale',d)/100);placeLabel(target,eff(layer,'y',d));}
             drawGaps(canvas);
         });
         warn();
@@ -1296,17 +1528,38 @@
                 const box=boxOf(device,layer);
                 Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100)});
                 // A title: as wide as its text, at most its container (frontend.css).
-                if(layer.type==='text')Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
+                if(textual(layer))Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
+                // A text: its words (paragraphs on lines of their own), at its size, as wide as on the site.
+                if(layer.type==='richtext'){const doc=new DOMParser().parseFromString(String(layer.content||''),'text/html');doc.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,br').forEach(el=>el.after('\n'));Object.assign(item.style,{whiteSpace:'pre-line',color:layer.color,fontSize:fontFor(layer,device)*width/baseWidth+'px',lineHeight:'1.5'});item.textContent=doc.body.textContent.trim();canvas.append(item);return;}
+                // A shortcode: a dashed box as wide as its Width, its shortcode in it (its element is not drawn here).
+                if(layer.type==='shortcode'){const real=shortcodeHeight(layer,device);item.classList.add('is-shortcode');item.classList.toggle('is-guess',!real||!real.own);Object.assign(item.style,{width:overlayWidth(layer,device)+'%',maxWidth:'',height:(real?real.height:30)+'%'});
+                    item.dataset.share=real?real.height:30;const label=document.createElement('span');label.className='wpbn-position-item__label';label.textContent=layer.shortcode||'Shortcode';item.append(label);placeLabel(item,v('y'));
+                    // Its height on this device: as the preview drew it, or a guess until Update shows it there.
+                    item.title=real&&real.own?'Its height as in the preview':'Its height is a guess: show this device in the preview and press Update';canvas.append(item);return;}
+                // A button: its text at its Size, in its Background, Corners and colours (scaled to the frame).
+                if(layer.type==='button'){const p=BUTTON_SIZES[v('button_size')]||BUTTON_SIZES.default,k=width/baseWidth,style=layer.button_style,line=layer.button_color;
+                    Object.assign(item.style,{display:'flex',alignItems:'center',justifyContent:'center',boxSizing:'border-box',padding:'0 '+p[1]*k+'px',minHeight:p[2]*k+'px',fontSize:p[3]*k+'px',fontWeight:'600',textTransform:'uppercase',whiteSpace:'nowrap',color:layer.button_text_color,
+                        background:style==='filled'?line:'transparent',border:style==='underline'?'0':Math.max(1,2*k)+'px solid '+line,borderBottom:Math.max(1,(style==='underline'?3:2)*k)+'px solid '+line,borderRadius:style==='underline'?'0':{square:'0',rounded:5*k+'px',round:35*k+'px'}[layer.button_shape]});
+                    item.textContent=layer.button_text;canvas.append(item);return;}
+                // An overlay: the whole scene in its fill.
+                if(layer.type==='overlay'){const blur=inlineFor(layer,'blur',device)*width/baseWidth;Object.assign(item.style,{backdropFilter:blur ? 'blur('+blur+'px)' : '',width:overlayWidth(layer,device)+'%',height:overlayHeight(layer,device)+'%',background:overlayFill(layer)});canvas.append(item);return;}
                 if(layer.type==='image') {
-                    item.style.height='100%';
+                    // An image object: its own box (Width, Height; Auto: the image's proportions); else the whole scene's height.
+                    if(imageObject(layer))Object.assign(item.style,{width:overlayWidth(layer,device)+'%',height:imageObjectHeight(layer,device)+'%'});
+                    else item.style.height='100%';
                     if(images[layer.image]){const image=document.createElement('img');image.src=images[layer.image];image.alt='';image.style.objectFit=v('fit');image.style.objectPosition=layer.focus_x+'% '+layer.focus_y+'%';item.append(image);}
-                }else{item.textContent=layer.text;item.style.color=layer.color;item.style.fontSize=fontFor(layer,device)*width/baseWidth+'px';item.style.lineHeight='1.05';}
+                }else{item.textContent=layer.text;item.style.color=layer.color;item.style.fontSize=fontFor(layer,device)*width/baseWidth+'px';item.style.lineHeight='1.05';
+                    // As wide as on the site: its Letter spacing (scaled), Case and Style.
+                    Object.assign(item.style,{letterSpacing:inlineFor(layer,'spacing',device)*width/baseWidth+'px',textTransform:layer.text_transform||'none',fontStyle:layer.font_style||'normal'});}
                 canvas.append(item);
             });
         });
         showPosition();
     }
     function openPosition(layer,button) {
+        positionKind=button && button.dataset.kind==='place' ? 'place' : 'focus';
+        // A shortcode's height as the preview shows it now.
+        if(layer.type==='shortcode')measureShortcodes();
         positionDevice=device();positionLayer=layer;positionReturn=button;
         const image=focusMode();
         positionDraft=image ? [layer.focus_x,layer.focus_y] : [eff(layer,'x',positionDevice),eff(layer,'y',positionDevice)];
@@ -1316,8 +1569,8 @@
         positionModal.querySelector('.wpbn-modal__layer').textContent=image ? layer.name : layer.name+' · '+DEVICES[positionDevice][1];
         positionModal.querySelector('.wpbn-position-help').textContent=image
             ? 'Click the part of the image to keep in view when its layer crops it. It applies on every device; the frames show each one. Arrow keys move the point by 1%; with Shift, by 10%.'
-            : layer.type==='text'
-            ? 'Drag the title to move it within its container (dashed), or click to put it there. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
+            : anchored(layer)
+            ? 'Drag the '+(layer.type==='text' ? 'title' : layer.type==='richtext' ? 'text' : layer.type==='button' ? 'button' : layer.type==='shortcode' ? 'element' : layer.type==='image' ? 'image' : 'overlay')+' to move it within its container (dashed), or click to put it there. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
             : 'Drag the layer to move it, or click to put its centre there. Arrow keys move it by 1%; with Shift, by 10%.';
         positionModal.hidden=false;document.body.classList.add('wpbn-modal-open');
         drawPositionScenes();focusStage.focus();
@@ -1340,11 +1593,14 @@
     function positionAt(event){
         const r=focusStage.getBoundingClientRect();if(!r.width || !r.height)return;
         const d=$('device').value, text=!focusMode(), share=text ? boxOf(d,positionLayer).width/100 : 1;
-        const title=text && positionLayer.type==='text' && dragging && dragging.size;
-        // The room a title moves in: its container (its height: the scene) less its own size.
-        const roomX=title ? Math.max(1,share*r.width-dragging.size[0]) : r.width*share, roomY=title ? Math.max(1,r.height-dragging.size[1]) : r.height;
+        const title=text && anchored(positionLayer) && dragging && dragging.size;
+        // The room a title moves in: its container (its height: the scene) less its own size. Larger than that (a slider
+        // taller than the scene): less than none, so it follows the pointer the other way round in its values (0% shows its
+        // top, 100% its bottom). As large (Width 100% of its container): no room: that way it stays as it is.
+        const roomX=title ? share*r.width-dragging.size[0] : r.width*share, roomY=title ? r.height-dragging.size[1] : r.height;
+        const along=(from,moved,room)=>Math.abs(room)<2 ? from : percent(from+moved/room*100);
         positionDraft=dragging && dragging.move
-            ? [percent(dragging.from[0]+(event.clientX-dragging.x)/roomX*100),percent(dragging.from[1]+(event.clientY-dragging.y)/roomY*100)]
+            ? [along(dragging.from[0],event.clientX-dragging.x,roomX),along(dragging.from[1],event.clientY-dragging.y,roomY)]
             : [percent(text ? fromScene(positionLayer,d,(event.clientX-r.left)/r.width*100) : (event.clientX-r.left)/r.width*100),percent((event.clientY-r.top)/r.height*100)];
         showPosition();
     }
