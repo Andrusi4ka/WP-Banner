@@ -107,7 +107,8 @@ class WPBN_Render {
             $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
             $inner = '';
             if ($l['type'] === 'text') {
-                $css .= '--wpbn-font:'.$l['font_size'].'px;--wpbn-tablet-font:'.$l['tablet_font_size'].'px;--wpbn-mobile-font:'.$l['mobile_font_size'].'px;color:'.$l['color'].';font-weight:'.$l['font_weight'].';';
+                $font = WPBN_Settings::fonts($l);
+                $css .= '--wpbn-font:'.$font['desktop'].'px;--wpbn-tablet-font:'.$font['tablet'].'px;--wpbn-mobile-font:'.$font['mobile'].'px;color:'.$l['color'].';font-weight:'.$l['font_weight'].';';
                 $text = nl2br(esc_html($l['text']), false);
                 $tag = $l['tag'];
                 $inner = '<'.$tag.($l['font_family'] !== '' ? ' style="'.esc_attr('font-family:'.$l['font_family']).'"' : '').'>'.$text.'</'.$tag.'>';

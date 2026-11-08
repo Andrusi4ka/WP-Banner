@@ -10,9 +10,11 @@
     // The kinds of element "Add element" offers (a tile each in the settings column): icon, name, what it is for.
     const ELEMENTS = {
         image: ['format-image', 'Image', 'A photo, or a transparent cutout in front of the title.'],
-        text: ['editor-textcolor', 'Text', 'A title between the image layers.']
+        text: ['editor-textcolor', 'Title', 'The banner\'s title, between the image layers (behind a cutout, for the mountain effect).']
     };
-    const TYPE_NAMES = {image:'Image', text:'Text'};
+    const TYPE_NAMES = {image:'Image', text:'Title'};
+    // A field with its help behind an "i" beside the label (the dark tooltip), instead of under it.
+    const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
     // adding: the settings column shows the elements to add instead of a layer's settings.
     let selected = -1, dark = false, adding = false;
     const turned = {};
@@ -123,6 +125,24 @@
         return '<div class="wpbn-field wpbn-field--check"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + key + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label>' + note(help) + '</div>';
     }
     // A field that only applies in some settings: greyed (not hidden) otherwise, its value kept.
+    // A title's font size on a device: tablet and mobile empty follow the larger screen (as WPBN_Settings::fonts()).
+    const FONT_KEYS = {desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'};
+    function fontFor(l, d) { return d === 'desktop' || l[FONT_KEYS[d]] != null ? l[FONT_KEYS[d]] : fontFor(l, UP[d]); }
+    // Font size as WP Swiper's "Custom size": Desktop, the arrow, then Tablet and Mobile once it is
+    // pressed (or while one of them has a size of its own); each a number with "px" after it.
+    let fontsOpen = false;
+    function fontSizeField(l) {
+        const open = fontsOpen || l.tablet_font_size != null || l.mobile_font_size != null;
+        const item = d => {
+            const key = FONT_KEYS[d], id = 'wpbn-f-' + key, own = l[key] != null, max = d === 'mobile' ? 250 : 500;
+            return '<div class="wpbn-inline-devices__item" data-device="' + d + '"><label for="' + id + '" title="' + DEVICES[d][1] + '"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span>' + DEVICES[d][1] + '</label>'
+                + '<span class="wpbn-inline-devices__box"><input id="' + id + '" data-font="' + d + '" type="number" min="8" max="' + max + '" step="1" value="' + (own ? escape(l[key]) : '') + '" placeholder="' + escape(fontFor(l, d)) + '" aria-label="Font size — ' + DEVICES[d][1] + '"><span class="wpbn-inline-devices__unit" aria-hidden="true">px</span></span></div>';
+        };
+        return '<div class="wpbn-field wpbn-field--inline-devices"><div class="wpbn-field__head"><span class="wpbn-field__label">Font size</span>' + tip('Tablet and mobile: empty takes the larger screen\'s size (shown in grey); the arrow shows them.') + '</div>'
+            + '<div class="wpbn-inline-devices' + (open ? ' is-open' : '') + '">' + item('desktop')
+            + '<button type="button" class="wpbn-inline-devices__toggle" aria-expanded="' + open + '" aria-label="Tablet and mobile sizes" title="Tablet and mobile sizes"><span class="dashicons dashicons-arrow-right-alt2" aria-hidden="true"></span></button>'
+            + item('tablet') + item('mobile') + '</div></div>';
+    }
     // A setting with a switch (OPTIONAL): the switch with the setting's name; on, the slider (per device)
     // under it, the device icons beside the switch. Width, Scale and Opacity of a text layer: the slider alone.
     function optionalRange(l, base, label, o) {
@@ -327,10 +347,10 @@
             let first = field('name', 'Layer name'), cards = '';
             if (l.type === 'image') first += picker(l);
             else {
-                first += textarea('text', 'Text', 'Enter starts a new line.') + select('tag', 'HTML tag', {div:'div', h1:'h1 (the page title)', h2:'h2', h3:'h3', p:'p'}, 'A banner title is often the page\'s h1. A heading takes the theme\'s heading font unless a font is set below.');
-                cards += card('Text style', field('color', 'Text color', 'color')
-                    + range({desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'}, 'Font size (px)', {min:8, max:d === 'mobile' ? 250 : 500, to:300})
-                    + field('font_family', 'Font', 'text', 'Empty: the theme\'s. As CSS takes it, e.g. "Playfair Display", serif; the font must be loaded on the site.')
+                first += withTip(textarea('text', 'Title'), 'Enter starts a new line.')
+                    + withTip(select('tag', 'Heading', {h1:'h1', h2:'h2', h3:'h3', h4:'h4', h5:'h5'}), 'h1 if the banner\'s title is the page\'s title (one h1 per page); otherwise h2, or a lower one (h3–h5) under other headings. The title takes the theme\'s heading font unless a font is set below.');
+                cards += card('Title style', fontSizeField(l) + field('color', 'Color', 'color')
+                    + withTip(field('font_family', 'Font', 'text'), 'Empty: the theme\'s heading font. As CSS takes it, e.g. "Playfair Display", serif; the font must be loaded on the site.')
                     + select('font_weight', 'Weight', {100:'100 Thin', 200:'200', 300:'300 Light', 400:'400 Regular', 500:'500 Medium', 600:'600 Semi-bold', 700:'700 Bold', 800:'800 Extra-bold', 900:'900 Black'}));
             }
             html = '<legend>Layer settings</legend>'
@@ -359,6 +379,14 @@
     function changed() { sync(); $('refresh').classList.add('is-stale'); }
     app.addEventListener('input', event => {
         const input = event.target;
+        if (input.dataset.font) {
+            const l = current(), key = FONT_KEYS[input.dataset.font];
+            if (input.value === '' && input.dataset.font !== 'desktop') l[key] = null;
+            else if (Number.isFinite(input.valueAsNumber)) l[key] = Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber));
+            else return;
+            input.closest('.wpbn-inline-devices').querySelectorAll('[data-font]').forEach(other => { other.placeholder = fontFor(l, other.dataset.font); });
+            changed(); return;
+        }
         // Height: a number typed on tablet / mobile gives it a unit of its own too (the one it followed);
         // emptied there, it follows the larger screen again.
         if (input.dataset.height) {
@@ -422,6 +450,12 @@
         if (button.dataset.fieldDevice) { setDevice(button.dataset.fieldDevice, true); return; }
         if (button.dataset.select !== undefined) { adding = false; selected = Number(button.dataset.select); list(); settings(); focusRow(selected); return; }
         if (button.dataset.rowAction) { rowAction(button.dataset.rowAction, Number(button.dataset.index)); return; }
+        if (button.classList.contains('wpbn-inline-devices__toggle')) {
+            const box = button.closest('.wpbn-inline-devices'), open = !box.classList.contains('is-open');
+            box.classList.toggle('is-open', open); button.setAttribute('aria-expanded', String(open)); fontsOpen = open;
+            if (open) { const tablet = box.querySelector('[data-font="tablet"]'); if (tablet) tablet.focus(); }
+            return;
+        }
         if (button.dataset.reset) {
             const obj = current(), key = button.dataset.reset, base = button.dataset.resetBase || null;
             obj[key] = base && key !== base ? null : DEFAULTS[base || key];
@@ -770,7 +804,7 @@
                 if(layer.type==='image') {
                     item.style.height='100%';
                     if(images[layer.image]){const image=document.createElement('img');image.src=images[layer.image];image.alt='';image.style.objectFit=v('fit');image.style.objectPosition=layer.focus_x+'% '+layer.focus_y+'%';item.append(image);}
-                }else{item.textContent=layer.text;item.style.color=layer.color;item.style.fontSize=(device==='mobile'?layer.mobile_font_size:device==='tablet'?layer.tablet_font_size:layer.font_size)*width/baseWidth+'px';}
+                }else{item.textContent=layer.text;item.style.color=layer.color;item.style.fontSize=fontFor(layer,device)*width/baseWidth+'px';}
                 canvas.append(item);
             });
         });

@@ -79,7 +79,7 @@ const server=http.createServer((req,res)=>{
         await page.click('[data-preview-device="mobile"]');
         await page.waitForTimeout(100);
         assert.equal(await frame().evaluate(()=>innerWidth),390);
-        assert.equal(await frame().locator('.wpbn-layer').evaluate(el=>getComputedStyle(el).fontSize),'48px');
+        assert.equal(await frame().locator('.wpbn-layer').evaluate(el=>getComputedStyle(el).fontSize),'120px','Mobile follows the desktop font size');
         assert.equal(await frame().locator('.wpbn-layer').evaluate(el=>parseFloat(el.style.getPropertyValue('--wpbn-dy'))),-80,'Mobile follows the larger screen\'s travel');
         assert.equal(await page.locator('[data-key="move_y_mobile"]').inputValue(),'','An inherited value leaves the number empty');
         assert.equal(await page.locator('[data-key="move_y_mobile"]').getAttribute('placeholder'),'-80','The inherited value shows as its placeholder');
@@ -173,7 +173,11 @@ const server=http.createServer((req,res)=>{
         await page.fill('#wpbn-f-tablet_height','700');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).tablet_height,700);
         await page.click('[data-select="0"]');
-        await page.fill('[data-key="tablet_font_size"]','90');
+        assert.equal(await page.locator('#wpbn-f-tablet_font_size').isVisible(),false,'Tablet and mobile sizes hidden until the arrow');
+        await page.click('.wpbn-inline-devices__toggle');
+        assert.equal(await page.locator('#wpbn-f-tablet_font_size').getAttribute('placeholder'),'120','An empty size shows the one it follows');
+        await page.fill('#wpbn-f-tablet_font_size','90');
+        assert.equal(await page.locator('#wpbn-f-mobile_font_size').getAttribute('placeholder'),'90','Mobile follows tablet');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0].tablet_font_size,90);
         if(await page.locator('#wpbn-rotate').getAttribute('aria-pressed')==='true') await page.click('#wpbn-rotate');
         await update();

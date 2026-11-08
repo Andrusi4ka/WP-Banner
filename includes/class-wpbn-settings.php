@@ -48,10 +48,11 @@ class WPBN_Settings {
     const MOTION = array('move_x', 'move_y', 'zoom');
     const FITS = array('cover','contain');
     const TYPES = array('image', 'text');
-    const TAGS = array('div', 'h1', 'h2', 'h3', 'p');
+    // A text layer is the banner's title: a heading (h2 unless it is the page's h1, or a lower one).
+    const TAGS = array('h1', 'h2', 'h3', 'h4', 'h5');
     public static function layer() {
-        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'color'=>'#ffffff', 'font_size'=>120, 'tablet_font_size'=>120, 'mobile_font_size'=>48,
-            'tag'=>'div', 'font_family'=>'', 'font_weight'=>800,
+        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'color'=>'#ffffff', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
+            'tag'=>'h2', 'font_family'=>'', 'font_weight'=>800,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>0,
             'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false,
             'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false);
@@ -88,6 +89,13 @@ class WPBN_Settings {
         $fade = array();
         foreach ($start as $device=>$value) { $fade[] = empty($l['use_end_opacity']) ? 0 : $end[$device] - $value; }
         return $fade;
+    }
+    // A title's font size on each device (px), the inherited ones filled in.
+    public static function fonts($l) {
+        $tablet = $l['tablet_font_size'] ?? null;
+        $tablet = $tablet === null ? $l['font_size'] : $tablet;
+        $mobile = $l['mobile_font_size'] ?? null;
+        return array('desktop'=>$l['font_size'], 'tablet'=>$tablet, 'mobile'=>$mobile === null ? $tablet : $mobile);
     }
     // The image on each device: tablet and mobile 0 = the larger screen's.
     public static function images($l) {
@@ -126,12 +134,14 @@ class WPBN_Settings {
             foreach (array('image', 'image_tablet', 'image_mobile') as $key) { $l[$key] = is_scalar($raw[$key] ?? null) ? absint($raw[$key]) : 0; }
             $l['color'] = is_string($raw['color'] ?? null) ? (sanitize_hex_color($raw['color']) ?: '#ffffff') : '#ffffff';
             $l['hidden'] = !empty($raw['hidden']);
-            foreach (array('font_size'=>array(8,500),'mobile_font_size'=>array(8,250)) as $key=>$range) {
-                $l[$key] = self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]);
+            $l['font_size'] = self::number($raw['font_size'] ?? null, $l['font_size'], 8, 500);
+            // Tablet and mobile: empty follows the larger screen (scenes saved before tablets had a size of their own too).
+            foreach (array('tablet_font_size'=>500, 'mobile_font_size'=>250) as $key=>$max) {
+                $value = $raw[$key] ?? null;
+                $l[$key] = $value === null || $value === '' ? null : self::number($value, null, 8, $max);
             }
-            // Scenes saved before tablets had their own size used the desktop size there.
-            $l['tablet_font_size'] = self::number($raw['tablet_font_size'] ?? null, $l['font_size'], 8, 500);
-            $l['tag'] = self::choice($raw['tag'] ?? null, self::TAGS, 'div');
+            // Titles saved as div or p (before text layers became titles): h2.
+            $l['tag'] = self::choice($raw['tag'] ?? null, self::TAGS, 'h2');
             // A font family as CSS takes it ("Playfair Display", serif); empty = the theme's.
             $l['font_family'] = is_string($raw['font_family'] ?? null) ? substr(trim(preg_replace('/[^\w \-,\'"]/u', '', $raw['font_family'])), 0, 120) : '';
             $l['font_weight'] = (int) round(self::number($raw['font_weight'] ?? null, 800, 100, 900) / 100) * 100;

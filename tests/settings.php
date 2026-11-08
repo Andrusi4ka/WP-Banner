@@ -67,9 +67,11 @@ $markup=WPBN_Render::markup($s);
 check(substr_count($markup,'class="wpbn-layer ')===2,'Hidden layers not rendered');
 check(strpos($markup,'z-index:1')<strpos($markup,'z-index:2'),'Back-to-front order preserved');
 check(strpos($markup,'<b>')===false && strpos($markup,'&amp; more')!==false && strpos($markup,'<br>')!==false,'Text escaped, line breaks kept');
-check($s['layers'][1]['tag']==='div' && strpos($markup,'<div style="font-family:')!==false,'Text tag allow-listed');
+check($s['layers'][1]['tag']==='h2' && strpos($markup,'<h2 style="font-family:')!==false,'Title tag allow-listed: h2 by default');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','tag'=>'div'),array('type'=>'text','tag'=>'p'))))['layers'][1]['tag']==='h2','Titles saved as div or p become h2');
 check(strpos($s['layers'][1]['font_family'],';')===false && strpos($s['layers'][1]['font_family'],'{')===false,'Font family cannot break out of its CSS');
 check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','tag'=>'h1'))))['layers'][0]['tag']==='h1','A banner title may be the h1');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','tag'=>'h5'),array('type'=>'text','tag'=>'h6'))))['layers'][0]['tag']==='h5','Headings h1 to h5');
 check(WPBN_Settings::sanitize($s)==$s,'Sanitization idempotent');
 
 // Switches: off, a setting has its value at rest; on, its own. An image layer's width is always the scene's.
@@ -115,7 +117,8 @@ check(WPBN_Settings::sanitize(array_merge($pc,array('height_unit'=>'px')))['targ
 
 // Per-device values and older scenes.
 $old=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_size'=>96))));
-check($old['layers'][0]['tablet_font_size']===96.0,'Older scenes keep the desktop size on tablets');
+check($old['layers'][0]['tablet_font_size']===null && WPBN_Settings::fonts($old['layers'][0])===array('desktop'=>96.0,'tablet'=>96.0,'mobile'=>96.0),'Tablet and mobile follow the desktop size until given their own');
+check(WPBN_Settings::fonts(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_size'=>96,'mobile_font_size'=>40))))['layers'][0])['mobile']===40.0,'Mobile with a size of its own keeps it');
 check(strpos(WPBN_Render::markup($old),'--wpbn-tablet-font:96px')!==false,'Tablet font size rendered');
 $old=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'image','move_y'=>-80,'mobile_motion'=>50))));
 check($old['layers'][0]['move_y_mobile']===-40.0 && $old['layers'][0]['move_y_tablet']===null && $old['layers'][0]['use_move_y'],'Motion on mobile becomes the mobile travel');
