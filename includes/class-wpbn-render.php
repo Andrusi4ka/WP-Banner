@@ -4,6 +4,8 @@ class WPBN_Render {
     // Scenes drawn on this page so far: the first one's images load first (it is usually the top banner).
     private static $count = 0;
     const SHORTCODE = 'wp_banner';
+    // A layer in a container: its X and Width as shares of the container (--wpbn-cw), centred in the scene.
+    const IN_CONTAINER = array('x'=>'calc((100%% - var(--wpbn-cw)) / 2 + var(--wpbn-cw) * %s)', 'width'=>'calc(var(--wpbn-cw) * %s)');
     public static function init() {
         add_shortcode(self::SHORTCODE, array(__CLASS__, 'shortcode'));
         // The shortcodes of the plugin's old names (WP Layer Motion, WP Banner Motion), for pages that still have them.
@@ -20,7 +22,7 @@ class WPBN_Render {
         if (get_post_type($id) !== 'wpbn_scene' || get_post_status($id) !== 'publish') { return ''; }
         self::assets();
         $s = WPBN_Settings::get($id);
-        return self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : ''));
+        return self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : '', 'id'=>$id));
     }
     // Placed by class: the scene moves into the nearest block around it with that class, as its
     // background, as soon as the browser reads it (so it does not show first where it stands);
@@ -73,9 +75,27 @@ class WPBN_Render {
         }
         return $html.$img.'</picture>';
     }
+    // A title's text as HTML: escaped, its line breaks as <br>, its <u> pairs (WPBN_Settings::title_text()
+    // leaves only paired, bare ones) as tags again.
+    public static function title_html($text) {
+        $text = WPBN_Settings::title_text($text);
+        return nl2br(str_replace(array('&lt;u&gt;', '&lt;/u&gt;'), array('<u>', '</u>'), esc_html($text)), false);
+    }
+    // An image's Gradient stays on what is not see-through in a cutout: the photo itself as its mask, on each
+    // device (frontend.css), for the kinds of image that can be see-through; none (all of the box) for others.
+    const SEE_THROUGH = array('image/png', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml');
+    private static function mask($l) {
+        $css = '';
+        foreach (WPBN_Settings::images($l) as $device=>$id) {
+            $url = $id && in_array(get_post_mime_type($id), self::SEE_THROUGH, true) ? wp_get_attachment_image_url($id, 'full') : '';
+            $css .= '--wpbn-mask'.($device === 'desktop' ? '' : ($device === 'tablet' ? '-t' : '-m')).':'.($url ? 'url("'.esc_url($url).'")' : 'none').';';
+        }
+        return $css;
+    }
     // $context  fill: the scene fills the element it is put into (no height of its own; the editor's preview);
     //           host: the class of the block it becomes the background of, if it stands inside one (HOST_SCRIPT);
-    //           eager: load its images at once (default: only the page's first scene does).
+    //           eager: load its images at once (default: only the page's first scene does);
+    //           id: the scene's (the id of the <link> that loads its Google font).
     public static function markup($s, $context = array()) {
         $fill = !empty($context['fill']);
         $first = isset($context['eager']) ? (bool) $context['eager'] : self::$count === 0;
@@ -86,15 +106,25 @@ class WPBN_Render {
         foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
         $html = '<section class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"' : '').'>';
         $loaded = false;
+        $links = '';
         foreach ($s['layers'] as $i=>$l) {
             if ($l['hidden']) { continue; }
             $l = WPBN_Settings::effective($l);
             // Each per-device setting as CSS variables (frontend.css picks them by breakpoint).
             $css = 'z-index:'.($i+1).';--wpbn-focus:'.$l['focus_x'].'% '.$l['focus_y'].'%;';
+            // Its container (WPBN_Container): its width, from the theme where it can; '' the whole scene.
+            $container = WPBN_Container::css($l);
+            if ($container !== '') { $css .= '--wpbn-cw:'.$container.';'; }
             $vars = array('x'=>array('left','%',1), 'y'=>array('top','%',1), 'width'=>array('width','%',1), 'opacity'=>array('opacity','',100), 'scale'=>array('scale','',100), 'fit'=>array('fit','',0));
             foreach ($vars as $key=>$var) {
                 foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) {
-                    $css .= '--wpbn-'.$var[0].($device === 'desktop' ? '' : ($device === 'tablet' ? '-t' : '-m')).':'.($var[2] ? ($value / $var[2]).$var[1] : $value).';';
+                    $css .= '--wpbn-'.$var[0].($device === 'desktop' ? '' : ($device === 'tablet' ? '-t' : '-m')).':'.($container !== '' && isset(self::IN_CONTAINER[$key]) ? sprintf(self::IN_CONTAINER[$key], $value / 100) : ($var[2] ? ($value / $var[2]).$var[1] : $value)).';';
+                }
+            }
+            // A title: its Position is also the point of it placed there (frontend.css ax, ay): within its container.
+            if ($l['type'] === 'text') {
+                foreach (array('x'=>'anx', 'y'=>'any') as $key=>$var) {
+                    foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) { $css .= '--wpbn-'.$var.($device === 'desktop' ? '' : ($device === 'tablet' ? '-t' : '-m')).':'.max(0, min(1, $value / 100)).';'; }
                 }
             }
             // The motion per device [desktop, tablet, mobile], and the box frontend.js needs to keep the edges hidden.
@@ -102,16 +132,26 @@ class WPBN_Render {
             foreach (WPBN_Settings::MOTION as $key) { $motion[$key] = array_values(WPBN_Settings::resolved($l, $key)); }
             $motion['fade'] = WPBN_Settings::fade($l);
             foreach (array('x', 'y', 'width', 'scale') as $key) { $motion['box_'.$key] = array_values(WPBN_Settings::resolved($l, $key)); }
-            // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain or text does not.
-            $motion['fill'] = $l['type'] === 'text' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
+            // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain, text or
+            // a layer in a container does not.
+            $motion['fill'] = $l['type'] === 'text' || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
             $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
+            // Gradient: over an image (frontend.css), a title's letters filled with it (below).
+            $gradient = !empty($l['use_gradient']) ? WPBN_Gradient::css($l['gradient']) : '';
+            if ($gradient !== '' && $l['type'] === 'image') { $classes .= ' wpbn-layer--gradient'; $css .= '--wpbn-gradient:'.$gradient.';'.self::mask($l); }
             $inner = '';
             if ($l['type'] === 'text') {
                 $font = WPBN_Settings::fonts($l);
-                $css .= '--wpbn-font:'.$font['desktop'].'px;--wpbn-tablet-font:'.$font['tablet'].'px;--wpbn-mobile-font:'.$font['mobile'].'px;color:'.$l['color'].';font-weight:'.$l['font_weight'].';';
-                $text = nl2br(esc_html($l['text']), false);
+                $css .= '--wpbn-font:'.$font['desktop'].'px;--wpbn-tablet-font:'.$font['tablet'].'px;--wpbn-mobile-font:'.$font['mobile'].'px;color:'.$l['color'].';font-weight:'.$l['font_weight'].';'
+                    // The words in <u>: their own color; none: the theme's primary color (frontend.css).
+                    .($l['accent_color'] !== '' ? '--wpbn-accent:'.$l['accent_color'].';' : '');
+                $text = self::title_html($l['text']);
                 $tag = $l['tag'];
-                $inner = '<'.$tag.($l['font_family'] !== '' ? ' style="'.esc_attr('font-family:'.$l['font_family']).'"' : '').'>'.$text.'</'.$tag.'>';
+                $tag_css = ($l['font_family'] !== '' ? 'font-family:'.WPBN_Fonts::css($l['font_family']).';' : '')
+                    .($gradient !== '' ? 'background-image:'.$gradient.';-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;' : '');
+                $inner = '<'.$tag.($tag_css !== '' ? ' style="'.esc_attr($tag_css).'"' : '').'>'.$text.'</'.$tag.'>';
+                // A Google font (Woodmart's list) loaded here, at its weight; empty: the theme's heading font (its weight may not be loaded yet).
+                $links .= WPBN_Fonts::link($l['font_family'] !== '' ? $l['font_family'] : 'var(--wd-title-font)', $l['font_weight'], $context['id'] ?? 0);
             } else {
                 // The first scene's images load at once, its back one first; later scenes' when they come near.
                 $attrs = $first ? ' decoding="async" loading="eager"'.(!$loaded ? ' fetchpriority="high"' : '') : ' decoding="async" loading="lazy"';
@@ -120,7 +160,7 @@ class WPBN_Render {
             }
             $html .= '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'">'.$inner.'</div>';
         }
-        $html .= '</section>';
+        $html = $links.$html.'</section>';
         return empty($context['host']) ? $html : $html.'<script>'.self::HOST_SCRIPT.'</script>';
     }
 }

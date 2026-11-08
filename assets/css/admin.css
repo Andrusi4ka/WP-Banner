@@ -40,9 +40,11 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-layer-row.is-drop-after:before{bottom:-5px}
 .wpbn-layer-select{display:flex;flex:1 1 auto;align-items:center;gap:10px;min-width:0;padding:8px 4px 8px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-weight:600;text-align:left;line-height:1.35;cursor:grab}
 .wpbn-layer-row:hover .wpbn-layer-select,.wpbn-layer-row.is-active .wpbn-layer-select{color:var(--wpbn-accent)}
-.wpbn-layer-thumb{display:flex;flex:0 0 44px;align-items:center;justify-content:center;width:44px;height:32px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
+.wpbn-layer-thumb{display:flex;flex:0 0 36px;align-items:center;justify-content:center;width:36px;height:36px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
 .wpbn-layer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-.wpbn-layer-thumb--text{background:#1d2327;font:800 18px/1 Arial,sans-serif}
+/* A title: its own icon (assets/images/title.svg), with its own frame. */
+.wpbn-layer-thumb--text{border:0;border-radius:0;background:none}
+.wpbn-layer-thumb--text img{object-fit:contain}
 .wpbn-layer-label{min-width:0;overflow-wrap:anywhere}
 .wpbn-layer-label small{display:block;color:#646970;font-weight:400;font-size:11px}
 .wpbn-layer-row.is-hidden .wpbn-layer-thumb,.wpbn-layer-row.is-hidden .wpbn-layer-label{opacity:.5}
@@ -84,7 +86,6 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-field__head{display:flex;align-items:center;gap:6px;min-height:26px;margin-bottom:4px}
 .wpbn-field__head label,.wpbn-field__label{margin:0;font-weight:500}
 .wpbn-field input[type=text],.wpbn-field input[type=number],.wpbn-field select{width:100%;max-width:100%;box-sizing:border-box}
-.wpbn-field input[type=color]{width:100%;height:34px;padding:2px;box-sizing:border-box;cursor:pointer}
 .wpbn-field .description{margin:4px 0 0}
 .wpbn-field__row{display:flex;align-items:center;gap:12px}
 .wpbn-field__row input[type=range]{flex:1 1 auto;min-width:0;margin:0;accent-color:var(--wpbn-accent);cursor:pointer}
@@ -253,18 +254,6 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-field--check{margin-bottom:10px}
 /* A size per device side by side, as WP Swiper's "Custom size": Desktop, the arrow, then Tablet and
    Mobile once it is pressed; each a number with its unit after it. */
-.wpbn-inline-devices{display:flex;flex-wrap:wrap;align-items:flex-end;gap:6px}
-.wpbn-inline-devices__item{display:flex;flex-direction:column;gap:4px}
-.wpbn-inline-devices:not(.is-open) .wpbn-inline-devices__item:not([data-device="desktop"]){display:none}
-.wpbn-inline-devices__item label{display:inline-flex;align-items:center;gap:4px;color:#50575e}
-.wpbn-inline-devices__item .dashicons{width:16px;height:16px;font-size:16px;color:#8c8f94}
-.wpbn-inline-devices__box{display:inline-flex;align-items:stretch;border:1px solid #8c8f94;border-radius:4px;background:#fff;overflow:hidden}
-.wpbn-inline-devices__box:focus-within{border-color:var(--wpbn-accent);box-shadow:0 0 0 1px var(--wpbn-accent)}
-#wpbn-app .wpbn-inline-devices__box input[type=number]{width:38px;min-height:40px;padding:0 6px;margin:0;border:0;border-radius:0;box-shadow:none;-moz-appearance:textfield}
-.wpbn-inline-devices__box input[type=number]::-webkit-inner-spin-button,.wpbn-inline-devices__box input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-.wpbn-inline-devices__unit{display:inline-flex;align-items:center;padding:0 6px;border-left:1px solid #dcdcde;background:#f6f7f7;color:#1d2327;font-weight:600}
-#wpbn-app .wpbn-inline-devices__toggle{display:inline-flex;align-items:center;justify-content:center;width:16px;height:40px;padding:0;border:0;background:none;color:#50575e;cursor:pointer}
-#wpbn-app .wpbn-inline-devices__toggle:hover,#wpbn-app .wpbn-inline-devices__toggle[aria-expanded="true"]{color:var(--wpbn-accent)}
 /* Help text behind an "i" icon: a dark tooltip on hover and keyboard focus (as WP Swiper's). */
 .wpbn-tip{position:relative;display:inline-flex;flex:0 0 auto;color:#a7aaad;cursor:help}
 .wpbn-tip[hidden]{display:none}
@@ -289,3 +278,82 @@ body.wpbn-modal-open{overflow:hidden}
 #wpbn-preview-stage.is-dark #wpbn-plain-frame{border-color:#1d2327;background:#1d2327;box-shadow:0 4px 14px rgba(0,0,0,.15)}
 #wpbn-preview-stage.is-custom #wpbn-plain-frame{display:block}
 #wpbn-preview-stage.is-custom #wpbn-frame{z-index:1}
+/* Every color field (admin.js colorField(), as WP Swiper's): a swatch, the color over a checkerboard
+   (so a see-through one shows as such), that opens the picker (Pickr). */
+.wpbn-color{display:inline-flex;vertical-align:middle}
+.wpbn-color__swatch{display:block;width:64px;height:40px;padding:3px;border:1px solid #8c8f94;border-radius:4px;background:#fff;cursor:pointer}
+.wpbn-color__swatch:hover{border-color:#2c3338}
+.wpbn-color__swatch:focus-visible,.wpbn-color__swatch[aria-expanded="true"]{border-color:var(--wp-admin-theme-color,#2271b1);outline:none;box-shadow:0 0 0 1px var(--wp-admin-theme-color,#2271b1)}
+.wpbn-color__chip{display:block;width:100%;height:100%;border-radius:2px;background:repeating-conic-gradient(#dcdcde 0% 25%,#fff 0% 50%) 0 0/10px 10px}
+/* The picker (Pickr's classic theme, in the body), over the Position window (100050). Squarer than
+   Pickr's own: narrower, the palette taller; the color's code on a row of its own. */
+.pcr-app.wpbn-pcr{z-index:100060}
+.pcr-app.wpbn-pcr[data-theme="classic"]{width:20em}
+.pcr-app.wpbn-pcr[data-theme="classic"] .pcr-selection .pcr-color-palette{height:11em}
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-result{flex:1 0 100%;height:2.6em;padding:0 .6em;border:0;border-radius:.15em;background:#f1f3f4;color:#75797e;font-size:.85em}
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-result:focus{box-shadow:0 0 0 1px rgba(255,255,255,.85),0 0 0 3px rgba(66,133,244,.75)}
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-type,.pcr-app.wpbn-pcr .pcr-interaction .pcr-cancel,.pcr-app.wpbn-pcr .pcr-interaction .pcr-clear{flex:1 1 auto}
+/* Closing (it fades out): a click there goes through, it changes no color. */
+.pcr-app.wpbn-pcr:not(.visible){pointer-events:none}
+/* Cancel grey, as the format buttons; Default red (Pickr's Clear). */
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-cancel{background:#f1f3f4;color:#75797e}
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-cancel:hover{filter:brightness(.92)}
+/* WordPress's own input styles off Pickr's. */
+.pcr-app.wpbn-pcr .pcr-interaction input{min-height:0;box-shadow:none;line-height:normal}
+/* A title's Color and Accent color, side by side. */
+.wpbn-colors{display:flex;flex-wrap:wrap;gap:0 24px}
+.wpbn-colors>.wpbn-field{flex:0 0 auto}
+/* Fields side by side, sharing the row (a title's Font and Weight). */
+.wpbn-row{display:flex;gap:0 12px}
+.wpbn-row>.wpbn-field{flex:1 1 0;min-width:0}
+/* A title's Font (with Woodmart, admin.js fontField()): as tall as a select; a list with a search box
+   under it, in groups, wider than the field when it is narrow. */
+.wpbn-font{position:relative}
+/* As WordPress's own selects (wp-admin forms.css): 40px tall, 14px text, the same border and corners. */
+.wpbn-font__toggle{display:flex;align-items:center;justify-content:space-between;gap:4px;width:100%;min-height:40px;box-sizing:border-box;margin:0;padding:0 6px 0 12px;border:1px solid #949494;border-radius:2px;background:#fff;color:#1e1e1e;font-family:inherit;font-size:14px;line-height:2.71428571;text-align:left;cursor:pointer}
+.wpbn-font__toggle:focus-visible,.wpbn-font__toggle[aria-expanded="true"]{border-color:var(--wp-admin-theme-color,#2271b1);outline:none;box-shadow:0 0 0 1px var(--wp-admin-theme-color,#2271b1)}
+.wpbn-font__name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.wpbn-font__toggle .dashicons{flex:0 0 auto;font-size:16px;width:16px;height:16px}
+.wpbn-font__panel{position:absolute;top:calc(100% + 4px);left:0;z-index:30;width:max(100%,280px);box-sizing:border-box;padding:8px;border:1px solid #c3c4c7;border-radius:4px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.15)}
+.wpbn-font__panel[hidden]{display:none}
+.wpbn-font__search{width:100%;box-sizing:border-box;margin:0 0 6px}
+.wpbn-font__list{max-height:280px;overflow:auto}
+.wpbn-font__group{padding:10px 8px 4px;color:#646970;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.wpbn-font__option{overflow:hidden;padding:5px 8px;border-radius:3px;white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
+.wpbn-font__option:hover,.wpbn-font__option.is-active{background:#f0f6fc}
+.wpbn-font__option.is-chosen{color:var(--wp-admin-theme-color,#2271b1);font-weight:600}
+.wpbn-font__empty{margin:6px 8px;color:#646970}
+/* Under Font and Weight: the title's text in them (admin.js refreshFontSample()), on one line. */
+.wpbn-font-sample{overflow:hidden;margin:-6px 0 14px;color:#1d2327;font-size:20px;line-height:1.3;white-space:nowrap;text-overflow:ellipsis}
+/* A title's Font size and Line height (admin.js deviceNumberField()): a number with its unit after it, the device
+   icons at the right of its label, as tall as the other fields; the two side by side (.wpbn-row). */
+/* The icons at the right of the label; under it when the column is too narrow for both. */
+.wpbn-field--device-number .wpbn-field__head{flex-wrap:wrap}
+.wpbn-number-unit{display:flex;align-items:stretch;border:1px solid #8c8f94;border-radius:4px;background:#fff;overflow:hidden}
+.wpbn-number-unit:focus-within{border-color:var(--wpbn-accent);box-shadow:0 0 0 1px var(--wpbn-accent)}
+#wpbn-app .wpbn-number-unit input[type=number]{flex:1 1 auto;width:0;min-width:0;min-height:40px;padding:0 10px;margin:0;border:0;border-radius:0;box-shadow:none}
+.wpbn-number-unit__unit{display:inline-flex;align-items:center;padding:0 10px;border-left:1px solid #dcdcde;background:#f6f7f7;color:#1d2327;font-weight:600}
+.wpbn-number-unit input[type=number]{-moz-appearance:textfield}
+.wpbn-number-unit input[type=number]::-webkit-inner-spin-button,.wpbn-number-unit input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+/* The Position window, for a title in a container: the container's edges, dashed. */
+.wpbn-position-container{position:absolute;top:0;bottom:0;box-sizing:border-box;border-inline:1px dashed rgba(34,113,177,.8);pointer-events:none;z-index:2}
+/* A layer's Gradient (admin.js gradientField(), as WP Swiper's, its editor as WoodMart's): its selects in a
+   row, the gradient as a bar (over a checkerboard: see-through colours show as such), its colours' points
+   under it (the chosen one in the accent colour), the chosen one's colour and Delete (red). */
+.wpbn-gradient__selects{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.wpbn-gradient__selects select{flex:1 1 120px;min-width:0}
+.wpbn-gradient__selects select[hidden]{display:none}
+.wpbn-gradient__bar{position:relative;height:28px;border:1px solid #8c8f94;border-radius:4px;background:repeating-conic-gradient(#dcdcde 0% 25%,#fff 0% 50%) 0 0/10px 10px;cursor:copy}
+.wpbn-gradient__fill{position:absolute;inset:0;border-radius:3px;pointer-events:none}
+.wpbn-gradient__stops{position:relative;height:26px;margin-bottom:8px}
+#wpbn-app .wpbn-gradient__handle{position:absolute;top:4px;width:18px;height:18px;margin-left:-9px;padding:2px;border:1px solid #8c8f94;border-radius:3px;background:repeating-conic-gradient(#dcdcde 0% 25%,#fff 0% 50%) 0 0/6px 6px;cursor:ew-resize;touch-action:none}
+/* Its tip, up to the bar. */
+.wpbn-gradient__handle::before{content:"";position:absolute;top:-5px;left:50%;margin-left:-4px;border:4px solid transparent;border-top:0;border-bottom:4px solid #8c8f94}
+.wpbn-gradient__chip{display:block;width:100%;height:100%;border-radius:1px}
+#wpbn-app .wpbn-gradient__handle.is-chosen,#wpbn-app .wpbn-gradient__handle:focus-visible{border-color:var(--wp-admin-theme-color,#2271b1);outline:none;box-shadow:0 0 0 1px var(--wp-admin-theme-color,#2271b1)}
+.wpbn-gradient__handle.is-chosen::before{border-bottom-color:var(--wp-admin-theme-color,#2271b1)}
+.wpbn-gradient__stop{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+/* Delete: red text, as WordPress's own delete links. */
+#wpbn-app .wpbn-gradient__delete{padding:0;border:0;background:none;color:#d63638;cursor:pointer}
+#wpbn-app .wpbn-gradient__delete:hover,#wpbn-app .wpbn-gradient__delete:focus{color:#b32d2e}
+#wpbn-app .wpbn-gradient__delete:disabled{color:#a7aaad;cursor:default}

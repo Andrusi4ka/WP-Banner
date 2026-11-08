@@ -39,6 +39,10 @@ const server=http.createServer((req,res)=>{
         await addElement('text');
         await page.fill('[data-key="text"]','SLOVAKIA');
         assert.equal(await page.locator('[data-key="x"],[data-key="y"]').count(),0,'Numeric position fields replaced');
+        // A title: Position at the right of Container, as tall as its select; its value over the button. No Width.
+        assert.ok(await page.evaluate(()=>{const sel=document.querySelector('#wpbn-f-container').getBoundingClientRect(),b=document.querySelector('.wpbn-position-button').getBoundingClientRect(),v=document.querySelector('.wpbn-position-value').getBoundingClientRect();return b.left>=sel.right && Math.abs(b.top-sel.top)<1 && Math.abs(b.bottom-sel.bottom)<1 && v.bottom<=b.top && Math.abs(v.right-b.right)<1;}),'Position at the right of Container, its value over it');
+        assert.equal(await page.locator('[data-key="width"]').count(),0,'No Width');
+        assert.equal(await page.locator('[data-key^="scale"],[data-key^="opacity"],[data-key="use_scale"],[data-key="use_opacity"]').count(),0,'A title: no Scale, no Opacity');
         await page.click('[data-action="position"]');
         const positionStage=page.locator('.wpbn-focus__stage');
         await positionStage.press('ArrowRight');await positionStage.press('Shift+ArrowUp');
@@ -49,16 +53,20 @@ const server=http.createServer((req,res)=>{
         const bounds=await positionStage.boundingBox();
         await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.75);await page.mouse.down();
         await page.mouse.move(bounds.x+bounds.width*.75,bounds.y+bounds.height*.25);await page.mouse.up();
-        assert.equal(await page.locator('.wpbn-focus__value').textContent(),'75% 25%','Dragging places layer centre');
+        // A new scene: titles in the theme container (Woodmart's 1222px less 30px, centred in the 1280px desktop): its edges dashed;
+        // a point at 75% of the scene is 76.8% of the container.
+        assert.deepEqual(await page.locator('.wpbn-focus__stage .wpbn-position-container').evaluate(el=>[el.style.left,el.style.width]),['3.4375%','93.125%'],'The container edges in the window');
+        assert.equal(await page.locator('.wpbn-focus__value').textContent(),'76.8% 25%','Dragging places layer centre, as a share of the container');
+        assert.ok(Math.abs((await page.locator('.wpbn-focus__point').boundingBox()).x+(await page.locator('.wpbn-focus__point').boundingBox()).width/2-(bounds.x+bounds.width*.75))<2,'Where it was dropped');
         await page.screenshot({path:path.join(__dirname,'position-modal.png'),fullPage:true});
         await page.click('.wpbn-modal__apply');
         let positioned=JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0];
-        assert.equal(positioned.x,75);assert.equal(positioned.y,25);
-        assert.equal(await page.locator('.wpbn-position-value').textContent(),'75% 25%');
+        assert.equal(positioned.x,76.8);assert.equal(positioned.y,25);
+        assert.equal(await page.locator('.wpbn-position-value').textContent(),'76.8% 25%');
         assert.equal(await page.locator('[data-action="position"]').evaluate(el=>el===document.activeElement),true,'Focus restored after apply');
         await page.click('[data-action="position"]');
         await positionStage.press('ArrowLeft');await positionStage.press('Escape');
-        assert.equal(await page.locator('.wpbn-position-value').textContent(),'75% 25%','Escape discards draft');
+        assert.equal(await page.locator('.wpbn-position-value').textContent(),'76.8% 25%','Escape discards draft');
         await page.click('[data-action="position"]');await page.click('.wpbn-focus__reset');await page.click('.wpbn-modal__apply');
         assert.equal(await page.locator('.wpbn-position-value').textContent(),'50% 50%','Reset centres the layer');
         assert.equal(await page.locator('[data-key="move_y"]').count(),0,'Motion is hidden behind its switch');
@@ -173,12 +181,28 @@ const server=http.createServer((req,res)=>{
         await page.fill('#wpbn-f-tablet_height','700');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).tablet_height,700);
         await page.click('[data-select="0"]');
-        assert.equal(await page.locator('#wpbn-f-tablet_font_size').isVisible(),false,'Tablet and mobile sizes hidden until the arrow');
-        await page.click('.wpbn-inline-devices__toggle');
+        // Font size: one number (px after it), the device icons at the right of its label;
+        // the icons choose the device; tablet and mobile empty follow the larger screen (in grey), a green dot when their own.
+        const deviceBefore=await page.locator('#wpbn-device').inputValue();
+        const fieldDevice=async d=>{await page.click('.wpbn-field--device-number [data-field-device="'+d+'"] >> nth=0');};
+        await fieldDevice('desktop');
+        const box=async s=>page.locator(s).boundingBox();
+        const sizeBox=await box('#wpbn-f-font_size');
+        assert.equal(await page.locator('[id*="line_height"]').count(),0,'No Line height');
+        assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.wpbn-field--device-number')].every(f=>{const icons=f.querySelector('.wpbn-devices').getBoundingClientRect(),label=f.querySelector('label').getBoundingClientRect(),input=f.querySelector('input').getBoundingClientRect(),field=f.getBoundingClientRect();return Math.abs(icons.right-field.right)<1 && icons.bottom<=input.top && icons.left>label.right;})),'The device icons at the right, over the number');
+        assert.equal(await page.locator('.wpbn-field--device-number .wpbn-number-unit__unit').allTextContents().then(t=>t.join()),'px','px after the size');
+        await fieldDevice('tablet');
+        assert.equal(await page.locator('#wpbn-f-tablet_font_size').inputValue(),'','Tablet: no size of its own');
         assert.equal(await page.locator('#wpbn-f-tablet_font_size').getAttribute('placeholder'),'120','An empty size shows the one it follows');
         await page.fill('#wpbn-f-tablet_font_size','90');
-        assert.equal(await page.locator('#wpbn-f-mobile_font_size').getAttribute('placeholder'),'90','Mobile follows tablet');
+        assert.equal(await page.locator('.wpbn-field--device-number >> nth=0').locator('[data-field-device="tablet"]').getAttribute('class').then(c=>/has-value/.test(c)),true,'A green dot: tablet has a size of its own');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0].tablet_font_size,90);
+        await fieldDevice('mobile');
+        assert.equal(await page.locator('#wpbn-f-mobile_font_size').getAttribute('placeholder'),'90','Mobile follows tablet');
+        await page.fill('#wpbn-f-mobile_font_size','60');
+        await page.fill('#wpbn-f-mobile_font_size','');
+        assert.ok(JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0].mobile_font_size===null && await page.locator('#wpbn-f-mobile_font_size').getAttribute('placeholder')==='90','Emptied: follows again');
+        await fieldDevice(deviceBefore);
         if(await page.locator('#wpbn-rotate').getAttribute('aria-pressed')==='true') await page.click('#wpbn-rotate');
         await update();
         await page.waitForFunction(()=>document.querySelector('#wpbn-frame').contentDocument?.querySelector('.wpbn-layer')?.style.getPropertyValue('--wpbn-tablet-font')==='90px');
@@ -203,7 +227,17 @@ const server=http.createServer((req,res)=>{
         const textBox=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
         await page.mouse.move(textBox.x+textBox.width/2,textBox.y+textBox.height/2);await page.mouse.down();
         await page.mouse.move(textBox.x+textBox.width/2+stageBox.width*.1,textBox.y+textBox.height/2,{steps:5});await page.mouse.up();
-        assert.equal(await page.locator('.wpbn-focus__value').textContent(),'60% 50%','Dragging the layer moves it by the pointer travel');
+        // A title moves within its container: dragged, it follows the pointer (its Position: a share of the room it has).
+        const movedBox=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
+        assert.ok(Math.abs(movedBox.x-textBox.x-stageBox.width*.1)<2 && Math.abs(movedBox.y-textBox.y)<1,'Dragging the title moves it by the pointer travel');
+        assert.ok(Number((await page.locator('.wpbn-focus__value').textContent()).split('%')[0])>60,'Its X: a share of the room left in its container');
+        // At 0% and 100% it stands at the container's edges (not past them).
+        const edges=await page.locator('.wpbn-focus__stage .wpbn-position-container').boundingBox();
+        for (const [key,side] of [['Home','left'],['End','right']]) {
+            await positionStage.focus();for(let i=0;i<11;i++)await positionStage.press(key==='Home'?'Shift+ArrowLeft':'Shift+ArrowRight');
+            const t=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
+            assert.ok(side==='left' ? Math.abs(t.x-edges.x)<1.5 : Math.abs(t.x+t.width-(edges.x+edges.width))<1.5,'X '+(side==='left'?'0%':'100%')+': the title at the container '+side+' edge');
+        }
         assert.equal(await page.locator('.wpbn-position-warning').isHidden(),true,'Text layers are not expected to cover the scene');
         await page.click('.wpbn-modal__cancel');
         await addElement('image');
@@ -256,8 +290,209 @@ const server=http.createServer((req,res)=>{
         assert.equal((await data()).layers[0].move_x_tablet,null,'Tablet reset: follows desktop again');
         await page.click('[data-preview-device="desktop"]');
         await toggle('use_move_x');
+        // No name field: the name is given when a layer is added and shows in the list.
+        assert.equal(await page.locator('[data-key="name"]').count(),0,'No layer name field');
+        // Layer thumbnails are square; a title shows its own icon (assets/images/title.svg).
+        for (const box of await page.locator('.wpbn-layer-thumb').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.width,r.height];}))) assert.equal(box[0],box[1],'Square thumbnail');
+        await page.waitForFunction(()=>{const img=document.querySelector('.wpbn-layer-thumb--text img');return img&&img.complete&&img.naturalWidth>0&&/assets\/images\/title\.svg$/.test(img.src);});
         // Opacity at the end: the layer goes from its Opacity to this one.
         await page.click('.wpbn-layer-row:has(.wpbn-layer-thumb--text) [data-select]');
+        // The color field, as WP Swiper's: a swatch that opens Pickr with the palette (named), opacity, Cancel and Default.
+        const layerColor=async()=>(await data()).layers.find(l=>l.type==='text').color;
+        await page.click('#wpbn-f-color');
+        await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.waitForTimeout(300);await page.screenshot({path:path.join(__dirname,'color-picker.png')});
+        assert.equal(await page.locator('.wpbn-pcr .pcr-swatches > button').count(),7,'Palette: the theme colors (Woodmart in the test), black, white and greys');
+        assert.equal(await page.locator('.wpbn-pcr .pcr-swatches > button').first().getAttribute('title'),'Primary color','Palette colors named on hover');
+        assert.equal(await page.locator('.wpbn-pcr .pcr-color-opacity').isVisible(),true,'With opacity');
+        assert.ok(await page.evaluate(()=>{const r=document.querySelector('.wpbn-pcr').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;}),'The picker on the screen (above the swatch near the bottom)');
+        await page.locator('.wpbn-pcr .pcr-swatches > button').first().click();
+        assert.equal(await layerColor(),'#83b735','A palette color chosen');
+        await page.fill('.wpbn-pcr .pcr-result','rgba(255, 0, 0, 0.5)');await page.press('.wpbn-pcr .pcr-result','Enter');
+        assert.equal(await layerColor(),'rgba(255,0,0,0.5)','A see-through color kept as rgba()');
+        assert.match(await page.locator('#wpbn-f-color .wpbn-color__chip').getAttribute('style'),/rgba\(255,\s*0,\s*0,\s*0\.5\)/,'The swatch shows it');
+        await page.click('.wpbn-pcr .pcr-cancel');
+        assert.equal(await layerColor(),'#ffffff','Cancel: back to the color it had when opened');
+        await page.click('#wpbn-f-color');await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.locator('.wpbn-pcr .pcr-swatches > button').first().click();
+        await page.click('.wpbn-pcr .wpbn-pcr__default');
+        assert.equal(await layerColor(),'#ffffff','Default: the layer\'s default color');
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#wpbn-f-color').getAttribute('aria-expanded'),'false','Closed');
+        // Accent color, beside Color: the words in <u> (as Woodmart's titles). Empty = the theme's primary color.
+        const accent=async()=>(await data()).layers.find(l=>l.type==='text').accent_color;
+        const colorsBox=await page.locator('#wpbn-f-color').boundingBox(), accentBox=await page.locator('#wpbn-f-accent_color').boundingBox();
+        assert.ok(Math.abs(colorsBox.y-accentBox.y)<2 && accentBox.x>colorsBox.x,'Accent color beside Color');
+        const fontBox=await page.locator('#wpbn-f-font_family').boundingBox(), weightBox=await page.locator('#wpbn-f-font_weight').boundingBox();
+        assert.ok(Math.abs(fontBox.y-weightBox.y)<2 && weightBox.x>fontBox.x+fontBox.width,'Font and Weight on one row');
+        // Title style: Font and Weight, the sample, Font size, then Color and Accent color.
+        const ys=await Promise.all(['#wpbn-f-font_family','#wpbn-font-sample','[data-font="desktop"]','#wpbn-f-color'].map(async s=>(await page.locator(s).boundingBox()).y));
+        assert.ok(ys[0]<ys[1] && ys[1]<ys[2] && ys[2]<ys[3],'Title style in its order: '+ys.join(', '));
+        // As tall as WordPress's selects (wp-admin forms.css, which the test page does not load).
+        await page.addStyleTag({content:'select{box-sizing:border-box;padding:0 24px 0 12px;font-size:14px;line-height:2.71428571;min-height:40px;border:1px solid #949494;border-radius:2px}'});
+        const fontH=(await page.locator('#wpbn-f-font_family').boundingBox()).height, weightH=(await page.locator('#wpbn-f-font_weight').boundingBox()).height;
+        assert.ok(Math.abs(fontH-weightH)<0.5 && Math.abs(fontH-40)<0.5,'Font as tall as Weight: '+fontH+' / '+weightH);
+        // Font: Woodmart's fonts in a list with a search box; Weight shows only the weights the font has.
+        const weightOptions=async()=>page.locator('#wpbn-f-font_weight option').evaluateAll(os=>os.map(o=>o.value));
+        const textLayer=async()=>(await data()).layers.find(l=>l.type==='text');
+        assert.equal(await page.locator('#wpbn-f-font_family').textContent(),'Default · Playfair Display','Default: the theme\'s title font');
+        assert.deepEqual(await weightOptions(),['400','700','900'],'Weight: the title font\'s weights only');
+        assert.equal(Number((await textLayer()).font_weight),900,'A weight the font does not have: the nearest it has');
+        await page.click('#wpbn-f-font_family');
+        assert.equal(await page.locator('.wpbn-font__search').evaluate(el=>el===document.activeElement),true,'The search box takes the typing');
+        await page.screenshot({path:path.join(__dirname,'font-list.png')});
+        assert.deepEqual(await page.locator('.wpbn-font__group').allTextContents(),['Theme fonts','Custom fonts','System fonts','Google fonts'],'Groups as Woodmart\'s');
+        await page.fill('.wpbn-font__search','EXO');
+        assert.deepEqual(await page.locator('.wpbn-font__option').allTextContents(),['Exo 2'],'Search by name, any case');
+        await page.fill('.wpbn-font__search','zzz');
+        assert.equal(await page.locator('.wpbn-font__empty').count(),1,'Nothing found');
+        await page.fill('.wpbn-font__search','o');
+        await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+        assert.equal((await textLayer()).font_family,'var(--wd-text-font)','Arrow keys and Enter choose (a theme font as its variable)');
+        assert.equal(await page.locator('.wpbn-font__panel').isHidden(),true,'Closed once chosen');
+        await page.click('#wpbn-f-font_family');await page.fill('.wpbn-font__search','Exo');
+        await page.click('.wpbn-font__option:has-text("Exo 2")');
+        assert.equal((await textLayer()).font_family,'Exo 2','A Google font chosen');
+        assert.deepEqual(await weightOptions(),['100','300','500'],'Its weights only');
+        assert.equal(Number((await textLayer()).font_weight),500,'The weight moved to the nearest it has');
+        await page.selectOption('#wpbn-f-font_weight','300');
+        // The font sample under them: the title's text in that font and weight, at once.
+        const sample=page.locator('#wpbn-font-sample');
+        assert.equal(await sample.evaluate(el=>el.style.fontFamily),'"Exo 2"','The sample in the chosen font');
+        assert.equal(await sample.evaluate(el=>el.style.fontWeight),'300','In the chosen weight');
+        assert.equal(await page.locator('link[data-wpbn-font][href*="family=Exo+2:wght@300"]').count(),1,'The Google font loaded in the editor');
+        assert.equal(await sample.textContent(),'SLOVAKIA','The title text');
+        await page.fill('[data-key="text"]','Discover <u>Norway</u>');
+        assert.equal(await sample.textContent(),'Discover Norway','It follows the text as it is typed, without its tags');
+        await page.waitForTimeout(800);await sample.screenshot({path:path.join(__dirname,'font-sample.png')});
+        // Fonts looked at in the list show in the sample at once (the nearest weight they have); it stays in view.
+        await page.click('#wpbn-f-font_family');
+        assert.ok((await page.locator('.wpbn-font__panel').boundingBox()).y>=(await sample.boundingBox()).y+(await sample.boundingBox()).height,'The list opens under the sample');
+        await page.fill('.wpbn-font__search','Playfair');
+        await page.hover('.wpbn-font__option:has-text("Title font")');
+        assert.equal(await sample.evaluate(el=>el.style.fontFamily),'"Playfair Display"','A hovered font shows in the sample');
+        await page.waitForTimeout(800);await page.screenshot({path:path.join(__dirname,'font-browse.png'),clip:{x:430,y:0,width:380,height:1000}});
+        assert.equal(await sample.evaluate(el=>el.style.fontWeight),'400','At the nearest weight it has');
+        await page.fill('.wpbn-font__search','Roboto');await page.keyboard.press('ArrowDown');
+        assert.equal(await sample.evaluate(el=>el.style.fontFamily),'Roboto','A font reached with the arrow keys too');
+        assert.equal((await textLayer()).font_family,'Exo 2','Only looked at: nothing chosen');
+        await page.keyboard.press('Escape');
+        assert.equal(await sample.evaluate(el=>el.style.fontFamily),'"Exo 2"','Closed: the title\'s font again');
+        assert.equal(await sample.evaluate(el=>el.style.fontWeight),'300','And its weight');
+        await page.click('#wpbn-f-font_family');await page.keyboard.press('Escape');
+        assert.equal(await page.locator('.wpbn-font__panel').isHidden(),true,'Escape closes the list');
+        await update();
+        assert.equal(await frame().locator('.wpbn-layer--text h2').evaluate(el=>getComputedStyle(el).fontFamily),'"Exo 2"','The title in its font');
+        assert.equal(await frame().locator('link[href*="family=Exo+2:wght@300"]').count(),1,'The Google font loaded at its weight');
+        await page.click('#wpbn-f-font_family');await page.click('.wpbn-font__option[data-family=""]');
+        await update();
+        assert.match(await frame().locator('.wpbn-layer--text h2').evaluate(el=>getComputedStyle(el).fontFamily),/Playfair Display/,'Default: the theme\'s title font in the preview too');
+        assert.equal(await accent(),'','Accent: the theme\'s color at first');
+        assert.match(await page.locator('#wpbn-f-accent_color .wpbn-color__chip').getAttribute('style'),/(#83b735|rgb\(131,\s*183,\s*53\))/,'Its swatch shows the theme\'s primary color');
+        await page.click('#wpbn-f-accent_color');await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.click('.wpbn-pcr .pcr-type[data-type="RGBA"]');
+        assert.equal(await accent(),'','A format button chooses nothing');
+        await page.fill('.wpbn-pcr .pcr-result','#ff0000');await page.press('.wpbn-pcr .pcr-result','Enter');
+        assert.equal(await accent(),'#ff0000','An accent color of its own');
+        await page.click('.wpbn-pcr .pcr-cancel');
+        assert.equal(await accent(),'','Cancel: the theme\'s color again');
+        await page.click('#wpbn-f-accent_color');await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.fill('.wpbn-pcr .pcr-result','#ff0000');await page.press('.wpbn-pcr .pcr-result','Enter');
+        await page.click('.wpbn-pcr .wpbn-pcr__default');
+        assert.equal(await accent(),'','Default: the theme\'s color');
+        await page.fill('.wpbn-pcr .pcr-result','#0000ff');await page.press('.wpbn-pcr .pcr-result','Enter');
+        await page.keyboard.press('Escape');
+        await page.fill('[data-key="text"]','Discover <u>Norway</u> <b>now</b>');
+        await update();
+        const word=frame().locator('.wpbn-layer--text u');
+        assert.equal(await word.textContent(),'Norway','Words in <u> become the accent');
+        assert.equal(await word.evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 255)','In the accent color');
+        assert.equal(await word.evaluate(el=>getComputedStyle(el).textDecorationLine),'none','Not underlined');
+        assert.equal(await frame().locator('.wpbn-layer--text b').count(),0,'Other tags are not kept');
+        await page.click('#wpbn-f-accent_color');await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.click('.wpbn-pcr .wpbn-pcr__default');await page.keyboard.press('Escape');
+        await update();
+        assert.equal(await frame().locator('.wpbn-layer--text u').evaluate(el=>getComputedStyle(el).color),'rgb(131, 183, 53)','No accent of its own: the theme\'s primary color');
+        // Container, each layer's (Position and size): its Position X and Width are shares of it, centred in the scene.
+        const titleIndex=(await data()).layers.findIndex(l=>l.type==='text');
+        const titleRow='[data-select="'+titleIndex+'"]';
+        await page.click('#wpbn-scene-settings');
+        assert.equal(await page.locator('#wpbn-f-container').count(),0,'Not a scene setting');
+        await page.click(titleRow);
+        assert.equal(await page.locator('#wpbn-f-container').inputValue(),'theme','A new title: Theme container');
+        assert.equal(await page.locator('#wpbn-f-container option[value="theme"]').textContent(),'Theme container','Just its name (which and how wide: in the i)');
+        assert.equal(await page.locator('#wpbn-f-container_width').count(),0,'No width field: the theme gives it');
+        await page.locator('#wpbn-settings').screenshot({path:path.join(__dirname,'layer-container.png')});
+        const imageLayer=(await data()).layers.find(l=>l.type==='image');
+        assert.ok(!imageLayer || imageLayer.container==='full','A new image: Full width (it fills the scene)');
+        await page.selectOption('#wpbn-f-container','custom');
+        assert.equal(await page.locator('#wpbn-f-container_width').isVisible(),true,'Custom: a width field of its own');
+        await page.fill('#wpbn-f-container_width','900');
+        assert.ok((await textLayer()).container==='custom' && (await textLayer()).container_width===900,'Container kept on the layer');
+        // A title as wide as its text: a short one narrower than its container; a long one wraps at its container's width.
+        await page.fill('[data-key="text"]','Hi');
+        await update();
+        const shortTitle=await frame().locator('.wpbn-layer--text').evaluate(el=>el.getBoundingClientRect().width);
+        assert.ok(shortTitle<800,'A short title: as wide as its text ('+shortTitle+')');
+        await page.fill('[data-key="text"]','Discover the mountains of Norway in every season of the year');
+        await update();
+        const titleWidth=async()=>frame().locator('.wpbn-layer--text').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),scale=Number(getComputedStyle(el).getPropertyValue('--wpbn-s'))||1;return {scene:s.width,width:r.width/scale,centre:r.left+r.width/2-s.left};});
+        let measured=await titleWidth();
+        assert.ok(Math.abs(measured.width-Math.min(measured.scene-30,900))<1,'A long title wraps at the 900px container ('+JSON.stringify(measured)+')');
+        await page.selectOption('#wpbn-f-container','full');
+        assert.equal(await page.locator('#wpbn-f-container_width').count(),0,'Full width: no width field');
+        await update();
+        measured=await titleWidth();
+        assert.ok(measured.width>measured.scene-60 && measured.width<=measured.scene+0.5,'Full width: at most the whole scene');
+        await page.selectOption('#wpbn-f-container','theme');await update();
+        measured=await titleWidth();
+        assert.ok(Math.abs(measured.width-(Math.min(measured.scene,1222)-30))<1,'Theme container: Woodmart, less its padding');
+        // On the site as in the window: X 0% puts the title at the container's left edge, 100% at its right.
+        await page.fill('[data-key="text"]','Hi');
+        for (const [key,edge] of [['Shift+ArrowLeft','left'],['Shift+ArrowRight','right']]) {
+            await page.click('[data-action="position"]');for(let i=0;i<11;i++)await positionStage.press(key);await page.click('.wpbn-modal__apply');await update();
+            const at=await frame().locator('.wpbn-layer--text').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {left:r.left-s.left,right:s.right-r.right,cw:Math.min(s.width,1222)-30,w:s.width};});
+            assert.ok(Math.abs((edge==='left'?at.left:at.right)-(at.w-at.cw)/2)<1,'X '+(edge==='left'?'0%':'100%')+' on the site: the title at the container '+edge+' edge ('+JSON.stringify(at)+')');
+        }
+        await page.fill('[data-key="text"]','Discover <u>Norway</u> <b>now</b>');
+        // Gradient (as WP Swiper's): behind its switch; the bar adds a colour, a point is moved or deleted, its colour picked.
+        const gradientOf=async()=>(await textLayer()).gradient;
+        assert.equal(await page.locator('.wpbn-gradient').count(),0,'Gradient: its colours hidden while it is off');
+        // In Position and size (last); its i on the switch's line, beside its name.
+        assert.equal(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Position and size")) #wpbn-f-use_gradient').count(),1,'Gradient in Position and size');
+        assert.equal(await page.locator('.wpbn-subheading:text-is("Gradient")').count(),0,'No card of its own');
+        assert.ok(await page.evaluate(()=>{const label=document.querySelector('label[for="wpbn-f-use_gradient"]').getBoundingClientRect(),i=document.querySelector('label[for="wpbn-f-use_gradient"] + .wpbn-tip').getBoundingClientRect();return Math.abs((i.top+i.bottom)/2-(label.top+label.bottom)/2)<3 && i.left>=label.right-1;}),'Its i beside its name');
+        await toggle('use_gradient');
+        assert.equal(await page.locator('.wpbn-gradient__handle').count(),2,'Two colours to start with');
+        const bar=await page.locator('.wpbn-gradient__bar').boundingBox();
+        await page.mouse.click(bar.x+bar.width*.5,bar.y+bar.height/2);
+        assert.equal((await gradientOf()).split(';').length,5,'A click on the bar adds a colour');
+        assert.match(await gradientOf(),/;rgba\(0,0,0,0\.3\)@50;/,'The colour the gradient has there');
+        assert.equal(await page.locator('.wpbn-gradient__handle.is-chosen').getAttribute('data-stop'),'1','The new colour chosen (in order)');
+        await page.locator('.wpbn-gradient__handle.is-chosen').press('Shift+ArrowRight');
+        assert.match(await gradientOf(),/@60;/,'Moved with the arrow keys');
+        await page.click('.wpbn-gradient .wpbn-color__swatch');await page.waitForSelector('.pcr-app.wpbn-pcr.visible');
+        await page.fill('.wpbn-pcr .pcr-result','#00ff00');await page.press('.wpbn-pcr .pcr-result','Enter');
+        assert.match(await gradientOf(),/;#00ff00@60;/,'Its colour picked with the colour block');
+        await page.keyboard.press('Escape');
+        await page.selectOption('.wpbn-gradient__type','circle');
+        assert.ok(/^circle;center center;/.test(await gradientOf()) && await page.locator('.wpbn-gradient__x').isVisible() && await page.locator('.wpbn-gradient__direction').isHidden(),'Radial: where its middle is');
+        await update();
+        const filled=await frame().locator('.wpbn-layer--text h2').evaluate(el=>{const c=getComputedStyle(el);return [c.backgroundImage,c.webkitTextFillColor];});
+        assert.ok(/radial-gradient/.test(filled[0]) && filled[1]==='rgba(0, 0, 0, 0)','A title: its letters filled with the gradient');
+        await page.click('.wpbn-gradient__handle[data-stop="1"]');await page.click('.wpbn-gradient__delete');
+        assert.equal((await gradientOf()).split(';').length,4,'Delete removes the chosen colour');
+        assert.equal(await page.locator('.wpbn-gradient__delete').isDisabled(),true,'Two colours at least');
+        await toggle('use_gradient');
+        assert.ok(await page.locator('.wpbn-gradient').count()===0 && /^circle;/.test(await gradientOf()),'Off: hidden, its colours kept');
+        // Over an image: on its box (a photo: no mask).
+        const imageIndex=(await data()).layers.findIndex(l=>l.type==='image');
+        if (imageIndex>=0) {
+            await page.click('[data-select="'+imageIndex+'"]');await toggle('use_gradient');await update();
+            const over=await frame().locator('.wpbn-layer--gradient').evaluate(el=>getComputedStyle(el,'::after').backgroundImage);
+            assert.match(over,/linear-gradient/,'Over the image: its gradient');
+            await toggle('use_gradient');await page.click(titleRow);
+        }
         assert.equal(await page.locator('[data-key="end_opacity"]').count(),0,'Hidden behind its switch');
         await toggle('use_end_opacity');
         await page.fill('[data-key="end_opacity"]','0');
@@ -276,6 +511,13 @@ const server=http.createServer((req,res)=>{
         assert.equal(await frame().evaluate(()=>innerWidth),1000);
         assert.equal(await page.locator('#wpbn-preview-stage').evaluate(el=>el.classList.contains('is-custom')),true,'Own size: a plain frame');
         assert.equal(await page.locator('.wpbn-device-drawing:not([hidden])').count(),0,"No device drawing for a size of one's own");
+        // The Position window: the preview's screen (its own size here), in the same proportions as the preview's scene.
+        await page.click('[data-action="position"]');
+        const sceneRatio=await frame().locator('.wpbn-scene').evaluate(el=>{const r=el.getBoundingClientRect();return r.width/r.height;});
+        const windowRatio=await page.locator('.wpbn-focus__stage').evaluate(el=>{const r=el.getBoundingClientRect();return r.width/r.height;});
+        assert.match(await page.locator('.wpbn-focus__stage').evaluate(el=>el.style.aspectRatio),/^1000 ?\//,'The window: the preview\'s own width');
+        assert.ok(Math.abs(sceneRatio-windowRatio)/sceneRatio<0.02,'The window in the preview scene\'s proportions ('+sceneRatio.toFixed(3)+' / '+windowRatio.toFixed(3)+')');
+        await page.click('.wpbn-modal__cancel');
         await page.fill('#wpbn-res-w','');await page.fill('#wpbn-res-h','');
         await update();
         assert.equal(await frame().evaluate(()=>innerWidth),1280,'Empty fields: the usual size again');

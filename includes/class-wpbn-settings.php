@@ -8,6 +8,11 @@ class WPBN_Settings {
         return array('height'=>720, 'tablet_height'=>null, 'mobile_height'=>null, 'height_unit'=>'auto', 'tablet_height_unit'=>null, 'mobile_height_unit'=>null,
             'target'=>'', 'layers'=>array());
     }
+    // A layer's Container: the box its Position X and Width are shares of, centred in the scene. full: the whole
+    // scene; theme: the theme's content width (Woodmart's container, a block theme's content size; WPBN_Container),
+    // so a layer lines up with the page's content; custom: container_width (px). The editor gives a new title the
+    // theme's and a new image the whole scene (a photo and its cutout fill it); layers from before it: the whole scene.
+    const CONTAINERS = array('full', 'theme', 'custom');
     // Placement by class applies only while the (desktop) Height is Auto: the height then comes from the block
     // around the scene. With another height the switch is greyed in the editor and does nothing; it is kept.
     public static function placed_by_class($s) {
@@ -51,10 +56,12 @@ class WPBN_Settings {
     // A text layer is the banner's title: a heading (h2 unless it is the page's h1, or a lower one).
     const TAGS = array('h1', 'h2', 'h3', 'h4', 'h5');
     public static function layer() {
-        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'color'=>'#ffffff', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
+        $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'color'=>'#ffffff', 'accent_color'=>'', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
             'tag'=>'h2', 'font_family'=>'', 'font_weight'=>800,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>0,
-            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false,
+            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200,
+            // Gradient (WPBN_Gradient): over an image, a title's letters filled with it; only with its switch on.
+            'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
             'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false);
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         return $l;
@@ -68,13 +75,21 @@ class WPBN_Settings {
     }
     // Settings with a switch: they apply only with it on; off, they have their value at rest (their values kept).
     // key => [switch, value when off, image layers only]: Scale and Opacity of an image layer; every layer's motion.
-    // An image layer's Width is always the scene's (100%); text layers keep theirs (where the text wraps).
+    // A layer's Width is always its container's (100%: effective()).
     const OPTIONAL = array('scale'=>array('use_scale', 100, true), 'opacity'=>array('use_opacity', 100, true),
         'move_x'=>array('use_move_x', 0, false), 'move_y'=>array('use_move_y', 0, false), 'zoom'=>array('use_zoom', 0, false),
         // Off: the layer keeps its Opacity to the end (no value of its own: see fade()).
         'end_opacity'=>array('use_end_opacity', null, false));
     public static function effective($l) {
-        if ($l['type'] === 'image') { $l['width'] = 100; $l['width_tablet'] = null; $l['width_mobile'] = null; }
+        // Every layer is as wide as its container (the scene on Full width): no Width setting (titles had one until
+        // 2026-11-08; the value kept is not used).
+        $l['width'] = 100; $l['width_tablet'] = null; $l['width_mobile'] = null;
+        // A title has no Scale and no Opacity (2026-11-08): 100% (the values kept are not used). Its Position is
+        // within its container (0–100%: frontend.css places it so).
+        if ($l['type'] === 'text') {
+            foreach (array('scale', 'opacity') as $key) { $l[$key] = 100; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+            foreach (array('x', 'y') as $key) { foreach (array('', '_tablet', '_mobile') as $suffix) { if ($l[$key.$suffix] !== null) { $l[$key.$suffix] = max(0, min(100, $l[$key.$suffix])); } } }
+        }
         foreach (self::OPTIONAL as $key=>$o) {
             list($flag, $off, $image_only) = $o;
             if ($off !== null && ($l['type'] === 'image' || !$image_only) && empty($l[$flag])) { $l[$key] = $off; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
@@ -105,6 +120,37 @@ class WPBN_Settings {
     private static function number($value, $fallback, $min, $max) {
         return is_scalar($value) && is_numeric($value) ? max($min, min($max, (float)$value)) : $fallback;
     }
+    // A color as the color fields keep it (admin.js colorField()): "#rrggbb", or "rgba(r,g,b,a)" below full
+    // opacity (a fully opaque one as "#rrggbb"). "#rgb" is widened; anything else: the fallback.
+    public static function color($value, $fallback) {
+        $value = is_string($value) ? strtolower(preg_replace('/\s+/', '', $value)) : '';
+        if (preg_match('/^#([0-9a-f])([0-9a-f])([0-9a-f])$/', $value, $m)) { return '#'.$m[1].$m[1].$m[2].$m[2].$m[3].$m[3]; }
+        if (preg_match('/^#[0-9a-f]{6}$/', $value)) { return $value; }
+        if (preg_match('/^rgba\((\d{1,3}),(\d{1,3}),(\d{1,3}),(\d*\.?\d+)\)$/', $value, $m)) {
+            $rgb = array(min(255, (int) $m[1]), min(255, (int) $m[2]), min(255, (int) $m[3]));
+            $alpha = round(min(1, (float) $m[4]), 2);
+            return $alpha >= 1 ? vsprintf('#%02x%02x%02x', $rgb) : 'rgba('.implode(',', $rgb).','.$alpha.')';
+        }
+        return $fallback;
+    }
+    // A title's text: plain text with its line breaks, and <u>…</u> around the words in the accent color
+    // (as Woodmart's titles). Only bare <u> and </u> stay (any case, no attributes), paired and never nested:
+    // an unclosed one ends with the text, a stray </u> goes.
+    const U_OPEN = '[[wpbn-u]]';
+    const U_CLOSE = '[[/wpbn-u]]';
+    public static function title_text($text) {
+        $text = preg_replace(array('/<u\s*>/i', '/<\/u\s*>/i'), array(self::U_OPEN, self::U_CLOSE), (string) $text);
+        $out = '';
+        $open = false;
+        foreach (preg_split('/(\[\[\/?wpbn-u\]\])/', sanitize_textarea_field($text), -1, PREG_SPLIT_DELIM_CAPTURE) as $part) {
+            if ($part === self::U_OPEN || $part === self::U_CLOSE) {
+                if (($part === self::U_OPEN) !== $open) { $out .= $open ? '</u>' : '<u>'; $open = !$open; }
+                continue;
+            }
+            $out .= $part;
+        }
+        return $open ? $out.'</u>' : $out;
+    }
     private static function choice($value, $allowed, $fallback) {
         return in_array($value, $allowed, true) ? $value : $fallback;
     }
@@ -128,11 +174,13 @@ class WPBN_Settings {
             if (!is_array($raw)) { continue; }
             $l = self::layer();
             if (is_string($raw['name'] ?? null)) { $l['name'] = sanitize_text_field($raw['name']); }
-            // Text keeps its line breaks.
-            if (is_string($raw['text'] ?? null)) { $l['text'] = sanitize_textarea_field($raw['text']); }
+            // Text keeps its line breaks and its <u> (the accent words, as in Woodmart's titles).
+            if (is_string($raw['text'] ?? null)) { $l['text'] = self::title_text($raw['text']); }
             $l['type'] = self::choice($raw['type'] ?? null, self::TYPES, 'image');
             foreach (array('image', 'image_tablet', 'image_mobile') as $key) { $l[$key] = is_scalar($raw[$key] ?? null) ? absint($raw[$key]) : 0; }
-            $l['color'] = is_string($raw['color'] ?? null) ? (sanitize_hex_color($raw['color']) ?: '#ffffff') : '#ffffff';
+            $l['color'] = self::color($raw['color'] ?? null, '#ffffff');
+            // The words in <u>: '' = the theme's primary color (Woodmart's), or the title's color without it.
+            $l['accent_color'] = self::color($raw['accent_color'] ?? null, '');
             $l['hidden'] = !empty($raw['hidden']);
             $l['font_size'] = self::number($raw['font_size'] ?? null, $l['font_size'], 8, 500);
             // Tablet and mobile: empty follows the larger screen (scenes saved before tablets had a size of their own too).
@@ -143,7 +191,9 @@ class WPBN_Settings {
             // Titles saved as div or p (before text layers became titles): h2.
             $l['tag'] = self::choice($raw['tag'] ?? null, self::TAGS, 'h2');
             // A font family as CSS takes it ("Playfair Display", serif); empty = the theme's.
-            $l['font_family'] = is_string($raw['font_family'] ?? null) ? substr(trim(preg_replace('/[^\w \-,\'"]/u', '', $raw['font_family'])), 0, 120) : '';
+            // Or one of Woodmart's font variables (WPBN_Fonts::THEME): the title follows Theme Settings.
+            $family = is_string($raw['font_family'] ?? null) ? trim($raw['font_family']) : '';
+            $l['font_family'] = preg_match('/^var\(--wd-(title|text|alternative)-font\)$/', $family) ? $family : substr(trim(preg_replace('/[^\w \-,\'"]/u', '', $family)), 0, 120);
             $l['font_weight'] = (int) round(self::number($raw['font_weight'] ?? null, 800, 100, 900) / 100) * 100;
             foreach (self::RESPONSIVE as $key=>$range) {
                 $l[$key] = self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]);
@@ -175,6 +225,12 @@ class WPBN_Settings {
                 $l['end_opacity_mobile'] = $end['mobile'] != $end['tablet'] ? $end['mobile'] : null;
                 $l['use_end_opacity'] = array_key_exists('use_fade', $raw) ? !empty($raw['use_fade']) : (bool) array_filter($fade);
             }
+            // Container. Titles saved while it was the scene's (before it was each layer's): the scene's.
+            $from_scene = $l['type'] === 'text' && !array_key_exists('container', $raw) && isset($input['container']);
+            $l['container'] = self::choice($from_scene ? $input['container'] : ($raw['container'] ?? null), self::CONTAINERS, 'full');
+            $l['container_width'] = (int) round(self::number($from_scene ? ($input['container_width'] ?? null) : ($raw['container_width'] ?? null), 1200, 320, 3000));
+            $l['use_gradient'] = !empty($raw['use_gradient']);
+            $l['gradient'] = WPBN_Gradient::sanitize($raw['gradient'] ?? null);
             // An image's point kept in view where its box crops it (object-position): one for every device.
             foreach (array('focus_x','focus_y') as $key) { $l[$key] = self::number($raw[$key] ?? null, 50, 0, 100); }
             $l['fit'] = in_array($raw['fit'] ?? null, self::FITS, true) ? $raw['fit'] : 'cover';

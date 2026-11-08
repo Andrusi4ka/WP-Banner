@@ -19,14 +19,16 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 * Motion as the page scrolls, each behind a switch: horizontal and vertical travel, zoom, and the opacity a layer ends at. Image edges never show while the layers move.
 * Per device (desktop, tablet, mobile): position, scale, opacity, motion, image fit, the image itself and the text size; tablet and mobile follow the larger screen until given their own. Each slider resets to its default.
 * Image position: the part of a photo kept in view where its layer crops it, with each device's crop shown.
-* Title: line breaks, heading (h1–h5; h2 by default), colour, font and weight.
+* Gradient, for each layer (as in WP Swiper): over an image (on a cutout only over the picture), or filling a title's letters; linear or radial, up to ten colours with opacity.
+* Container, for each layer: it lines up with the page's content (the theme's container: Woodmart's or a block theme's content width), a width of your own, or the whole scene.
+* Title: line breaks, heading (h1–h5; h2 by default), colour (with opacity and the theme's colours, as in WP Swiper), an accent colour for the words wrapped in <u></u> (as Woodmart's titles; the theme's primary colour by default), font (with Woodmart: its fonts in a list with a search box, Google fonts loaded with the banner), weight (the font's own weights) and size per device.
 * Scene height in px, vh, % or Auto (fills the parent column), per device.
 * Placed by class: inside a row, column or block with the scene's class, the element becomes that block's background, as wide and tall as the block, behind its content.
 * The WPBakery element lists the scenes, with "Edit scene" and "Add scene"; with Woodmart it is under "Theme elements".
 * Preview beside the settings, as on a desktop, tablet or phone (or a screen size of your own), turned sideways too, with a page under the banner and a scroll simulation.
 * Respects the visitor's reduced-motion setting.
 
-Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) 5 (MIT).
+Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) 5 (MIT) and [Pickr](https://github.com/simonwep/pickr) 1.9.1 (MIT).
 
 == Installation ==
 

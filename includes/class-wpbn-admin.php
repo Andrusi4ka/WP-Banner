@@ -35,8 +35,11 @@ class WPBN_Admin {
         $screen = get_current_screen();
         if (!$screen || $screen->post_type !== 'wpbn_scene' || $screen->base !== 'post') { return; }
         wp_enqueue_media();
-        wp_enqueue_style('wpbn-admin', WPBN_URL.'assets/css/admin.css', array(), wpbn_asset('assets/css/admin.css'));
-        wp_enqueue_script('wpbn-admin', WPBN_URL.'assets/js/admin.js', array(), wpbn_asset('assets/js/admin.js'), true);
+        // Pickr 1.9.1 (MIT), as in WP Swiper: every color field's picker (admin.js colorField()).
+        wp_enqueue_style('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/classic.min.css', array(), '1.9.1');
+        wp_enqueue_script('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/pickr.min.js', array(), '1.9.1', true);
+        wp_enqueue_style('wpbn-admin', WPBN_URL.'assets/css/admin.css', array('wpbn-pickr'), wpbn_asset('assets/css/admin.css'));
+        wp_enqueue_script('wpbn-admin', WPBN_URL.'assets/js/admin.js', array('wpbn-pickr'), wpbn_asset('assets/js/admin.js'), true);
     }
     public static function editor($post) {
         wp_nonce_field('wpbn_save', 'wpbn_nonce');
@@ -48,7 +51,13 @@ class WPBN_Admin {
                 if ($image && !isset($images[$image])) { $images[$image] = wp_get_attachment_image_url($image,'large'); $info[$image] = self::image_info($image); }
             }
         }
-        $boot = array('scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID);
+        $boot = array('scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID,
+            // The color fields' palette: the theme's colors, black, white and greys.
+            'palette'=>WPBN_Palette::colors(), 'primary'=>WPBN_Palette::primary(),
+            // The Font list (Woodmart's fonts, with each one's weights); null without Woodmart: a text field.
+            'fonts'=>WPBN_Fonts::groups(), 'fontFaces'=>WPBN_Fonts::faces(),
+            // The theme's container for Container: Theme container (null: none, the scene's own width is used).
+            'themeContainer'=>WPBN_Container::theme());
         // Classes the other scenes are placed by: two scenes with one class would both go into its blocks.
         $boot['classes'] = array();
         foreach (get_posts(array('post_type'=>'wpbn_scene', 'post_status'=>array('publish','draft','pending','private','future'), 'numberposts'=>200, 'exclude'=>array($post->ID))) as $other) {
@@ -111,7 +120,7 @@ class WPBN_Admin {
         $markup = self::preview_markup($s);
         nocache_headers();
         header('Content-Type: text/html; charset='.get_option('blog_charset'));
-        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><style>'.self::PAGE_CSS.'</style></head><body>'.$markup.self::PAGE.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script></body></html>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style></head><body>'.$markup.self::PAGE.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script></body></html>';
         exit;
     }
     // Under the scene in the preview: the rest of a page, drawn as grey blocks (a heading, text,
@@ -120,6 +129,12 @@ class WPBN_Admin {
     const PAGE = '<main class="wpbn-page" aria-hidden="true"><div class="wpbn-page__intro"><span class="wpbn-page__title"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></div>'
         .'<div class="wpbn-page__media"><span class="wpbn-page__picture"></span><div><span class="wpbn-page__subtitle"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span><span class="wpbn-page__button"></span></div></div>'
         .'<div class="wpbn-page__cards"><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span><span class="wpbn-page__card"><span class="wpbn-page__thumb"></span><span class="wpbn-page__line"></span><span class="wpbn-page__line wpbn-page__line--short"></span></span></div></main>';
+    // The preview page has none of the theme's styles: its primary color, which the titles' accent words take (frontend.css).
+    public static function theme_css() {
+        $primary = WPBN_Palette::primary();
+        // And its fonts (WPBN_Fonts::theme_css()).
+        return ($primary !== '' ? ':root{--wd-primary-color:'.$primary.'}' : '').WPBN_Fonts::theme_css();
+    }
     // The placeholder page's look; the Dark button gives the body .wpbn-black (admin.js).
     // Thin scrollbars, as light or dark as the screen.
     const PAGE_CSS = 'html{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.28) transparent}html:has(body.wpbn-black){scrollbar-color:rgba(255,255,255,.28) transparent}'

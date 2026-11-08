@@ -24,7 +24,11 @@ define('WPBN_URL', plugin_dir_url(__FILE__));
 // An asset's version: the plugin's plus the file's time, so browsers fetch it again when it changes.
 function wpbn_asset($file) { $time = @filemtime(WPBN_DIR . $file); return $time ? WPBN_VERSION . '.' . $time : WPBN_VERSION; }
 require_once WPBN_DIR . 'includes/class-wpbn-settings.php';
+require_once WPBN_DIR . 'includes/class-wpbn-gradient.php';
 require_once WPBN_DIR . 'includes/class-wpbn-render.php';
+require_once WPBN_DIR . 'includes/class-wpbn-palette.php';
+require_once WPBN_DIR . 'includes/class-wpbn-fonts.php';
+require_once WPBN_DIR . 'includes/class-wpbn-container.php';
 require_once WPBN_DIR . 'includes/class-wpbn-admin.php';
 require_once WPBN_DIR . 'includes/class-wpbn-whats-new.php';
 require_once WPBN_DIR . 'includes/class-wpbn-wpbakery.php';
