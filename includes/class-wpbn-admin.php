@@ -94,17 +94,18 @@ class WPBN_Admin {
         echo '<div class="wpbn-resolution" role="group" aria-labelledby="wpbn-res-label"><span class="wpbn-resolution__label" id="wpbn-res-label">'.esc_html__('Screen','wp-banner').'</span>'
             .'<input type="number" id="wpbn-res-w" min="240" max="3840" step="1" aria-label="'.esc_attr__('Screen width (px)','wp-banner').'"><span aria-hidden="true">×</span>'
             .'<input type="number" id="wpbn-res-h" min="240" max="2160" step="1" aria-label="'.esc_attr__('Screen height (px)','wp-banner').'"><span>px</span></div>';
-        echo '<div class="wpbn-toolbar__end"><div class="wpbn-preview-devices" role="group" aria-label="'.esc_attr__('Preview device','wp-banner').'">';
+        // Undo and Redo (admin.js; also Ctrl + Z, Ctrl + Shift + Z / Ctrl + Y) for the changes made since the page opened,
+        // at the left of the device buttons.
+        $undo = esc_attr__('Undo (Ctrl + Z)','wp-banner');
+        $redo = esc_attr__('Redo (Ctrl + Shift + Z)','wp-banner');
+        echo '<div class="wpbn-toolbar__end"><span class="wpbn-history" role="group" aria-label="'.esc_attr__('History','wp-banner').'">'
+            .'<button type="button" class="button" id="wpbn-undo" aria-label="'.$undo.'" title="'.$undo.'" disabled><span class="dashicons dashicons-undo" aria-hidden="true"></span></button>'
+            .'<button type="button" class="button" id="wpbn-redo" aria-label="'.$redo.'" title="'.$redo.'" disabled><span class="dashicons dashicons-redo" aria-hidden="true"></span></button></span>';
+        echo '<div class="wpbn-preview-devices" role="group" aria-label="'.esc_attr__('Preview device','wp-banner').'">';
         foreach ($devices as $device=>$d) {
             echo '<button type="button" class="wpbn-device-button" data-preview-device="'.esc_attr($device).'" aria-pressed="'.($device==='desktop'?'true':'false').'"><span class="dashicons dashicons-'.$d[0].'" aria-hidden="true"></span>'.esc_html($d[1]).'</button>';
         }
-        // Undo and Redo (admin.js; also Ctrl + Z, Ctrl + Shift + Z / Ctrl + Y) for the changes made since the page opened.
-        $undo = esc_attr__('Undo (Ctrl + Z)','wp-banner');
-        $redo = esc_attr__('Redo (Ctrl + Shift + Z)','wp-banner');
-        echo '</div><span class="wpbn-history" role="group" aria-label="'.esc_attr__('History','wp-banner').'">'
-            .'<button type="button" class="button" id="wpbn-undo" aria-label="'.$undo.'" title="'.$undo.'" disabled><span class="dashicons dashicons-undo" aria-hidden="true"></span></button>'
-            .'<button type="button" class="button" id="wpbn-redo" aria-label="'.$redo.'" title="'.$redo.'" disabled><span class="dashicons dashicons-redo" aria-hidden="true"></span></button></span>';
-        echo '<button type="button" class="button" id="wpbn-refresh"><span class="dashicons dashicons-update" aria-hidden="true"></span>'.esc_html__('Update','wp-banner').'</button></div></div>';
+        echo '</div><button type="button" class="button" id="wpbn-refresh"><span class="dashicons dashicons-update" aria-hidden="true"></span>'.esc_html__('Update','wp-banner').'</button></div></div>';
         $play = esc_attr__('Play the scroll','wp-banner');
         echo '<div id="wpbn-preview-stage"><div id="wpbn-device-shell"><iframe id="wpbn-frame" name="wpbn_preview_frame" title="'.esc_attr__('Banner preview','wp-banner').'" sandbox="allow-scripts allow-same-origin"></iframe></div></div><div class="wpbn-scrub"><button type="button" class="button" id="wpbn-play" aria-pressed="false" aria-label="'.$play.'" title="'.$play.'"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span></button><label for="wpbn-progress">'.esc_html__('Scroll simulation','wp-banner').'</label><input type="range" id="wpbn-progress" min="0" max="100" step="0.1" value="0"></div><p class="description">'.esc_html__('Preview uses unsaved settings: press Update to see your changes. Publish or update the scene to apply them on the site.','wp-banner').'</p></div></div></div>';
     }

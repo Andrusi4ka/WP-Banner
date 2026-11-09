@@ -121,6 +121,8 @@ class WPBN_Settings {
             // A title's Letter spacing (px, per device as Font size), Case (text-transform), Style (italic) and Shadow.
             'letter_spacing'=>0, 'tablet_letter_spacing'=>null, 'mobile_letter_spacing'=>null, 'text_transform'=>'none', 'font_style'=>'normal',
             'use_shadow'=>false, 'shadow_color'=>self::SHADOW_COLOR, 'shadow_x'=>0, 'shadow_y'=>2, 'shadow_blur'=>10,
+            // An overlay's Shadow Inside its edges (a vignette) instead of around it.
+            'shadow_inset'=>false,
             // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
             'height'=>100, 'height_unit'=>'%', 'tablet_height'=>null, 'tablet_height_unit'=>null, 'mobile_height'=>null, 'mobile_height_unit'=>null,
             // Its Blur (px, per device as Font size): the layers under it blurred (backdrop-filter); 0: none.
@@ -340,6 +342,7 @@ class WPBN_Settings {
             $l['text_transform'] = self::choice($raw['text_transform'] ?? null, self::CASES, 'none');
             $l['font_style'] = self::choice($raw['font_style'] ?? null, array('normal', 'italic'), 'normal');
             $l['use_shadow'] = !empty($raw['use_shadow']);
+            $l['shadow_inset'] = !empty($raw['shadow_inset']);
             $l['shadow_color'] = self::color($raw['shadow_color'] ?? null, self::SHADOW_COLOR);
             foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200)) as $key=>$range) {
                 $l[$key] = round(self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]), 1);

@@ -11,6 +11,8 @@
 .wpbn-scene .wpbn-layer{position:absolute;box-sizing:border-box;height:100%;left:var(--wpbn-left);top:var(--wpbn-top);width:var(--wpbn-width);opacity:calc(var(--wpbn-opacity) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale,1);--wpbn-ax:var(--wpbn-anx,.5);--wpbn-ay:var(--wpbn-any,.5);transform:translate(calc(var(--wpbn-ax) * -100%),calc(var(--wpbn-ay) * -100%)) translate3d(calc(var(--wpbn-dx,0px) + var(--wpbn-kx,0px) + var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px)),0) scale(calc(var(--wpbn-s) * var(--wpbn-z,1) * var(--wpbn-k,1)));pointer-events:none}
 .wpbn-scene .wpbn-layer picture{display:contents}
 .wpbn-scene .wpbn-layer img{display:block;width:100%;height:100%;max-width:none;border:0;border-radius:0;object-fit:var(--wpbn-fit,cover);object-position:var(--wpbn-focus,50% 50%)}
+/* An image's Shadow: along its outline, so a transparent PNG (a cutout) casts it from its shape, not its box. */
+.wpbn-scene .wpbn-layer--shadow img{filter:drop-shadow(var(--wpbn-ds))}
 /* A title: as wide as its text, at most its container's width (--wpbn-width), wrapping there. */
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content);max-width:var(--wpbn-width);height:auto;text-align:center;font-size:var(--wpbn-font);letter-spacing:var(--wpbn-ls,normal);line-height:1.05;overflow-wrap:anywhere}
 /* The title's tag (h1–h5) without the theme's margins and sizes, with the title's spacing, case, style and shadow; a heading keeps the theme's heading font unless the layer sets one. */
@@ -63,6 +65,16 @@
 @keyframes wpbn-slide-x{from{transform:translateX(var(--wpbn-a0,0px))}to{transform:translateX(var(--wpbn-a1,0px))}}
 .wpbn-scene .wpbn-anim--slide-y{animation-name:wpbn-slide-y}
 @keyframes wpbn-slide-y{from{transform:translateY(var(--wpbn-a0,0px))}to{transform:translateY(var(--wpbn-a1,0px))}}
+/* Firefox snaps a slowly scaled or moved flat layer to whole pixels: a slow zoom trembles. Drawn in perspective it
+   does not: the zoom as the box coming closer, by exactly its scale (P / (P - z) = s with z = P - P / s; P = 1000px),
+   around the same point (Direction: transform-origin); a slide the same way. Compared by eye in Firefox (2026-11-09):
+   this and a 0.1° turn were smooth, the turn tilted the photo; a plain scale, will-change or a 0.01° turn trembled.
+   Only there: other browsers draw the in-between positions already. */
+@supports (-moz-appearance:none){
+@keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}to{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a1,1)))}}
+@keyframes wpbn-slide-x{from{transform:perspective(1000px) translateX(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateX(var(--wpbn-a1,0px))}}
+@keyframes wpbn-slide-y{from{transform:perspective(1000px) translateY(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateY(var(--wpbn-a1,0px))}}
+}
 /* Waiting at its start until the banner is in view (Starts: When the banner comes into view; frontend.js adds .wpbn-scene--seen),
    and paused while the banner is off the screen (frontend.js: .wpbn-scene--away), so nothing runs where nobody sees it. */
 .wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}

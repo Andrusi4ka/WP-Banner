@@ -193,6 +193,8 @@ class WPBN_Render {
             if ($l['type'] === 'overlay') {
                 $gradient = !empty($l['use_gradient']) ? WPBN_Gradient::css($l['gradient']) : '';
                 $css .= 'background:'.($gradient !== '' ? $gradient : $l['color']).';';
+                // Its Shadow (the title's keys and block): around its box, or Inside its edges (a vignette).
+                if (WPBN_Settings::shadow($l) !== '') { $css .= 'box-shadow:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
                 // Its Blur per device (frontend.css): the layers under it blurred; none anywhere: no backdrop-filter at all.
                 $blur = WPBN_Settings::blurs($l);
                 if (max($blur) > 0) { $classes .= ' wpbn-layer--blur'; $css .= '--wpbn-blur:'.$blur['desktop'].'px;--wpbn-blur-t:'.$blur['tablet'].'px;--wpbn-blur-m:'.$blur['mobile'].'px;'; }
@@ -248,6 +250,8 @@ class WPBN_Render {
                     $classes .= ' wpbn-layer--object';
                     foreach (WPBN_Settings::heights($l) as $device=>$h) { $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.($h[1] === 'auto' ? 'auto' : $h[0].$h[1]).';'; }
                 }
+                // Its Shadow (the title's keys and block): along the image's outline, a transparent PNG's shape (frontend.css drop-shadow).
+                if (WPBN_Settings::shadow($l) !== '') { $classes .= ' wpbn-layer--shadow'; $css .= '--wpbn-ds:'.WPBN_Settings::shadow($l).';'; }
                 // The first scene's images load at once, its back one first; later scenes' when they come near.
                 $attrs = $first ? ' decoding="async" loading="eager"'.(!$loaded ? ' fetchpriority="high"' : '') : ' decoding="async" loading="lazy"';
                 $inner = self::image($s, $l, $attrs);

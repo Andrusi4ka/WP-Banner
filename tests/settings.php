@@ -388,12 +388,21 @@ check(strpos($slideHtml,'--wpbn-a0-d:-60px;--wpbn-a1-d:0px;')!==false && motion_
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_anim'=>1)))))),'wpbn-anim')===false,'An overlay is never animated');
 $animCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
 foreach (array('zoom','fade','slide-x','slide-y') as $kind) { check(strpos($animCss,'.wpbn-scene .wpbn-anim--'.$kind.'{animation-name:wpbn-'.$kind.'}')!==false && strpos($animCss,'@keyframes wpbn-'.$kind.'{')!==false,'Keyframes for '.$kind); }
+check(strpos($animCss,"@supports (-moz-appearance:none){
+@keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}")!==false && strpos($animCss,'will-change:')===false && strpos($animCss,'rotate(.01deg)')===false,'Smooth slow zooms in Firefox: drawn in perspective (no snapping to whole pixels), no layer hints');
 check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}')!==false && strpos($animCss,'.wpbn-scene .wpbn-anim{animation:none}')!==false,'Waits until in view, paused off the screen, none with reduced motion');
 // Follow the mouse: per layer, an overlay never; Decorative: no alt text.
 $m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
 check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0,'Follow the mouse: bounded, not for an overlay, only with its switch');
 check(strpos($animCss,'+ var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px))')!==false,'The pointer\'s offset in the layer\'s place');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'decorative'=>1)))))),'alt=""')!==false && $lay(array('type'=>'image'))['decorative']===false,'Decorative: an empty alt; off by default');
+// An image's Shadow (the title's keys): drop-shadow along its outline, only with its switch on.
+$sh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_shadow'=>1,'shadow_x'=>4,'shadow_y'=>12,'shadow_blur'=>24,'shadow_color'=>'rgba(0,0,0,0.4)')),$lay(array('type'=>'image','image'=>3,'shadow_y'=>12))))));
+check(substr_count($sh,'wpbn-layer--shadow')===1 && strpos($sh,'--wpbn-ds:4px 12px 24px rgba(0,0,0,0.4);')!==false,'Image Shadow: its values, only with its switch on');
+check(strpos($animCss,'.wpbn-scene .wpbn-layer--shadow img{filter:drop-shadow(var(--wpbn-ds))}')!==false,'Drawn along the outline of the image');
+// An overlay's Shadow: around its box, or Inside it (a vignette); only with its switch on.
+$osh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_shadow'=>1,'shadow_y'=>8,'shadow_blur'=>30)),$lay(array('type'=>'overlay','use_shadow'=>1,'shadow_inset'=>1,'shadow_blur'=>120,'shadow_color'=>'rgba(0,0,0,0.6)')),$lay(array('type'=>'overlay','shadow_inset'=>1))))));
+check(strpos($osh,'box-shadow:0px 8px 30px rgba(0,0,0,0.5);')!==false && strpos($osh,'box-shadow:inset 0px 2px 120px rgba(0,0,0,0.6);')!==false && substr_count($osh,'box-shadow')===2,'Overlay Shadow: around it or Inside, only with its switch on');
 // A title's or a Text layer's Width: Auto (as before), % of its container, px or vw, per device.
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text')))))),'--wpbn-tw')===false,'Width Auto by default: nothing set');
 $tw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'richtext','content'=>'<p>a</p>','container'=>'custom','text_width'=>60,'text_width_unit'=>'%','mobile_text_width_unit'=>'auto'))))));

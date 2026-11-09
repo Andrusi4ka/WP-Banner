@@ -621,11 +621,19 @@
     function shadowField(l) {
         const id = 'wpbn-f-use_shadow';
         const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_shadow"' + (l.use_shadow ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>Shadow</span></label>'
-            + tip('A shadow behind the letters: its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).') + '</div></div>';
+            + tip(l.type === 'image'
+                // An image's: along its outline (a PNG's transparent parts cast none), as CSS drop-shadow (WPBN_Render).
+                ? 'A shadow along the image\'s outline (a transparent PNG casts it from its shape): for a cutout or an image object; a photo that fills the scene hides it. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
+                // An overlay's: around its box (box-shadow), or Inside it.
+                : l.type === 'overlay'
+                ? 'A shadow around the overlay, for a band or a panel smaller than the scene (one over the whole scene hides it). Inside: within its edges instead, e.g. a vignette darkening the scene\'s edges. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
+                : 'A shadow behind the letters: its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).') + '</div></div>';
         if (!l.use_shadow) return toggle;
         const px = (key, label, min, max) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<span class="wpbn-number-unit"><input id="wpbn-f-' + key + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(l[key]) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>';
         return toggle + '<div class="wpbn-row wpbn-shadow">' + colorField('shadow_color', 'Color', {alpha:true, def:boot.layer.shadow_color})
-            + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>';
+            + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>'
+            // An overlay's shadow can fall Inside its edges (a vignette); its help is the Shadow tip's.
+            + (l.type === 'overlay' ? check('shadow_inset', 'Inside') : '');
     }
     function inlineFor(l, kind, d) { const key = INLINE[kind].keys[d]; return d === 'desktop' || l[key] != null ? l[key] : inlineFor(l, kind, UP[d]); }
     const fontFor = (l, d) => inlineFor(l, 'font', d);
@@ -981,13 +989,15 @@
             let first = '', cards = '';
             if (l.type === 'image') first += picker(l)
                 // Decorative: no alt text read out (a cutout of the photo behind it would be described twice).
-                + withTip(check('decorative', 'Decorative image'), 'Screen readers skip it. Turn on for a cutout or a second copy of a photo, so it is not described twice. Off: the alt text from the media library.');
+                + withTip(check('decorative', 'Decorative image'), 'Screen readers skip it. Turn on for a cutout or a second copy of a photo, so it is not described twice. Off: the alt text from the media library.')
+                // Shadow along its outline (the title's Shadow block, its keys).
+                + shadowField(l);
             else if (l.type === 'overlay') {
                 // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
                 first += fillChoice(l) + (l.use_gradient ? gradientField(l)
                     : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size and place: Position and size.'))
-                    // Blur, for Color and Gradient alike.
-                    + deviceNumberField(l, 'blur');
+                    // Blur, for Color and Gradient alike; then its Shadow (Inside: a vignette).
+                    + deviceNumberField(l, 'blur') + shadowField(l);
             } else if (l.type === 'shortcode') {
                 first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It shows in this layer\'s place (layers above it cover it) and can be clicked and swiped. Its height is its own. Press Update to see it in the preview.');
             } else if (l.type === 'button') {

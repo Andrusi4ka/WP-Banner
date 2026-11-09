@@ -390,4 +390,5 @@ body.wpbn-modal-open{overflow:hidden}
 /* Undo and Redo, beside Update (admin.js remember()). */
 .wpbn-history{display:inline-flex;gap:4px}
 .wpbn-history .button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0}
-.wpbn-history .dashicons{width:16px;height:16px;font-size:16px;line-height:1}
+/* The arrows centred in their buttons: WordPress's button styles would give them the button's line height. */
+#wpbn-app .wpbn-history .dashicons{display:block;width:18px;height:18px;font-size:18px;line-height:18px;margin:0}

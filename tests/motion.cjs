@@ -590,6 +590,13 @@ const server=http.createServer((req,res)=>{
         await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Fill"))').screenshot({path:path.join(__dirname,'overlay-fill.png')});
         await page.click('.wpbn-field--device-number:has(#wpbn-f-backdrop_blur) [data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_backdrop_blur','4');
         assert.ok((await overlay()).mobile_backdrop_blur===4 && (await overlay()).tablet_backdrop_blur==null,'Its own on mobile');
+        // Its Shadow, in Fill: Inside only once on; Inside, a vignette in the preview.
+        assert.equal(await page.locator('#wpbn-f-shadow_inset').count(),0,'Overlay Shadow off: no Inside');
+        await page.click('label[for="wpbn-f-use_shadow"]');
+        await page.click('label[for="wpbn-f-shadow_inset"]');
+        assert.ok((await overlay()).use_shadow===true && (await overlay()).shadow_inset===true,'Overlay Shadow on, Inside');
+        await update();
+        assert.match(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).boxShadow),/inset/,'In the preview: a shadow inside its edges');
         await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
         await page.click('.wpbn-field--height [data-field-device="desktop"]');
         await page.click('[data-row-action="delete"][data-index="'+overlayIndex+'"]');
@@ -800,6 +807,12 @@ const server=http.createServer((req,res)=>{
         assert.equal(await photo.locator('#wpbn-f-decorative').isChecked(),false,'Decorative off by default');
         await photo.click('label[for="wpbn-f-decorative"]');
         assert.equal((await photoData()).decorative,true,'Decorative on');
+        // Shadow (the title's block): on, along the image's outline in the preview.
+        assert.equal(await photo.locator('#wpbn-f-use_shadow').isChecked(),false,'Image Shadow off by default');
+        await photo.click('label[for="wpbn-f-use_shadow"]');
+        assert.ok((await photoData()).use_shadow===true && await photo.locator('#wpbn-f-shadow_blur').count()===1,'Shadow on: its color, X, Y, Blur');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        assert.match(await photo.frameLocator('#wpbn-frame').locator('.wpbn-layer--shadow img').evaluate(el=>getComputedStyle(el).filter),/^drop-shadow/,'In the preview: a drop shadow');
         await photo.close();
         // A new scene: Animation, Undo / Redo, Follow the mouse, a title's Width, the tips' places.
         const ed=await browser.newPage({viewport:{width:1600,height:1000}});ed.on('pageerror',e=>errors.push(e.message));
@@ -816,6 +829,8 @@ const server=http.createServer((req,res)=>{
         let edT=await edTitle();
         assert.ok(edT.anim_type==='fade' && edT.anim_from===0 && edT.anim_to===100 && edT.anim_repeat==='once' && await ed.locator('#wpbn-f-anim_origin').count()===0,'Fade: 0 → 100, once, no Direction');
         assert.equal(await ed.locator('#wpbn-undo').isDisabled(),false,'Undo available');
+        // The arrows centred in their buttons (WordPress's button line height does not reach them).
+        assert.ok(await ed.evaluate(()=>['undo','redo'].every(id=>{const b=document.getElementById('wpbn-'+id).getBoundingClientRect(),i=document.querySelector('#wpbn-'+id+' .dashicons'),r=i.getBoundingClientRect();return Math.abs((r.top+r.height/2)-(b.top+b.height/2))<1 && Math.abs((r.left+r.width/2)-(b.left+b.width/2))<1 && getComputedStyle(i).lineHeight===getComputedStyle(i).height;})),'Undo and Redo arrows centred');
         await ed.click('#wpbn-undo');
         assert.ok(await ed.locator('#wpbn-f-anim_type').inputValue()==='zoom' && (await edTitle()).anim_type==='zoom','Undo: back to Zoom, the saved data too');
         await ed.click('#wpbn-redo');
