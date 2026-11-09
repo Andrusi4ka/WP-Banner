@@ -46,6 +46,8 @@
    theme's primary color (Woodmart's), and without that, the title's. */
 /* An overlay's Blur: the layers under it (within the scene) blurred, per device. */
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur));backdrop-filter:blur(var(--wpbn-blur))}
+/* An overlay's fill, shadow and blur: its box, as large as the layer (WPBN_Render). */
+.wpbn-scene .wpbn-overlay{width:100%;height:100%}
 /* An overlay: its own Height per device (a share of the scene, px or vh). */
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh,100%)}
 /* An image object (Fill the scene off): its own Height (Auto: the image's proportions at its width). */
@@ -99,6 +101,20 @@
 @keyframes wpbn-enter-slide{from{opacity:0;transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}
 .wpbn-scene .wpbn-enter--zoom{animation-name:wpbn-enter-zoom}
 @keyframes wpbn-enter-zoom{from{opacity:0;transform:scale(var(--wpbn-es,.8))}}
+/* From an edge: all the way in from outside the banner (frontend.js edges(): --wpbn-ex / --wpbn-ey), no fade. */
+.wpbn-scene .wpbn-enter--edge{animation-name:wpbn-enter-edge}
+@keyframes wpbn-enter-edge{from{transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}
+/* Flips and Rotate Z (as Woodmart's theme animations look). */
+.wpbn-scene .wpbn-enter--flip-x-top{animation-name:wpbn-enter-flip-x-top}
+@keyframes wpbn-enter-flip-x-top{from{opacity:0;transform:perspective(1000px) translateY(-100px) rotateX(90deg) scale(.6)}}
+.wpbn-scene .wpbn-enter--flip-x-bottom{animation-name:wpbn-enter-flip-x-bottom}
+@keyframes wpbn-enter-flip-x-bottom{from{opacity:0;transform:perspective(1000px) translateY(100px) rotateX(-90deg) scale(.6)}}
+.wpbn-scene .wpbn-enter--flip-y-left{animation-name:wpbn-enter-flip-y-left}
+@keyframes wpbn-enter-flip-y-left{from{opacity:0;transform:perspective(1000px) translateX(-100px) rotateY(-90deg) scale(.6)}}
+.wpbn-scene .wpbn-enter--flip-y-right{animation-name:wpbn-enter-flip-y-right}
+@keyframes wpbn-enter-flip-y-right{from{opacity:0;transform:perspective(1000px) translateX(100px) rotateY(90deg) scale(.6)}}
+.wpbn-scene .wpbn-enter--rotate-z{animation-name:wpbn-enter-rotate-z}
+@keyframes wpbn-enter-rotate-z{from{opacity:0;transform:rotate(-20deg) scale(.8)}}
 .wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible,.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}
 .wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,var(--wp--preset--color--primary,currentColor)));text-decoration:none}
 @media(max-width:1024px){
@@ -130,3 +146,17 @@
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
 }
 @media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
+/* A layer's Border (2026-11-09; WPBN_Render): its width per side and device, its line and colour; on what shows of it (an image's
+   picture, an overlay's box, the others' own box), so it comes in and moves with it. */
+.wpbn-scene .wpbn-layer--border:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--border.wpbn-layer--image img,.wpbn-scene .wpbn-layer--border .wpbn-overlay{box-sizing:border-box;border-style:var(--wpbn-brs,solid);border-color:var(--wpbn-brc,#fff);border-width:var(--wpbn-brw)}
+@media(max-width:1024px){.wpbn-scene .wpbn-layer--border:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--border.wpbn-layer--image img,.wpbn-scene .wpbn-layer--border .wpbn-overlay{border-width:var(--wpbn-brw-t,var(--wpbn-brw))}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer--border:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--border.wpbn-layer--image img,.wpbn-scene .wpbn-layer--border .wpbn-overlay{border-width:var(--wpbn-brw-m,var(--wpbn-brw-t,var(--wpbn-brw)))}}
+/* A layer's Radius (2026-11-09; WPBN_Render): per corner and device, on the same as its Border (the picture is cut to it). */
+.wpbn-scene .wpbn-layer--radius:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img,.wpbn-scene .wpbn-layer--radius .wpbn-overlay{border-radius:var(--wpbn-brr)}
+@media(max-width:1024px){.wpbn-scene .wpbn-layer--radius:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img,.wpbn-scene .wpbn-layer--radius .wpbn-overlay{border-radius:var(--wpbn-brr-t,var(--wpbn-brr))}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer--radius:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img,.wpbn-scene .wpbn-layer--radius .wpbn-overlay{border-radius:var(--wpbn-brr-m,var(--wpbn-brr-t,var(--wpbn-brr)))}}
+/* A layer's Padding (2026-11-09; WPBN_Render): the space inside its box per side and device (its box keeps its size, the box
+   being border-box: its content keeps away from its edges, a title's lines wrap inside it). */
+.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad)}
+@media(max-width:1024px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-t,var(--wpbn-pad))}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-m,var(--wpbn-pad-t,var(--wpbn-pad)))}}

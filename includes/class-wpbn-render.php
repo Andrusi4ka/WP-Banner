@@ -204,17 +204,40 @@ class WPBN_Render {
                 }
             }
         }
+        // Its Padding (WPBN_Settings::paddings(); frontend.css): the space inside its box, per device.
+        $padding = WPBN_Settings::paddings($l);
+        if ($padding) {
+            $classes .= ' wpbn-layer--padding';
+            $css .= '--wpbn-pad:'.$padding['desktop'].';--wpbn-pad-t:'.$padding['tablet'].';--wpbn-pad-m:'.$padding['mobile'].';';
+        }
+        // Its Radius (WPBN_Settings::radii(); frontend.css): on the same as its Border, per device.
+        $radius = WPBN_Settings::radii($l);
+        if ($radius) {
+            $classes .= ' wpbn-layer--radius';
+            $css .= '--wpbn-brr:'.$radius['desktop'].';--wpbn-brr-t:'.$radius['tablet'].';--wpbn-brr-m:'.$radius['mobile'].';';
+        }
+        // Its Border (WPBN_Settings::borders(); frontend.css): on its picture, an overlay's box or its own box, per device.
+        $border = WPBN_Settings::borders($l);
+        if ($border) {
+            $classes .= ' wpbn-layer--border';
+            $css .= '--wpbn-brw:'.$border['desktop'].';--wpbn-brw-t:'.$border['tablet'].';--wpbn-brw-m:'.$border['mobile'].';--wpbn-brs:'.$l['border_style'].';--wpbn-brc:'.$l['border_color'].';';
+        }
         $inner = '';
         // An overlay: the whole scene in its colour, or its Gradient instead (only overlays have one: images and
-        // titles had it until 2026-11-08; their values kept are not used).
+        // titles had it until 2026-11-08; their values kept are not used). In a box of its own (.wpbn-overlay, 2026-11-09), so its
+        // Entrance animation's wrapper can bring it in; the layer keeps its size and place.
         if ($l['type'] === 'overlay') {
             $gradient = !empty($l['use_gradient']) ? WPBN_Gradient::css($l['gradient']) : '';
-            $css .= 'background:'.($gradient !== '' ? $gradient : $l['color']).';';
+            $fill = 'background:'.($gradient !== '' ? $gradient : $l['color']).';';
             // Its Shadow (the title's keys and block): around its box, or Inside its edges (a vignette).
-            if (WPBN_Settings::shadow($l) !== '') { $css .= 'box-shadow:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
+            if (WPBN_Settings::shadow($l) !== '') { $fill .= 'box-shadow:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
             // Its Blur per device (frontend.css): the layers under it blurred; none anywhere: no backdrop-filter at all.
             $blur = WPBN_Settings::blurs($l);
-            if (max($blur) > 0) { $classes .= ' wpbn-layer--blur'; $css .= '--wpbn-blur:'.$blur['desktop'].'px;--wpbn-blur-t:'.$blur['tablet'].'px;--wpbn-blur-m:'.$blur['mobile'].'px;'; }
+            if (max($blur) > 0) { $css .= '--wpbn-blur:'.$blur['desktop'].'px;--wpbn-blur-t:'.$blur['tablet'].'px;--wpbn-blur-m:'.$blur['mobile'].'px;'; }
+            // Its Entrance animation on this box itself, not a wrapper: a box fading or moving around it would cut its blur off
+            // from the layers behind (it would blur nothing).
+            list($enter_class, $enter_css) = WPBN_Entrance::active($l) ? WPBN_Entrance::wrapper($l) : array('', '');
+            $inner = '<div class="wpbn-overlay'.(max($blur) > 0 ? ' wpbn-layer--blur' : '').($enter_class !== '' ? ' '.$enter_class : '').'" style="'.esc_attr($fill.$enter_css).'"></div>';
             // Its Height per device (frontend.css; % of the scene).
             foreach (WPBN_Settings::heights($l) as $device=>$h) { $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.$h[0].$h[1].';'; }
         } elseif ($l['type'] === 'shortcode') {
@@ -287,7 +310,7 @@ class WPBN_Render {
             $inner = '<div class="'.esc_attr($anim_class).'" style="'.esc_attr($anim_css).'">'.$inner.'</div>';
         }
         // Entrance animation (WPBN_Entrance): around that, so it comes in once, then the Loop animation runs on.
-        if ($inner !== '' && WPBN_Entrance::active($l)) {
+        if ($inner !== '' && WPBN_Entrance::active($l) && $l['type'] !== 'overlay') {
             list($enter_class, $enter_css) = WPBN_Entrance::wrapper($l);
             $inner = '<div class="'.esc_attr($enter_class).'" style="'.esc_attr($enter_css).'">'.$inner.'</div>';
         }

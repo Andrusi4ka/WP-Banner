@@ -7,49 +7,74 @@
 #wpbn-app button:focus-visible{outline:2px solid var(--wpbn-accent);outline-offset:1px}
 #wpbn-app .description,#wpbn-shortcode .description{font-size:12px}
 
-/* Three columns sized by the box: menu, the chosen card, the preview (twice as wide). */
-.wpbn-workspace{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr) minmax(0,2fr);gap:16px;align-items:start}
+/* Under the layers, as WP Swiper's settings box: the menu of blocks and the chosen block, as wide as each other, then the preview (half the box). */
+.wpbn-workspace{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:16px;align-items:start}
 .wpbn-sidebar{display:flex;flex-direction:column;gap:16px;min-width:0}
 .wpbn-settings{min-width:0}
 
-/* Scene settings: one of WP Swiper's menu items. */
+/* The menu: WP Swiper's menu items, the chosen one lit; a green dot where something is on (an animation). */
+.wpbn-menu{display:flex;flex-direction:column;gap:6px}
 .wpbn-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #dcdcde;border-radius:6px;background:#fff;color:#1d2327;font:inherit;font-weight:600;text-align:left;cursor:pointer}
-.wpbn-menu-item .dashicons{color:#646970}
-.wpbn-menu-item:after{content:"\f345";margin-left:auto;font:normal 16px/1 dashicons;color:#a7aaad}
+.wpbn-menu-item .dashicons{flex:0 0 auto;color:#646970}
+.wpbn-menu-item__title{flex:1 1 auto;min-width:0}
+.wpbn-menu-item:after{content:"\f345";flex:0 0 auto;font:normal 16px/1 dashicons;color:#a7aaad}
 .wpbn-menu-item:hover{border-color:var(--wpbn-accent);color:var(--wpbn-accent)}
 .wpbn-menu-item[aria-current=true]{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent);box-shadow:inset 3px 0 0 var(--wpbn-accent)}
 .wpbn-menu-item[aria-current=true] .dashicons,.wpbn-menu-item[aria-current=true]:after{color:var(--wpbn-accent)}
+.wpbn-menu-item__dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:#00a32a}
+/* Words for screen readers only (as WordPress's own class, also where its styles are not loaded). */
+.wpbn-menu .screen-reader-text{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+.wpbn-block>.wpbn-card:first-child{margin-top:0}
 
 /* Sections: a frame with its title (Layers, Layer settings, Scene settings). */
 .wpbn-section{min-width:0;margin:0;padding:12px 16px;border:1px solid #dcdcde;border-radius:4px}
 .wpbn-section legend{padding:0 6px;font-weight:600}
+/* The section's title with its tip (Scroll animation, Follow the mouse): the "i" beside it, centred on its line. */
+#wpbn-block-title{display:inline-flex;align-items:center;gap:6px}
+#wpbn-block-title .wpbn-tip .dashicons{width:16px;height:16px;font-size:16px}
+.wpbn-layers{margin-bottom:16px}
 .wpbn-layers>.description{margin:0 0 10px}
 
-/* Layer rows: thumbnail, name and kind, then hide / duplicate / delete. */
-#wpbn-layers{display:flex;flex-direction:column;gap:6px}
-.wpbn-layer-row{position:relative;display:flex;align-items:center;gap:2px;padding-right:6px;border:1px solid #dcdcde;border-radius:6px;background:#fff;cursor:grab;touch-action:none;user-select:none}
-/* A grip of dots on the left: the row can be dragged. */
-.wpbn-layer-grip{flex:0 0 8px;width:8px;height:16px;margin-left:6px;background:radial-gradient(circle,#a7aaad 1.2px,transparent 1.6px) 0 0/4px 4px;opacity:.8}
-.wpbn-layer-row:hover .wpbn-layer-grip{opacity:1}
+/* The layers as WP Swiper's slides: tiles in rows, Scene settings first, the front layer next, Add element last. */
+.wpbn-strip{position:relative;display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+#wpbn-layers{display:contents}
+.wpbn-tile{position:relative;container-type:inline-size;display:flex;flex-direction:column;gap:6px;min-width:0;margin:0;padding:8px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:6px;background:#fff;color:#1d2327;font:inherit;text-align:left}
+button.wpbn-tile{cursor:pointer}
+.wpbn-tile:hover{border-color:var(--wpbn-accent)}
+.wpbn-tile.is-active,.wpbn-scene-tile[aria-current=true]{border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 0 0 0 1px var(--wpbn-accent)}
+.wpbn-layer-row{cursor:grab;touch-action:none;user-select:none}
 body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
-.wpbn-layer-row:hover{border-color:var(--wpbn-accent)}
-.wpbn-layer-row.is-active{border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
 .wpbn-layer-row.is-dragging{z-index:2;opacity:.9;box-shadow:0 6px 16px rgba(0,0,0,.18);transition:none}
-.wpbn-layer-row.is-drop-before:before,.wpbn-layer-row.is-drop-after:before{content:"";position:absolute;left:0;right:0;height:2px;border-radius:2px;background:var(--wpbn-accent);pointer-events:none}
-.wpbn-layer-row.is-drop-before:before{top:-5px}
-.wpbn-layer-row.is-drop-after:before{bottom:-5px}
-.wpbn-layer-select{display:flex;flex:1 1 auto;align-items:center;gap:10px;min-width:0;padding:8px 4px 8px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-weight:600;text-align:left;line-height:1.35;cursor:grab}
-.wpbn-layer-row:hover .wpbn-layer-select,.wpbn-layer-row.is-active .wpbn-layer-select{color:var(--wpbn-accent)}
-.wpbn-layer-thumb{display:flex;flex:0 0 36px;align-items:center;justify-content:center;width:36px;height:36px;overflow:hidden;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/8px 8px;color:#a7aaad}
+/* Where a dragged tile lands: a line beside the tile, before (in front of it) or after. */
+.wpbn-layer-row.is-drop-before:before,.wpbn-layer-row.is-drop-after:before{content:"";position:absolute;top:0;bottom:0;width:2px;border-radius:2px;background:var(--wpbn-accent);pointer-events:none}
+.wpbn-layer-row.is-drop-before:before{left:-7px}
+.wpbn-layer-row.is-drop-after:before{right:-7px}
+.wpbn-layer-select{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;line-height:1.35;cursor:grab}
+.wpbn-tile:hover .wpbn-layer-label,.wpbn-tile.is-active .wpbn-layer-label,.wpbn-scene-tile[aria-current=true] .wpbn-layer-label{color:var(--wpbn-accent)}
+/* The thumbnail: an image's photo (cropped), a fill over a checkerboard, or the icon of its kind. */
+.wpbn-tile__thumb,.wpbn-layer-thumb{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/3;overflow:hidden;box-sizing:border-box;border-radius:3px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/10px 10px;color:#a7aaad}
+.wpbn-tile__thumb{background:#f0f0f1;color:#50575e}
+.wpbn-tile__thumb .dashicons,.wpbn-layer-thumb .dashicons{width:32px;height:32px;font-size:32px}
+/* A layer's number (1: the back layer) in its thumbnail's top left corner. */
+.wpbn-layer-thumb{position:relative}
+.wpbn-tile__number{position:absolute;top:4px;left:4px;min-width:20px;height:20px;padding:0 6px;box-sizing:border-box;border-radius:10px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:600;line-height:20px;text-align:center}
 .wpbn-layer-thumb img{display:block;width:100%;height:100%;object-fit:cover}
-/* A title, a text and a button: the icon their element has under Add element, dark (an image's empty one stays light). */
-.wpbn-layer-thumb--text,.wpbn-layer-thumb--richtext,.wpbn-layer-thumb--button,.wpbn-layer-thumb--shortcode{color:#50575e}
+/* A title's and a text's thumbnail: the word (user's request, 2026-11-09), a title's bold. */
+.wpbn-thumb-word{color:#50575e;font-size:18px;line-height:1}
+.wpbn-layer-thumb--text .wpbn-thumb-word{font-size:22px;font-weight:700}
+/* A title, a text, a button and a shortcode: the icon their element has under Add element, dark on grey (an image's empty one stays light). */
+.wpbn-layer-thumb--text,.wpbn-layer-thumb--richtext,.wpbn-layer-thumb--button,.wpbn-layer-thumb--shortcode{background:#f0f0f1;color:#50575e}
 /* An overlay: its fill over the checkerboard (a see-through one shows as such). */
-.wpbn-layer-thumb--overlay>span{display:block;width:100%;height:100%}
-.wpbn-layer-label{min-width:0;overflow-wrap:anywhere}
+/* An overlay: over the photo under it, its box at its size and place (admin.js overlayThumb()). */
+.wpbn-overlay-thumb{position:absolute;display:block}
+.wpbn-layer-label{min-width:0;font-weight:600;overflow-wrap:anywhere}
 .wpbn-layer-label small{display:block;color:#646970;font-weight:400;font-size:11px}
-.wpbn-layer-row.is-hidden .wpbn-layer-thumb,.wpbn-layer-row.is-hidden .wpbn-layer-label{opacity:.5}
-.wpbn-layer-tools{display:flex;flex:0 0 auto;gap:2px}
+.wpbn-layer-row.is-hidden .wpbn-layer-thumb,.wpbn-layer-row.is-hidden .wpbn-layer-select>.wpbn-layer-label{opacity:.5}
+/* Between the thumbnail and the name: hide and duplicate at the left, delete at the right. The thumbnail is 4:3 and as wide
+   as the tile's content (100cqw: the tile is a size container), so the row sits 4px under it; the name leaves room for it. */
+.wpbn-layer-tools{position:absolute;top:calc(8px + 75cqw + 4px);left:8px;display:flex;gap:2px}
+.wpbn-layer-tools--end{left:auto;right:8px}
+.wpbn-layer-row .wpbn-layer-select>.wpbn-layer-label{margin-top:28px}
 .wpbn-icon-button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:3px;background:none;color:#a7aaad;cursor:pointer}
 .wpbn-icon-button .dashicons{width:18px;height:18px;font-size:18px}
 .wpbn-icon-button svg{display:block;width:14px;height:14px}
@@ -57,20 +82,37 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-icon-button--danger:hover{color:#d63638}
 .wpbn-icon-button[aria-pressed=true]{color:#50575e}
 .wpbn-icon-button:disabled{color:#dcdcde;background:none;cursor:not-allowed}
-.wpbn-empty{margin:0;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2;color:#646970}
+.wpbn-layer-tools .wpbn-icon-button{color:#787c82}
+/* On hover or focus: the scheme's blue (--wpbn-accent); Delete red. */
+.wpbn-layer-tools .wpbn-icon-button:hover,.wpbn-layer-tools .wpbn-icon-button:focus-visible{color:var(--wpbn-accent)}
+.wpbn-layer-tools .wpbn-icon-button--danger:hover,.wpbn-layer-tools .wpbn-icon-button--danger:focus-visible{color:#d63638}
+.wpbn-layer-tools .wpbn-icon-button:disabled{color:#dcdcde}
+/* Position on a tile: its icon 16px, its lines bolder than the drawing's (user's request, 2026-11-09). */
+.wpbn-layer-tools .wpbn-tile-position svg{width:16px;height:16px}
+.wpbn-tile-position svg path{stroke-width:2.2}
+.wpbn-position-own{margin:8px 0 0}
+.wpbn-empty{grid-column:span 2;margin:0;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2;color:#646970}
 
-/* Add element: a block like a layer row (dashed); it opens the elements in the settings column. */
-.wpbn-add{margin-top:6px;border:1px dashed #a7aaad;border-radius:6px;background:#fff}
+/* Add element: a dashed tile; it opens the elements in a window. */
+.wpbn-add{display:flex;border:1px dashed #a7aaad;border-radius:6px;background:#fff}
 .wpbn-add:hover{border-color:var(--wpbn-accent)}
-.wpbn-add:has([aria-current=true]){border-style:solid;border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
-.wpbn-add__toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;padding:8px 12px;border:0;border-radius:6px;background:none;color:#50575e;font:inherit;font-weight:600;cursor:pointer}
-.wpbn-add__toggle:hover,.wpbn-add__toggle[aria-current=true]{color:var(--wpbn-accent)}
-.wpbn-add__plus{width:20px;height:20px;font-size:20px}
+.wpbn-add:has([aria-expanded=true]){border-style:solid;border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 0 0 0 1px var(--wpbn-accent)}
+.wpbn-add__toggle{display:flex;flex:1 1 auto;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px;padding:8px 12px;border:0;border-radius:6px;background:none;color:#50575e;font:inherit;font-weight:600;cursor:pointer}
+.wpbn-add__toggle:hover,.wpbn-add__toggle[aria-expanded=true]{color:var(--wpbn-accent)}
+.wpbn-add__plus{width:28px;height:28px;font-size:28px}
 /* The elements to add: tiles, as many in a row as fit (more kinds to come). */
 .wpbn-elements{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
 .wpbn-element{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:1;padding:6px;border:1px solid #dcdcde;border-radius:4px;background:#fff;color:#50575e;font:inherit;font-size:12px;cursor:pointer}
 .wpbn-element .dashicons{width:28px;height:28px;font-size:28px}
 .wpbn-element:hover,.wpbn-element:focus-visible{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent)}
+/* In the Add element window: larger tiles, each with a line on what it is for. */
+.wpbn-modal--add .wpbn-modal__box{width:min(760px,100%)}
+.wpbn-modal--add .wpbn-elements{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.wpbn-modal--add .wpbn-element{justify-content:flex-start;aspect-ratio:auto;padding:16px 12px;text-align:center}
+.wpbn-element__name{font-size:13px;font-weight:600}
+.wpbn-element__about{color:#646970;font-size:12px;line-height:1.45}
+.wpbn-element:disabled{opacity:.5;cursor:not-allowed}
+.wpbn-modal__body>.wpbn-add-note{margin:14px 0 0}
 /* Under the image picker: its file name, then pixel size and weight. */
 .wpbn-picker__info{margin:6px 0 0;font-size:12px;line-height:1.45;color:#646970}
 .wpbn-picker__name{display:block;color:#1d2327;font-weight:500;overflow-wrap:anywhere}
@@ -131,7 +173,7 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 
 /* Preview: bar, frame, scroll simulation. In view while the settings scroll. */
 .wpbn-preview{position:sticky;top:46px;min-width:0;padding:12px 16px 16px;border:1px solid #dcdcde;border-radius:4px;background:#f6f7f7}
-.wpbn-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.wpbn-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
 .wpbn-preview-title{font-weight:600}
 .wpbn-toolbar .wpbn-resolution{margin-right:auto}
 .wpbn-toolbar__end{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -143,10 +185,10 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 /* An overlay's fill: Color or Gradient, two buttons across the card, styled as the preview's devices. */
 .wpbn-fill-choice{display:flex;gap:4px;margin-bottom:14px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
 .wpbn-fill-choice .wpbn-device-button{flex:1 1 0;min-height:32px}
-#wpbn-rotate,#wpbn-dark{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
+#wpbn-rotate,#wpbn-dark,#wpbn-dev{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
 #wpbn-rotate svg{display:block;width:22px;height:auto}
-#wpbn-dark svg{display:block;width:20px;height:20px}
-#wpbn-rotate[aria-pressed=true],#wpbn-dark[aria-pressed=true]{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
+#wpbn-dark svg,#wpbn-dev svg{display:block;width:20px;height:20px}
+#wpbn-rotate[aria-pressed=true],#wpbn-dark[aria-pressed=true],#wpbn-dev[aria-pressed=true]{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
 #wpbn-refresh{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
 #wpbn-refresh .dashicons{width:16px;height:16px;font-size:16px;line-height:1;vertical-align:middle;color:inherit}
 #wpbn-app #wpbn-refresh.is-stale{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
@@ -194,7 +236,18 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-focus__frame{display:block;position:relative;overflow:hidden;border-radius:4px;background:#f0f0f1}
 .wpbn-focus__device figcaption{display:flex;align-items:center;gap:4px;margin-top:4px;color:#646970;font-size:12px;line-height:1.3}
 .wpbn-focus__device .dashicons{width:14px;height:14px;font-size:14px}
-.wpbn-focus__value{margin:12px 0 0;color:#50575e}
+/* The Position window's X and Y: numbers with % after them, typed or set by dragging. */
+.wpbn-focus__value{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0}
+/* One box per axis, as the settings' numbers with a unit: its name in a grey cell, the number, % after it; lit as it is typed in.
+   (The window is outside #wpbn-app: WordPress's own input styles reset here.) */
+.wpbn-axis{display:inline-flex;align-items:stretch;height:32px;box-sizing:border-box;border:1px solid #8c8f94;border-radius:4px;background:#fff;overflow:hidden;transition:border-color .12s,box-shadow .12s}
+.wpbn-axis:hover{border-color:#646970}
+.wpbn-axis:focus-within{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}
+.wpbn-axis__name{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:0 8px;box-sizing:border-box;border-right:1px solid #dcdcde;background:#f6f7f7;color:#1d2327;font-weight:600;cursor:text}
+.wpbn-axis input[type=number]{width:64px;min-height:0;height:auto;margin:0;padding:0 2px 0 10px;border:0;border-radius:0;background:none;box-shadow:none;color:#1d2327;font-size:14px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.wpbn-axis input[type=number]:focus{outline:none;box-shadow:none}
+.wpbn-axis input[type=number]::-webkit-inner-spin-button,.wpbn-axis input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.wpbn-axis__unit{display:inline-flex;align-items:center;padding:0 10px 0 0;color:#646970}
 .wpbn-focus__reset{margin-right:auto!important}
 .wpbn-position-canvas{display:block;position:absolute;inset:0;overflow:hidden;border-radius:4px;background:#f0f0f1;pointer-events:none}
 .wpbn-position-item{display:block;position:absolute;text-align:center;font-weight:800;line-height:1.05;overflow-wrap:anywhere;transform-origin:center}
@@ -311,7 +364,41 @@ body.wpbn-modal-open{overflow:hidden}
 /* Fields side by side, sharing the row (a title's Font and Weight). */
 .wpbn-row{display:flex;gap:0 12px}
 .wpbn-row>.wpbn-field{flex:1 1 0;min-width:0}
+/* Line and Color: the colour as wide as its swatch, Line the rest of the row. */
+.wpbn-row--line>.wpbn-field:last-child{flex:0 0 auto}
 /* A title's Shadow: its colour, then X, Y and Blur, closer together. */
+/* Border (Effect): a box drawn as the four sides, each side's width beside it, the link in its middle (admin.js borderField()). */
+.wpbn-border-box{position:relative;height:136px;margin:4px 0 2px}
+.wpbn-border-box__frame{position:absolute;top:44px;right:84px;bottom:44px;left:84px;border-radius:2px;background:#fff}
+.wpbn-border-box__side{position:absolute;width:76px}
+#wpbn-app .wpbn-border-box__side input[type=number]{min-height:32px;padding:0 6px;text-align:center}
+.wpbn-border-box__side .wpbn-number-unit__unit{padding:0 6px;font-weight:400;color:#646970}
+.wpbn-border-box__side--top{top:0;left:50%;transform:translateX(-50%)}
+.wpbn-border-box__side--bottom{bottom:0;left:50%;transform:translateX(-50%)}
+.wpbn-border-box__side--left{left:0;top:50%;transform:translateY(-50%)}
+.wpbn-border-box__side--right{right:0;top:50%;transform:translateY(-50%)}
+.wpbn-border-box__link{position:absolute;top:50%;left:50%;display:flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:1px solid #dcdcde;border-radius:50%;background:#fff;color:#646970;transform:translate(-50%,-50%);cursor:pointer}
+.wpbn-border-box__link svg{display:block;width:16px;height:16px}
+/* Radius: a corner's field at each corner of the box (its number, px and % above each other beside it: the one in use dark and
+   bold, the other light and thin); the frame's corners rounded as the radii are. */
+.wpbn-radius-box__frame{top:40px;right:96px;bottom:40px;left:96px;border:1px solid #8c8f94}
+.wpbn-radius-input{position:absolute;display:flex;align-items:stretch;width:88px;height:36px;box-sizing:border-box;border:1px solid #8c8f94;border-radius:4px;background:#fff;overflow:hidden}
+.wpbn-radius-input:focus-within{border-color:var(--wpbn-accent);box-shadow:0 0 0 1px var(--wpbn-accent)}
+#wpbn-app .wpbn-radius-input input[type=number]{flex:1 1 auto;width:0;min-width:0;min-height:0;margin:0;padding:0 4px;border:0;border-radius:0;box-shadow:none;text-align:center;-moz-appearance:textfield}
+.wpbn-radius-input input[type=number]::-webkit-inner-spin-button,.wpbn-radius-input input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.wpbn-border-box__corner--tl{top:0;left:0}
+.wpbn-border-box__corner--tr{top:0;right:0}
+.wpbn-border-box__corner--br{bottom:0;right:0}
+.wpbn-border-box__corner--bl{bottom:0;left:0}
+.wpbn-unit-pick{display:flex;flex:0 0 28px;flex-direction:column;border-left:1px solid #dcdcde;background:#f6f7f7}
+.wpbn-unit-pick button{flex:1 1 0;min-height:0;margin:0;padding:0;border:0;background:none;color:#a7aaad;font-family:inherit;font-size:11px;font-weight:400;line-height:1;cursor:pointer}
+.wpbn-unit-pick button+button{border-top:1px solid #e4e4e4}
+.wpbn-unit-pick button:hover{color:var(--wpbn-accent)}
+.wpbn-unit-pick button[aria-pressed=true]{color:#1d2327;font-weight:700}
+/* Padding: Border's box, each side's number with px / % beside it; the spaces green inside the frame (as a browser's inspector). */
+.wpbn-pad-box__frame{right:96px;left:96px;border:0 solid rgba(147,196,125,.65);background:#fff;box-sizing:border-box}
+.wpbn-border-box__link:hover{border-color:var(--wpbn-accent);color:var(--wpbn-accent)}
+.wpbn-border-box__link[aria-pressed=true]{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent)}
 .wpbn-shadow{gap:0 8px}
 .wpbn-shadow>.wpbn-field:first-child{flex:0 0 auto}
 #wpbn-app .wpbn-shadow .wpbn-number-unit input[type=number]{padding:0 6px}
@@ -401,14 +488,15 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-layer-thumb--shape svg,.wpbn-picker__thumb svg,.wpbn-object-thumb svg{display:block;width:100%;height:100%}
 .wpbn-layer-thumb--shape svg{padding:3px;box-sizing:border-box}
 .wpbn-picker__thumb svg{padding:4px;box-sizing:border-box}
-/* Its objects under its row, indented, the front one at the top. */
-.wpbn-object-row{display:flex;align-items:center;gap:2px;margin:-2px 0 0 24px;padding-right:6px;border:1px solid #e4e4e4;border-radius:6px;background:#fff}
+/* Its objects in its tile, under its name, the front one at the top. */
+.wpbn-objects{display:flex;flex-direction:column;gap:4px;cursor:default}
+.wpbn-object-row{display:flex;align-items:center;gap:2px;padding-right:2px;border:1px solid #e4e4e4;border-radius:6px;background:#fff}
 .wpbn-object-row:hover{border-color:var(--wpbn-accent)}
 .wpbn-object-row.is-active{border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
-.wpbn-object-select{display:flex;flex:1 1 auto;align-items:center;gap:8px;min-width:0;padding:5px 4px 5px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-size:12px;text-align:left;line-height:1.35;cursor:pointer}
+.wpbn-object-select{display:flex;flex:1 1 auto;align-items:center;gap:6px;min-width:0;padding:4px 2px 4px 4px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-size:12px;text-align:left;line-height:1.35;cursor:pointer}
 .wpbn-object-row:hover .wpbn-object-select,.wpbn-object-row.is-active .wpbn-object-select{color:var(--wpbn-accent)}
 .wpbn-object-row.is-hidden .wpbn-object-thumb,.wpbn-object-row.is-hidden .wpbn-layer-label{opacity:.5}
-.wpbn-object-thumb{display:flex;flex:0 0 26px;width:26px;height:26px;padding:2px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:#fff}
+.wpbn-object-thumb{display:flex;flex:0 0 22px;width:22px;height:22px;padding:2px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:#fff}
 /* The drawing in the layer's card: as large as fits, a click on an object chooses it. */
 .wpbn-shape-canvas{display:flex;align-items:center;justify-content:center;max-width:100%;max-height:320px;margin:10px auto 0;padding:10px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/16px 16px}
 .wpbn-shape-svg{display:block;width:100%;height:100%;max-height:300px;overflow:visible}
@@ -422,12 +510,3 @@ body.wpbn-modal-open{overflow:hidden}
 /* A Shape object's Fill: five choices, wrapping on a narrow column. */
 .wpbn-fill-choice--wrap{flex-wrap:wrap}
 .wpbn-fill-choice--wrap .wpbn-device-button{flex:1 1 52px;padding:4px 6px}
-/* A layer's settings in tabs (admin.js tabbed()): as the preview's device buttons, the chosen one lit; a dot where something is on. */
-.wpbn-tabs{display:flex;gap:4px;margin:0 0 8px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
-.wpbn-tab{display:inline-flex;flex:1 1 0;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:32px;padding:4px 8px;border:1px solid transparent;border-radius:4px;background:none;color:#50575e;font:inherit;cursor:pointer}
-.wpbn-tab:hover{color:var(--wpbn-accent)}
-.wpbn-tab[aria-selected=true]{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent);font-weight:600}
-.wpbn-tab__dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:#00a32a}
-.wpbn-tabpanel>.wpbn-card:first-child{margin-top:0}
-/* Words for screen readers only (as WordPress's own class, also where its styles are not loaded). */
-.wpbn-tab .screen-reader-text{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}

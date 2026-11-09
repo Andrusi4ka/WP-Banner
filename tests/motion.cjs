@@ -6,6 +6,11 @@ const assert=require('node:assert/strict');
 // Playwright (npm install: package.json devDependencies) drives the Chrome already on the machine (BROWSER_BIN).
 const {chromium}=require('playwright-core');
 const root=path.resolve(__dirname,'..');
+// Position: the button on the chosen layer's tile (2026-11-09); its value is its title (the browser's tooltip), refreshed as it is pointed at.
+const POS='.wpbn-layer-row.is-active [data-row-action="position"]';
+const posTip=async p=>{await p.hover(POS);return p.locator(POS).getAttribute('title');};
+// The Position window's X and Y (typed or set by dragging, 2026-11-09), as "X% Y%".
+const focusValue=p=>p.evaluate(()=>document.getElementById('wpbn-pos-x').value+'% '+document.getElementById('wpbn-pos-y').value+'%');
 const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/PHP/php.exe';
 const fixture=(mode,input='',image=false)=>execFileSync(php,[path.join(__dirname,'settings.php'),mode],{encoding:'utf8',input,env:Object.assign({},process.env,image?{WPBN_TEST_IMAGE:'1'}:{})});
 const server=http.createServer((req,res)=>{
@@ -36,45 +41,61 @@ const server=http.createServer((req,res)=>{
         const toggle=async key=>{await page.click('label[for="wpbn-f-'+key+'"]');};
         const data=async()=>JSON.parse(await page.locator('#wpbn-data').inputValue());
         // Add element: the block opens on its tiles; a tile adds that element and closes it.
-        const addElement=async type=>{await page.click('#wpbn-add-toggle');assert.equal(await page.locator('#wpbn-add-toggle').getAttribute('aria-current'),'true');assert.equal(await page.locator('#wpbn-settings legend').textContent(),'Add element','The elements open in the settings column');await page.click('#wpbn-settings [data-add="'+type+'"]');assert.equal(await page.locator('#wpbn-add-toggle').getAttribute('aria-current'),'false');assert.equal(await page.locator('#wpbn-settings legend').textContent(),'Layer settings','The new layer is selected');};
-        assert.equal(await page.locator('[data-add]').count(),0,'No elements shown before Add element');
+        const addElement=async type=>{await page.click('#wpbn-add-toggle');assert.equal(await page.locator('#wpbn-add-toggle').getAttribute('aria-expanded'),'true');assert.ok(await page.locator('.wpbn-modal--add').isVisible(),'The elements open in a window');await page.click('.wpbn-modal--add [data-add="'+type+'"]');assert.equal(await page.locator('#wpbn-layers > .wpbn-layer-row:last-child.is-active').count(),1,'The new layer: the last tile, chosen');assert.ok(await page.locator('.wpbn-modal--add').isHidden() && await page.locator('#wpbn-add-toggle').getAttribute('aria-expanded')==='false','The window closes');assert.equal(await page.locator('#wpbn-settings legend').textContent(),'Content','The new layer is selected, on Content (the title: its block\'s name)');};
+        assert.ok(await page.locator('.wpbn-modal--add').isHidden(),'No elements shown before Add element');
+        // Esc, Close and the backdrop close the window without adding anything.
+        for (const how of ['Escape','.wpbn-modal--add .wpbn-modal__close','.wpbn-modal--add .wpbn-modal__backdrop']) {
+            await page.click('#wpbn-add-toggle');
+            assert.ok(await page.locator('.wpbn-modal--add [data-add="image"]').evaluate(el=>el===document.activeElement),'The first element focused');
+            if (how==='Escape') await page.keyboard.press('Escape'); else await page.locator(how).click({position:{x:5,y:5}});
+            assert.ok(await page.locator('.wpbn-modal--add').isHidden() && JSON.parse(await page.locator('#wpbn-data').inputValue()).layers.length===0,how+' closes it, nothing added');
+        }
         await addElement('text');
         await page.fill('[data-key="text"]','SLOVAKIA');
         assert.equal(await page.locator('[data-key="x"],[data-key="y"]').count(),0,'Numeric position fields replaced');
-        // A title: Position at the right of Container, as tall as its select; its value over the button. No Width.
-        assert.ok(await page.evaluate(()=>{const sel=document.querySelector('#wpbn-f-container').getBoundingClientRect(),b=document.querySelector('.wpbn-position-button').getBoundingClientRect(),v=document.querySelector('.wpbn-position-value').getBoundingClientRect();return b.left>=sel.right && Math.abs(b.top-sel.top)<1 && Math.abs(b.bottom-sel.bottom)<1 && v.bottom<=b.top && Math.abs(v.right-b.right)<1;}),'Position at the right of Container, its value over it');
+        // Position (2026-11-09): a button on the layer's tile between Hide and Duplicate, its value on hover; none in its settings. No Width.
+        assert.ok(await page.evaluate(()=>[...document.querySelectorAll('.wpbn-layer-row.is-active .wpbn-layer-tools button')].map(x=>x.dataset.rowAction).join()==='hide,position,duplicate,delete') && await page.locator('#wpbn-settings [data-action="position"]').count()===0,'Position on the tile between Hide and Duplicate, not in the settings');
+        assert.ok(await page.evaluate(()=>{const b=document.querySelector('.wpbn-layer-row.is-active [data-row-action="position"]'),r=b.querySelector('svg').getBoundingClientRect();return r.width===16 && getComputedStyle(b.querySelector('svg path')).strokeWidth==='2.2px' && !!document.querySelector('.wpbn-layer-row.is-active [data-row-action="hide"]').title;}),'Its icon 16px, bolder; a title as Hide has');
         assert.equal(await page.locator('[data-key="width"]').count(),0,'No Width');
         assert.equal(await page.locator('[data-key^="scale"],[data-key^="opacity"],[data-key="use_scale"],[data-key="use_opacity"]').count(),0,'A title: no Scale, no Opacity');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         const positionStage=page.locator('.wpbn-focus__stage');
         await positionStage.press('ArrowRight');await positionStage.press('Shift+ArrowUp');
-        assert.equal(await page.locator('.wpbn-focus__value').textContent(),'51% 40%');
+        assert.equal(await focusValue(page),'51% 40%');
         await page.click('.wpbn-modal__cancel');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0].x,50,'Cancel preserves saved coordinates');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         const bounds=await positionStage.boundingBox();
         await page.mouse.move(bounds.x+bounds.width*.25,bounds.y+bounds.height*.75);await page.mouse.down();
         await page.mouse.move(bounds.x+bounds.width*.75,bounds.y+bounds.height*.25);await page.mouse.up();
         // A new scene: titles in the theme container (Woodmart's 1222px less 30px, centred in the 1280px desktop): its edges dashed;
         // a point at 75% of the scene is 76.8% of the container.
         assert.deepEqual(await page.locator('.wpbn-focus__stage .wpbn-position-container').evaluate(el=>[el.style.left,el.style.width]),['3.4375%','93.125%'],'The container edges in the window');
-        assert.equal(await page.locator('.wpbn-focus__value').textContent(),'76.8% 25%','Dragging places layer centre, as a share of the container');
+        assert.equal(await focusValue(page),'76.8% 25%','Dragging places layer centre, as a share of the container');
         assert.ok(Math.abs((await page.locator('.wpbn-focus__point').boundingBox()).x+(await page.locator('.wpbn-focus__point').boundingBox()).width/2-(bounds.x+bounds.width*.75))<2,'Where it was dropped');
         await page.screenshot({path:path.join(__dirname,'position-modal.png'),fullPage:true});
         await page.click('.wpbn-modal__apply');
         let positioned=JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0];
         assert.equal(positioned.x,76.8);assert.equal(positioned.y,25);
-        assert.equal(await page.locator('.wpbn-position-value').textContent(),'76.8% 25%');
-        assert.equal(await page.locator('[data-action="position"]').evaluate(el=>el===document.activeElement),true,'Focus restored after apply');
-        await page.click('[data-action="position"]');
+        assert.equal(await posTip(page),'Position: 76.8% 25%','Its value on hover');
+        assert.equal(await page.locator(POS).evaluate(el=>el===document.activeElement),true,'Focus restored after apply');
+        await page.click(POS);
         await positionStage.press('ArrowLeft');await positionStage.press('Escape');
-        assert.equal(await page.locator('.wpbn-position-value').textContent(),'76.8% 25%','Escape discards draft');
-        await page.click('[data-action="position"]');await page.click('.wpbn-focus__reset');await page.click('.wpbn-modal__apply');
-        assert.equal(await page.locator('.wpbn-position-value').textContent(),'50% 50%','Reset centres the layer');
-        // Scroll animation: one switch for the card (2026-11-09); no switches inside it.
-        assert.equal(await page.locator('[data-key="move_y"]').count(),0,'Scroll animation hidden behind its switch');
-        await toggle('use_scroll');
-        assert.ok((await data()).layers[0].use_scroll===true && (await data()).layers[0].use_move_y===true && (await data()).layers[0].use_zoom===true,'One switch turns the scroll animation on');
+        assert.equal(await posTip(page),'Position: 76.8% 25%','Escape discards draft');
+        await page.click(POS);await page.click('.wpbn-focus__reset');await page.click('.wpbn-modal__apply');
+        assert.equal(await posTip(page),'Position: 50% 50%','Reset centres the layer');
+        // X and Y typed (2026-11-09): the layer goes there as it is typed; Enter applies.
+        await page.click(POS);
+        await page.fill('#wpbn-pos-x','30');
+        assert.equal(await page.locator('.wpbn-focus__stage').getAttribute('aria-valuenow'),'30','Typed: the layer moves there');
+        await page.press('#wpbn-pos-x','Enter');
+        assert.ok(await page.locator('.wpbn-modal--position').isHidden() && JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0].x===30,'Enter applies the typed X');
+        await page.click(POS);await page.click('.wpbn-focus__reset');await page.click('.wpbn-modal__apply');
+        // Scroll animation: no switch (2026-11-09, user's request): its fields at once, at rest; it is always on.
+        assert.ok(await page.locator('[data-key="move_y"]').count()===1 && await page.locator('#wpbn-f-use_scroll').count()===0,'Scroll animation: no switch, its fields at once');
+        assert.ok((await data()).layers[0].use_scroll===true && (await data()).layers[0].use_move_y===true && (await data()).layers[0].use_zoom===true && (await data()).layers[0].move_y===0,'Always on, at rest');
+        // Its fields' help in tips beside their labels, not under them.
+        assert.ok(await page.locator('[data-base="move_y"] .wpbn-field__head .wpbn-tip').count()===1 && await page.locator('[data-base="move_y"] > .description').count()===0,'Travel: its help in a tip');
         assert.equal(await page.locator('label[for="wpbn-f-use_move_x"],label[for="wpbn-f-use_move_y"],label[for="wpbn-f-use_zoom"],label[for="wpbn-f-use_end_opacity"]').count(),0,'No switches inside it');
         assert.equal(await page.locator('[data-key="end_opacity"]').inputValue(),'100','Opacity at the end: as it is, to start with');
         assert.equal(await page.locator('[data-key="move_y"]').inputValue(),'0','A new layer does not move');
@@ -126,11 +147,20 @@ const server=http.createServer((req,res)=>{
         await page.locator('[data-select="1"]').press('Alt+ArrowDown');
         assert.deepEqual(await names(),['Title 1 copy','Title 1'],'Alt + Down sends the layer backward');
         assert.equal(await page.locator('[data-select="0"]').evaluate(el=>el===document.activeElement),true,'Focus follows the moved layer');
-        await page.locator('.wpbn-layer-row[data-index="0"]').dragTo(page.locator('.wpbn-layer-row[data-index="1"]'),{targetPosition:{x:30,y:4}});
-        assert.deepEqual(await names(),['Title 1','Title 1 copy'],'Dragging above a row brings the layer in front of it');
-        await page.locator('.wpbn-layer-row[data-index="1"]').dragTo(page.locator('.wpbn-layer-row[data-index="0"]'),{targetPosition:{x:30,y:30}});
-        assert.deepEqual(await names(),['Title 1 copy','Title 1'],'Dragging below a row sends the layer behind it');
-        assert.equal(await page.locator('.wpbn-layer-row[data-index="0"] .wpbn-layer-select').evaluate(el=>getComputedStyle(el).cursor),'grab','Rows show a grab cursor');
+        // Tiles (2026-11-09): from the back layer to the front one, numbered on their thumbnails (1: the back one).
+        const tileBox=async i=>page.locator('.wpbn-layer-row[data-index="'+i+'"]').boundingBox();
+        assert.ok((await tileBox(0)).x<(await tileBox(1)).x && await page.locator('.wpbn-layer-row[data-index="1"] .wpbn-layer-thumb .wpbn-tile__number').textContent()==='2','The back layer\'s tile first; numbers on the thumbnails');
+        // Dragged, the others make room as it goes (shown before it is dropped); over a tile's right half: after it (in front).
+        const src=await tileBox(0), dst=await tileBox(1);
+        await page.mouse.move(src.x+src.width/2,src.y+30);await page.mouse.down();await page.mouse.move(dst.x+dst.width-20,dst.y+30,{steps:4});
+        assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('#wpbn-layers .wpbn-layer-row')].map(r=>r.dataset.index)),['1','0'],'While it is dragged the other tile is already in its new place');
+        await page.mouse.up();
+        assert.deepEqual(await names(),['Title 1','Title 1 copy'],'Dropped on the right half of a tile: the layer in front of it');
+        await page.locator('.wpbn-layer-row[data-index="1"]').dragTo(page.locator('.wpbn-layer-row[data-index="0"]'),{targetPosition:{x:20,y:30}});
+        assert.deepEqual(await names(),['Title 1 copy','Title 1'],'Dropped on the left half: behind it');
+        assert.equal(await page.locator('.wpbn-layer-row[data-index="0"] .wpbn-layer-select').evaluate(el=>getComputedStyle(el).cursor),'grab','Tiles show a grab cursor');
+        // A tile's buttons on hover: the scheme's blue, Delete red.
+        for (const [action,color] of [['hide','rgb(34, 113, 177)'],['duplicate','rgb(34, 113, 177)'],['delete','rgb(214, 54, 56)']]) { const el=page.locator('[data-row-action="'+action+'"][data-index="0"]');await el.hover();assert.equal(await el.evaluate(e=>getComputedStyle(e).color),color,action+': its hover colour'); }
         const rowBox=await page.locator('.wpbn-layer-row[data-index="0"]').boundingBox();
         await page.mouse.move(rowBox.x+40,rowBox.y+rowBox.height/2);await page.mouse.down();await page.mouse.move(rowBox.x+40,rowBox.y+rowBox.height/2+12);
         assert.equal(await page.evaluate(()=>getComputedStyle(document.querySelector('.wpbn-layer-row.is-dragging .wpbn-layer-select')).cursor),'grabbing','Dragging shows a grabbing hand');
@@ -167,7 +197,18 @@ const server=http.createServer((req,res)=>{
         await page.click('[data-preview-device="desktop"]');
         assert.equal(await page.locator('#wpbn-rotate').isDisabled(),true);
         const widths=await page.evaluate(()=>['.wpbn-sidebar','.wpbn-settings','.wpbn-preview'].map(s=>document.querySelector(s).getBoundingClientRect().width));
-        assert.ok(Math.abs(widths[0]/widths[2]-.85/2)<.005 && Math.abs(widths[1]/widths[2]-1.15/2)<.005,'Editor columns use a .85:1.15:2 ratio (layers 15% narrower, settings wider; 2026-11-09)');
+        assert.ok(Math.abs(widths[0]-widths[1])<1 && Math.abs(widths[0]/widths[2]-1/2)<.005,'Editor columns use a 1:1:2 ratio (the menu and the block as wide as each other, the preview; 2026-11-09)');
+        // Developer mode (2026-11-09, as WP Swiper's): over the preview the scene's size, each layer's box with its kind and size,
+        // a placed layer's distances to the edges; kept after Update; off, gone.
+        await page.click('#wpbn-dev');
+        assert.equal(await page.locator('#wpbn-dev').getAttribute('aria-pressed'),'true');
+        await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__size');
+        const devInfo=await frame().evaluate(()=>{const r=document.querySelector('.wpbn-scene').getBoundingClientRect(),n=v=>Math.round(v*10)/10;return {size:document.querySelector('.wpbn-dev__size').textContent,scene:n(r.width)+' × '+n(r.height),names:[...document.querySelectorAll('.wpbn-dev__name')].map(e=>e.textContent),dims:document.querySelectorAll('.wpbn-dev__dimension').length};});
+        assert.ok(devInfo.size===devInfo.scene && devInfo.names.length===1 && /^Title · \d/.test(devInfo.names[0]) && devInfo.dims>0,'Developer mode: the scene size, the title box and distances ('+JSON.stringify(devInfo)+')');
+        await update();
+        await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__name');
+        await page.click('#wpbn-dev');
+        assert.ok(await frame().locator('.wpbn-dev').count()===0 && await page.locator('#wpbn-dev').getAttribute('aria-pressed')==='false','Developer mode off: the boxes gone');
         for (const device of ['desktop','tablet','mobile']) {
             await page.click('[data-preview-device="'+device+'"]');
             const drawing=page.locator('.wpbn-device-drawing:not([hidden])');
@@ -234,7 +275,7 @@ const server=http.createServer((req,res)=>{
         await page.selectOption('[data-key="tablet_height_unit"]','px');
         assert.equal(JSON.parse(await page.locator('#wpbn-data').inputValue()).tablet_height,600,'Back to px: a pixel height again');
         await page.click('[data-select="0"]');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         await page.click('.wpbn-focus__reset');
         const stageBox=await positionStage.boundingBox();
         const textBox=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
@@ -243,7 +284,7 @@ const server=http.createServer((req,res)=>{
         // A title moves within its container: dragged, it follows the pointer (its Position: a share of the room it has).
         const movedBox=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
         assert.ok(Math.abs(movedBox.x-textBox.x-stageBox.width*.1)<2 && Math.abs(movedBox.y-textBox.y)<1,'Dragging the title moves it by the pointer travel');
-        assert.ok(Number((await page.locator('.wpbn-focus__value').textContent()).split('%')[0])>60,'Its X: a share of the room left in its container');
+        assert.ok(Number((await focusValue(page)).split('%')[0])>60,'Its X: a share of the room left in its container');
         // At 0% and 100% it stands at the container's edges (not past them).
         const edges=await page.locator('.wpbn-focus__stage .wpbn-position-container').boundingBox();
         for (const [key,side] of [['Home','left'],['End','right']]) {
@@ -255,11 +296,10 @@ const server=http.createServer((req,res)=>{
         await page.click('.wpbn-modal__cancel');
         await addElement('image');
         assert.equal(await page.locator('[data-base="width"]').count(),0,"Image layers have no Width: always the scene's");
-        assert.equal(await page.locator('[data-key="scale"]').count(),0,'Scale is hidden behind its switch');
+        assert.ok(await page.locator('[data-base="scale"]').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-use_opacity, #wpbn-f-use_rotate').count()===0,'Scale, Opacity, Rotation: no switches (2026-11-09)');
         assert.equal(await page.locator('#wpbn-settings [data-action="clear"]').count(),0,'No Remove on desktop: an image layer has an image');
-        const fitRow=await page.evaluate(()=>[document.querySelector('[data-key^="fit"]'),document.querySelector('[data-action="position"]')].map(el=>Math.round(el.getBoundingClientRect().top)));
-        assert.equal(fitRow[0],fitRow[1],'Image fit and Position on one row');
-        await page.click('[data-action="position"]');
+        assert.ok(await page.locator('#wpbn-settings [data-action="position"]').count()===0 && await page.locator(POS).getAttribute('data-kind')==='focus','A photo filling the scene: its Image position on the tile, none in its settings');
+        await page.click(POS);
         assert.equal(await page.locator('.wpbn-focus__device').count(),3,'One frame per device');
         const mobileRatio=await page.locator('.wpbn-focus__device[data-device="mobile"] .wpbn-focus__frame').evaluate(el=>{const r=el.getBoundingClientRect();return r.width/r.height;});
         assert.ok(Math.abs(mobileRatio-390/JSON.parse(await page.locator("#wpbn-data").inputValue()).mobile_height)<.02,'Device frames use the scene heights');
@@ -290,7 +330,6 @@ const server=http.createServer((req,res)=>{
         // Reset beside a slider: desktop back to the default; tablet / mobile follow the larger screen again.
         await page.click('[data-preview-device="desktop"]');
         await page.click('[data-select="0"]');
-        if (!(await page.locator('#wpbn-f-use_scroll').isChecked())) await toggle('use_scroll');
         await page.fill('[data-key="move_x"]','120');
         const reset=base=>page.locator('.wpbn-field[data-base="'+base+'"] [data-reset]');
         assert.equal(await reset('move_x').isDisabled(),false,'Something to reset: the button is active');
@@ -304,9 +343,9 @@ const server=http.createServer((req,res)=>{
         await page.click('[data-preview-device="desktop"]');
         // Its name (2026-11-09, user's request): the first field of its settings; given when it is added, shown in the list.
         assert.equal(await page.locator('#wpbn-settings [data-key="name"]').count(),1,'A layer name field');
-        // Layer thumbnails are square; a title shows its element's icon, dark.
-        for (const box of await page.locator('.wpbn-layer-thumb').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.width,r.height];}))) assert.equal(box[0],box[1],'Square thumbnail');
-        assert.ok(await page.locator('.wpbn-layer-thumb--text .dashicons-editor-textcolor').count()>0 && await page.locator('.wpbn-layer-thumb--text img').count()===0 && await page.locator('.wpbn-layer-thumb--text').first().evaluate(el=>getComputedStyle(el).color)==='rgb(80, 87, 94)','A title: the Title element\'s icon, dark');
+        // Layer thumbnails are 4:3, as WP Swiper's slides; a title shows its element's icon, dark.
+        for (const box of await page.locator('.wpbn-layer-thumb').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.width,r.height];}))) assert.ok(Math.abs(box[0]/box[1]-4/3)<.02,'A 4:3 thumbnail');
+        assert.ok((await page.locator('.wpbn-layer-thumb--text .wpbn-thumb-word').first().textContent())==='Title' && (await page.locator('.wpbn-layer-thumb--richtext .wpbn-thumb-word').count()===0 || (await page.locator('.wpbn-layer-thumb--richtext .wpbn-thumb-word').first().textContent())==='Text') && await page.locator('.wpbn-layer-thumb--text img').count()===0 && await page.locator('.wpbn-layer-thumb--text').first().evaluate(el=>getComputedStyle(el).color)==='rgb(80, 87, 94)','A title: the word Title on its thumbnail, dark');
         // Opacity at the end: the layer goes from its Opacity to this one.
         await page.click('.wpbn-layer-row:has(.wpbn-layer-thumb--text) [data-select]');
         // The color field, as WP Swiper's: a swatch that opens Pickr with the palette (named), opacity, Cancel and Default.
@@ -425,7 +464,7 @@ const server=http.createServer((req,res)=>{
         await page.click('.wpbn-pcr .wpbn-pcr__default');await page.keyboard.press('Escape');
         await update();
         assert.equal(await frame().locator('.wpbn-layer--text u').evaluate(el=>getComputedStyle(el).color),'rgb(131, 183, 53)','No accent of its own: the theme\'s primary color');
-        // Container, each layer's (Position and size): its Position X and Width are shares of it, centred in the scene.
+        // Container, each layer's (Size): its Position X and Width are shares of it, centred in the scene.
         const titleIndex=(await data()).layers.findIndex(l=>l.type==='text');
         const titleRow='[data-select="'+titleIndex+'"]';
         await page.click('#wpbn-scene-settings');
@@ -462,7 +501,7 @@ const server=http.createServer((req,res)=>{
         // On the site as in the window: X 0% puts the title at the container's left edge, 100% at its right.
         await page.fill('[data-key="text"]','Hi');
         for (const [key,edge] of [['Shift+ArrowLeft','left'],['Shift+ArrowRight','right']]) {
-            await page.click('[data-action="position"]');for(let i=0;i<11;i++)await positionStage.press(key);await page.click('.wpbn-modal__apply');await update();
+            await page.click(POS);for(let i=0;i<11;i++)await positionStage.press(key);await page.click('.wpbn-modal__apply');await update();
             const at=await frame().locator('.wpbn-layer--text').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {left:r.left-s.left,right:s.right-r.right,cw:Math.min(s.width,1222)-30,w:s.width};});
             assert.ok(Math.abs((edge==='left'?at.left:at.right)-(at.w-at.cw)/2)<1,'X '+(edge==='left'?'0%':'100%')+' on the site: the title at the container '+edge+' edge ('+JSON.stringify(at)+')');
         }
@@ -481,7 +520,7 @@ const server=http.createServer((req,res)=>{
         await toggle('use_shadow');
         assert.equal(await page.locator('.wpbn-shadow .wpbn-field').count(),4,'On: its color, X, Y and Blur in a row');
         await page.fill('#wpbn-f-shadow_x','3');await page.fill('#wpbn-f-shadow_y','5');await page.fill('#wpbn-f-shadow_blur','12');
-        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Title style"))').screenshot({path:path.join(__dirname,'title-style.png')});
+        await page.locator('#wpbn-block-style .wpbn-card').screenshot({path:path.join(__dirname,'title-style.png')});
         await update();
         const styled=await frame().locator('.wpbn-layer--text h2').evaluate(el=>{const c=getComputedStyle(el);return [c.letterSpacing,c.textTransform,c.fontStyle,c.textShadow];});
         assert.ok(styled[0]==='4px' && styled[1]==='uppercase' && styled[2]==='italic' && /3px 5px 12px/.test(styled[3]),'On the site: spacing, case, style and shadow ('+styled.join(' | ')+')');
@@ -491,7 +530,7 @@ const server=http.createServer((req,res)=>{
         await toggle('use_shadow');await page.selectOption('#wpbn-f-text_transform','none');await page.selectOption('#wpbn-f-font_style','normal');await page.fill('#wpbn-f-letter_spacing','0');
         await page.click('[data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_letter_spacing','');await page.click('[data-field-device="desktop"]');
         // The title moves as the page scrolls already (its Scroll animation on, above): its Opacity at the end in the same card.
-        assert.ok(await page.locator('#wpbn-f-use_scroll').isChecked() && await page.locator('[data-key="end_opacity"]').count()===1,'Opacity at the end, under the same switch');
+        assert.equal(await page.locator('[data-key="end_opacity"]').count(),1,'Opacity at the end, in the same block');
         await page.fill('[data-key="end_opacity"]','0');
         await update();
         await frame().waitForFunction(()=>typeof window.wpbnPreviewProgress==='function');
@@ -504,19 +543,19 @@ const server=http.createServer((req,res)=>{
         const overlayIndex=(await data()).layers.length-1, overlay=async()=>(await data()).layers[overlayIndex];
         assert.ok((await overlay()).type==='overlay' && (await overlay()).color==='rgba(0,0,0,0.4)' && /^Overlay \d+$/.test((await overlay()).name),'A new overlay: a see-through black');
         assert.match(await page.locator('[data-select="'+overlayIndex+'"] small').textContent(),/^Overlay/,'Named in the layer list');
-        assert.equal(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay > span').evaluate(el=>el.style.background),'rgba(0, 0, 0, 0.4)','Its thumbnail: its fill');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Fill','Position and size','Scroll animation','Entrance animation'],'Layer (its name), Fill, Position and size, Scroll animation, Entrance animation');
-        assert.ok(await page.locator('label[for="wpbn-f-use_move_y"], label[for="wpbn-f-use_zoom"]').count()===0 && await page.locator('label[for="wpbn-f-use_scroll"]').count()===1 && await page.locator('[data-action="position"]').count()===1,'No travel or zoom; Opacity at the end; Position');
+        assert.equal(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay .wpbn-overlay-thumb').evaluate(el=>el.style.background),'rgba(0, 0, 0, 0.4)','Its thumbnail: its fill');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Fill','Size','Effect','Entrance animation','Scroll animation'],'Content (its name), Fill, Size, Effect, Entrance animation, Scroll animation');
+        assert.ok(await page.locator('label[for="wpbn-f-use_move_y"], label[for="wpbn-f-use_zoom"]').count()===0 && await page.locator('#wpbn-f-use_scroll').count()===0 && await page.locator(POS).count()===1,'No travel or zoom; Opacity at the end; Position');
         await update();
-        const covers=async()=>frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {same:Math.abs(r.left-s.left)<1&&Math.abs(r.top-s.top)<1&&Math.abs(r.width-s.width)<1&&Math.abs(r.height-s.height)<1,bg:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage,z:Number(getComputedStyle(el).zIndex)};});
+        const covers=async()=>frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {same:Math.abs(r.left-s.left)<1&&Math.abs(r.top-s.top)<1&&Math.abs(r.width-s.width)<1&&Math.abs(r.height-s.height)<1,bg:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundColor,image:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundImage,z:Number(getComputedStyle(el).zIndex)};});
         let shade=await covers();
         assert.ok(shade.same && shade.bg==='rgba(0, 0, 0, 0.4)' && shade.z===overlayIndex+1,'On the site: the whole scene in its colour, in front of the layers under it ('+JSON.stringify(shade)+')');
         // Gradient (as WP Swiper's), in Fill, behind its switch: the bar adds a colour, a point is moved or deleted, its colour picked.
         const gradientOf=async()=>(await overlay()).gradient;
         assert.equal(await page.locator('.wpbn-gradient').count(),0,'Gradient: its colours hidden while it is off');
         // Fill: Color or Gradient, two buttons across the card, at its top; only the chosen one's settings under them.
-        assert.deepEqual(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Fill")) .wpbn-fill-choice button').allTextContents(),['Color','Gradient'],'Color and Gradient buttons in Fill');
-        assert.ok(await page.evaluate(()=>{const c=document.querySelector('.wpbn-fill-choice'),card=c.closest('.wpbn-card'),b=[...c.querySelectorAll('button')].map(x=>x.getBoundingClientRect()),r=c.getBoundingClientRect(),first=card.querySelector('.wpbn-subheading').nextElementSibling;return first===c && Math.abs(b[0].width-b[1].width)<1 && r.width>card.getBoundingClientRect().width-40;}),'At the top, across the card, the two alike');
+        assert.deepEqual(await page.locator('#wpbn-block-fill .wpbn-fill-choice button').allTextContents(),['Color','Gradient'],'Color and Gradient buttons in Fill');
+        assert.ok(await page.evaluate(()=>{const c=document.querySelector('.wpbn-fill-choice'),card=c.closest('.wpbn-card'),b=[...c.querySelectorAll('button')].map(x=>x.getBoundingClientRect()),r=c.getBoundingClientRect(),first=card.firstElementChild;return first===c && Math.abs(b[0].width-b[1].width)<1 && r.width>card.getBoundingClientRect().width-40;}),'At the top, across the card, the two alike');
         assert.equal(await page.locator('[data-fill="color"]').getAttribute('aria-pressed'),'true','Color chosen to start with');
         assert.equal(await page.locator('#wpbn-f-color').count(),1,'Color: its colour field');
         await page.click('[data-fill="gradient"]');
@@ -542,9 +581,9 @@ const server=http.createServer((req,res)=>{
         shade=await covers();
         assert.ok(/radial-gradient/.test(shade.image),'Its gradient instead of the colour');
         await page.screenshot({path:path.join(__dirname,'overlay.png'),fullPage:true});
-        assert.match(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay > span').evaluate(el=>el.style.background),/radial-gradient/,'The thumbnail follows');
+        assert.match(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay .wpbn-overlay-thumb').evaluate(el=>el.style.background),/radial-gradient/,'The thumbnail follows');
         // In the Position window of another layer: drawn over the whole scene.
-        await page.click(titleRow);await page.click('[data-action="position"]');
+        await page.click(titleRow);await page.click(POS);
         assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-item.is-other').evaluateAll(items=>items.some(el=>/radial-gradient/.test(el.style.background) && el.style.width==='100%' && el.style.height==='100%')),'In the Position window: over the whole scene');
         await page.click('.wpbn-modal__cancel');
         await page.click('[data-select="'+overlayIndex+'"]');await page.click('[data-fill="color"]');
@@ -554,7 +593,7 @@ const server=http.createServer((req,res)=>{
         assert.deepEqual(await page.locator('[data-key="height_unit"] option').allTextContents(),['%','px','vh'],'Height: %, px or vh (no Auto)');
         assert.equal(await page.locator('#wpbn-f-height').inputValue(),'100','100% of the scene to start with');
         await page.fill('#wpbn-f-height','40');await page.selectOption('#wpbn-f-container','theme');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>el.style.height==='40%' && parseFloat(el.style.width)<100),'In the Position window: its height and container');
         for(let i=0;i<6;i++)await positionStage.press('Shift+ArrowDown');await page.click('.wpbn-modal__apply');
         assert.ok((await overlay()).height===40 && (await overlay()).y===100 && (await overlay()).container==='theme','Kept: 40%, at the bottom, in the theme container');
@@ -572,7 +611,7 @@ const server=http.createServer((req,res)=>{
         await page.fill('#wpbn-f-overlay_width','50');await page.selectOption('#wpbn-f-container','custom');
         assert.ok(await page.locator('.wpbn-field--device-number #wpbn-f-container_width').count()===1,'Container width: per device, as Font size');
         await page.fill('#wpbn-f-container_width','800');
-        await page.click('[data-action="position"]');for(let i=0;i<6;i++)await positionStage.press('Shift+ArrowLeft');await page.click('.wpbn-modal__apply');
+        await page.click(POS);for(let i=0;i<6;i++)await positionStage.press('Shift+ArrowLeft');await page.click('.wpbn-modal__apply');
         await update();
         const half=await frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),cw=Math.min(s.width-30,800);return {width:r.width,cw,left:r.left-s.left,edge:(s.width-cw)/2};});
         assert.ok(Math.abs(half.width-half.cw/2)<1 && Math.abs(half.left-half.edge)<1,'Half its 800px container wide, at its left edge (X 0%) ('+JSON.stringify(half)+')');
@@ -580,18 +619,18 @@ const server=http.createServer((req,res)=>{
         await page.selectOption('[data-key="tablet_overlay_width_unit"]','px');await page.fill('#wpbn-f-tablet_overlay_width','300');
         assert.ok((await overlay()).container_width_tablet===600 && (await overlay()).container_width_mobile==null && (await overlay()).tablet_overlay_width===300 && (await overlay()).tablet_overlay_width_unit==='px' && (await overlay()).mobile_overlay_width_unit==null,'Their own on tablet');
         await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
-        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Position and size"))').screenshot({path:path.join(__dirname,'overlay-size.png')});
+        await page.locator('#wpbn-block-position .wpbn-card').screenshot({path:path.join(__dirname,'overlay-size.png')});
         // Blur (per device, in Fill, for Color and Gradient alike): the layers under it blurred.
-        assert.ok(await page.locator('.wpbn-card:has(.wpbn-subheading:text-is("Fill")) .wpbn-field--device-number #wpbn-f-backdrop_blur').count()===1 && await page.locator('#wpbn-f-backdrop_blur').inputValue()==='0','Blur in Fill, 0 to start with');
+        assert.ok(await page.locator('#wpbn-block-fill .wpbn-field--device-number #wpbn-f-backdrop_blur').count()===1 && await page.locator('#wpbn-f-backdrop_blur').inputValue()==='0','Blur in Fill, 0 to start with');
         await update();
-        assert.equal(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'none','0: no blur');
+        assert.equal(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'none','0: no blur');
         await page.fill('#wpbn-f-backdrop_blur','12');
         await page.click('[data-fill="gradient"]');
         assert.equal(await page.locator('#wpbn-f-backdrop_blur').inputValue(),'12','With Gradient too');
         await page.click('[data-fill="color"]');
         await update();
-        assert.equal(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'blur(12px)','On the site: the layers under it blurred');
-        await page.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Fill"))').screenshot({path:path.join(__dirname,'overlay-fill.png')});
+        assert.equal(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'blur(12px)','On the site: the layers under it blurred');
+        await page.locator('#wpbn-block-fill .wpbn-card').screenshot({path:path.join(__dirname,'overlay-fill.png')});
         await page.click('.wpbn-field--device-number:has(#wpbn-f-backdrop_blur) [data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_backdrop_blur','4');
         assert.ok((await overlay()).mobile_backdrop_blur===4 && (await overlay()).tablet_backdrop_blur==null,'Its own on mobile');
         // Its Shadow, in Fill: Inside only once on; Inside, a vignette in the preview.
@@ -600,7 +639,7 @@ const server=http.createServer((req,res)=>{
         await page.click('label[for="wpbn-f-shadow_inset"]');
         assert.ok((await overlay()).use_shadow===true && (await overlay()).shadow_inset===true,'Overlay Shadow on, Inside');
         await update();
-        assert.match(await frame().locator('.wpbn-layer--overlay').evaluate(el=>getComputedStyle(el).boxShadow),/inset/,'In the preview: a shadow inside its edges');
+        assert.match(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).boxShadow),/inset/,'In the preview: a shadow inside its edges');
         await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
         await page.click('.wpbn-field--height [data-field-device="desktop"]');
         await page.click('[data-row-action="delete"][data-index="'+overlayIndex+'"]');
@@ -611,8 +650,8 @@ const server=http.createServer((req,res)=>{
         const textIndex=(await data()).layers.length-1, textOf=async()=>(await data()).layers[textIndex];
         assert.ok((await textOf()).type==='richtext' && (await textOf()).content==='<p>Your text here.</p>' && (await textOf()).font_size===18 && (await textOf()).container==='theme' && /^Text \d+$/.test((await textOf()).name),'A new text: a paragraph, 18px, in the theme container');
         assert.ok(await page.locator('[data-select="'+textIndex+'"] .wpbn-layer-thumb--richtext').count()===1 && /^Text/.test(await page.locator('[data-select="'+textIndex+'"] small').textContent()),'In the layer list: Text');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Text style','Position and size','Scroll animation','Follow the mouse','Entrance animation','Loop animation'],'Its cards');
-        assert.ok(await page.locator('#wpbn-f-content').count()===1 && await page.locator('#wpbn-f-font_size').inputValue()==='18' && await page.locator('[data-action="position"]').count()===1 && await page.locator('#wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-f-text_transform, #wpbn-f-accent_color, #wpbn-f-use_scale').count()===0,'Its text box, Font size, Shadow and Position; no Case, Accent color or Scale');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Text style','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards');
+        assert.ok(await page.locator('#wpbn-f-content').count()===1 && await page.locator('#wpbn-f-font_size').inputValue()==='18' && await page.locator(POS).count()===1 && await page.locator('#wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-f-text_transform, #wpbn-f-accent_color, #wpbn-f-use_scale').count()===0,'Its text box, Font size, Shadow and Position; no Case, Accent color or Scale');
         assert.match(await page.locator('.wpbn-font__name').textContent(),/^Default/,'Default font: the theme\'s text font');
         await page.fill('#wpbn-f-content','<p style="text-align: center">Hello <strong>world</strong> <a href="#x">link</a></p><ul><li>One</li></ul><script>alert(1)</script>');
         assert.match((await textOf()).content,/<strong>world<\/strong>/,'Kept in the layer as typed');
@@ -628,7 +667,7 @@ const server=http.createServer((req,res)=>{
         await addElement('shortcode');
         const scIndex=(await data()).layers.length-1, scOf=async()=>(await data()).layers[scIndex];
         assert.ok((await scOf()).type==='shortcode' && (await scOf()).container==='theme' && /^Shortcode \d+$/.test((await scOf()).name) && await page.locator('[data-select="'+scIndex+'"] .wpbn-layer-thumb--shortcode').count()===1,'A new shortcode layer, in the theme container, its icon in the list');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Position and size','Scroll animation','Follow the mouse','Entrance animation','Loop animation'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards');
         assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-height').count()===0,'Its Width; no Scale, no Height');
         await page.fill('#wpbn-f-shortcode','[wp_swiper id="12"]');
         await page.fill('#wpbn-f-overlay_width','60');
@@ -636,7 +675,7 @@ const server=http.createServer((req,res)=>{
         await update();
         const sc=await frame().locator('.wpbn-layer--shortcode').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {html:el.innerHTML,w:r.width,cw:Math.min(s.width,1222)-30,events:getComputedStyle(el).pointerEvents};});
         assert.ok(/class="demo-slider" data-shortcode="wp_swiper"/.test(sc.html) && Math.abs(sc.w-sc.cw*0.6)<2 && sc.events==='auto','On the site: the shortcode\'s element, 60% of the container, clickable ('+JSON.stringify(sc)+')');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         assert.equal(await page.locator('.wpbn-position-target').first().textContent(),'[wp_swiper id="12"]','The Position window: a box with its shortcode');
         assert.ok(await page.locator('.wpbn-position-warning').isHidden(),'Not taller than the scene: no warning');
         // Its height as the preview drew it (120px of the scene's), not a guess, on the device shown.
@@ -649,23 +688,23 @@ const server=http.createServer((req,res)=>{
         await page.fill('#wpbn-f-shortcode','[tall_slider]');
         await update();
         await frame().evaluate(()=>{const el=document.querySelector('.wpbn-layer--shortcode .demo-slider');el.style.height=(el.closest('.wpbn-scene').offsetHeight*2.5)+'px';});
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         const tall=await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>{const c=el.parentElement.getBoundingClientRect(),l=el.querySelector('.wpbn-position-item__label').getBoundingClientRect();return {share:el.offsetHeight/el.parentElement.offsetHeight,labelIn:l.top>=c.top&&l.bottom<=c.bottom};});
         assert.ok(tall.share>2.4 && tall.labelIn,'Taller than the scene: as tall, its label inside the scene ('+JSON.stringify(tall)+')');
         assert.match(await page.locator('.wpbn-position-warning__text').textContent(),/taller than the scene on Desktop/,'A warning');
-        await page.locator('.wpbn-modal__box, .wpbn-modal').first().screenshot({path:path.join(__dirname,'shortcode-position.png')});
+        await page.locator('.wpbn-modal--position .wpbn-modal__box').screenshot({path:path.join(__dirname,'shortcode-position.png')});
         await page.keyboard.press('ArrowUp');
         assert.ok(await page.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>{const c=el.parentElement.getBoundingClientRect(),l=el.querySelector('.wpbn-position-item__label').getBoundingClientRect();return l.top>=c.top&&l.bottom<=c.bottom;}),'Moved: its label stays in sight');
         // Dragged: it follows the pointer (taller than the scene: smoothly, not to an edge).
         const dragBy=async (dx,dy)=>{const t=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox(),st=await page.locator('.wpbn-focus__stage').boundingBox();const x=st.x+st.width/2,y=st.y+st.height/2;await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+dx/2,y+dy/2);await page.mouse.move(x+dx,y+dy);await page.mouse.up();return t;};
-        const valueNow=async()=>(await page.locator('.wpbn-focus__value').textContent()).split(' ').map(parseFloat);
+        const valueNow=async()=>(await focusValue(page)).split(' ').map(parseFloat);
         const [x0,y0]=await valueNow(), before=await dragBy(20,30), after=await page.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox(), [x1,y1]=await valueNow();
         assert.ok(y1>0 && y1<100 && Math.abs(y1-y0)>0.5 && Math.abs(y1-y0)<15 && Math.abs(after.y-before.y-30)<3,'Taller than the scene: dragged down, it moves down with the pointer, its Y not at an edge ('+[y0,y1,after.y-before.y]+')');
         assert.ok(x1>0 && x1<100 && Math.abs(after.x-before.x-20)<3,'Across: it follows the pointer ('+[x0,x1,after.x-before.x]+')');
         await page.keyboard.press('Escape');
         // As wide as its container (Width 100%): no room across: dragging leaves its X as it is.
         await page.fill('#wpbn-f-overlay_width','100');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         const [wx0]=await valueNow(); await dragBy(40,0); const [wx1]=await valueNow();
         assert.equal(wx1,wx0,'As wide as its container: X stays');
         await page.keyboard.press('Escape');
@@ -677,7 +716,7 @@ const server=http.createServer((req,res)=>{
         const buttonIndex=(await data()).layers.length-1, buttonOf=async()=>(await data()).layers[buttonIndex];
         assert.ok((await buttonOf()).type==='button' && (await buttonOf()).button_text==='Learn more' && (await buttonOf()).container==='theme' && /^Button \d+$/.test((await buttonOf()).name),'A new button: Learn more, in the theme container');
         assert.ok(await page.locator('[data-select="'+buttonIndex+'"] .wpbn-layer-thumb--button').count()===1,'In the layer list: its icon');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Button style','Position and size','Scroll animation','Follow the mouse','Entrance animation','Loop animation'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Button style','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards');
         assert.ok(await page.locator('#wpbn-f-button_new_tab').isDisabled() && await page.locator('#wpbn-f-use_scale, #wpbn-f-font_size').count()===0,'Open in a new window greyed without a link; no Scale, no Font size');
         await page.fill('#wpbn-f-button_url','https://example.com/book');
         assert.ok(!(await page.locator('#wpbn-f-button_new_tab').isDisabled()),'With a link: Open in a new window');
@@ -699,7 +738,7 @@ const server=http.createServer((req,res)=>{
         assert.ok(btn.text==='Book now' && btn.href==='https://example.com/book' && btn.target==='_blank' && /noopener/.test(btn.rel),'On the site: a link in a new window ('+JSON.stringify(btn)+')');
         await page.locator('#wpbn-settings').screenshot({path:path.join(__dirname,'button.png')});await page.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'button-preview.png')});
         assert.ok(btn.radius==='35px' && btn.bg==='rgba(0, 0, 0, 0)' && btn.border==='2px' && btn.h>=48 && btn.font==='14px' && btn.events==='auto','Round, a border, Large, clickable ('+JSON.stringify(btn)+')');
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         assert.equal(await page.locator('.wpbn-position-target').first().textContent(),'Book now','The Position window draws the button');
         await page.keyboard.press('Escape');
         await page.click('[data-row-action="delete"][data-index="'+buttonIndex+'"]');
@@ -709,13 +748,13 @@ const server=http.createServer((req,res)=>{
         assert.ok(await frame().locator('.wpbn-page').count()===1 && await frame().evaluate(()=>document.documentElement.scrollHeight>innerHeight*1.5),'A placeholder page under the banner');
         // A screen size of one's own, applied with Update, in a plain frame.
         await page.fill('#wpbn-res-w','1000');await page.fill('#wpbn-res-h','700');
-        assert.ok(await page.locator('#wpbn-res-hint').count()===0 && await page.locator('.wpbn-toolbar #wpbn-dark + .wpbn-resolution').count()===1,'Screen: in the bar after the Dark button, no hint');await page.locator('.wpbn-toolbar').screenshot({path:path.join(__dirname,'toolbar.png')});
+        assert.ok(await page.locator('#wpbn-res-hint').count()===0 && await page.locator('.wpbn-toolbar #wpbn-dark + #wpbn-dev + .wpbn-resolution').count()===1,'Screen: in the bar after the Dark and Developer mode buttons, no hint');await page.locator('.wpbn-toolbar').screenshot({path:path.join(__dirname,'toolbar.png')});
         await update();
         assert.equal(await frame().evaluate(()=>innerWidth),1000);
         assert.equal(await page.locator('#wpbn-preview-stage').evaluate(el=>el.classList.contains('is-custom')),true,'Own size: a plain frame');
         assert.equal(await page.locator('.wpbn-device-drawing:not([hidden])').count(),0,"No device drawing for a size of one's own");
         // The Position window: the preview's screen (its own size here), in the same proportions as the preview's scene.
-        await page.click('[data-action="position"]');
+        await page.click(POS);
         const sceneRatio=await frame().locator('.wpbn-scene').evaluate(el=>{const r=el.getBoundingClientRect();return r.width/r.height;});
         const windowRatio=await page.locator('.wpbn-focus__stage').evaluate(el=>{const r=el.getBoundingClientRect();return r.width/r.height;});
         assert.match(await page.locator('.wpbn-focus__stage').evaluate(el=>el.style.aspectRatio),/^1000 ?\//,'The window: the preview\'s own width');
@@ -745,7 +784,7 @@ const server=http.createServer((req,res)=>{
         assert.equal(await page.locator('#wpbn-f-target').isDisabled(),true,'Another height: greyed');
         assert.equal((await data()).target,'hero','Greyed, the class kept');
         // Attributes: the scene's own id and classes on its block.
-        assert.ok(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents().then(t=>t.includes('Attributes')),'Scene settings: Attributes');
+        assert.ok(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents().then(t=>t.includes('Attributes')),'Scene settings: Attributes');
         await page.fill('#wpbn-f-css_id','offer');
         await page.fill('#wpbn-f-css_class','hero-banner dark');
         assert.ok((await data()).css_id==='offer' && (await data()).css_class==='hero-banner dark','Kept in the scene');
@@ -756,18 +795,17 @@ const server=http.createServer((req,res)=>{
         const photo=await browser.newPage({viewport:{width:1600,height:1000}});photo.on('pageerror',e=>errors.push(e.message));
         await photo.goto('http://127.0.0.1:'+server.address().port+'/?image=1');
         await photo.click('[data-select="0"]');
-        assert.equal(await photo.locator('.wpbn-position-value').textContent(),'50% 50%','The point in view, the percentages alone');
+        assert.equal(await posTip(photo),'Image position: 50% 50%','The point in view, on hover');
         assert.equal(await photo.locator('.wpbn-picker__actions .button').textContent(),'Change','The image row ends with Change');
-        assert.equal(await photo.locator('.wpbn-position-button').textContent(),'Position','An outline button with its name');
-        await photo.click('[data-action="position"]');
-        assert.equal(await photo.locator('.wpbn-modal').evaluate(el=>el.classList.contains('is-focus')),true);
+        await photo.click(POS);
+        assert.equal(await photo.locator('.wpbn-modal--position').evaluate(el=>el.classList.contains('is-focus')),true);
         assert.equal(await photo.locator('.wpbn-modal__what').textContent(),'Image position');
         await photo.locator('.wpbn-focus__image').evaluate(img=>img.decode());
         const stageRatio=await photo.locator('.wpbn-focus__stage').evaluate(el=>{const r=el.getBoundingClientRect(),i=el.querySelector('.wpbn-focus__image');return [r.width/r.height,i.naturalWidth/i.naturalHeight];});
         assert.ok(Math.abs(stageRatio[0]-stageRatio[1])<.02,'The whole photo at its own proportions');
         const sb=await photo.locator('.wpbn-focus__stage').boundingBox();
         await photo.mouse.click(sb.x+sb.width*.25,sb.y+sb.height*.75);
-        assert.equal(await photo.locator('.wpbn-focus__value').textContent(),'25% 75%');
+        assert.equal(await focusValue(photo),'25% 75%');
         assert.equal(await photo.locator('.wpbn-focus__device[data-device="mobile"] .wpbn-position-target img').evaluate(i=>i.style.objectPosition),'25% 75%','Frames crop the photo around the point');
         assert.equal(await photo.locator('.wpbn-focus__device .wpbn-position-gap').count(),0,'A full-size layer leaves no gaps');
         await photo.click('.wpbn-modal__apply');
@@ -782,18 +820,18 @@ const server=http.createServer((req,res)=>{
         let obj=await photoData();
         assert.ok(obj.fill_scene===false && obj.overlay_width===50 && obj.height_unit==='auto','Off: half its container, Height Auto');
         assert.ok(await photo.locator('#wpbn-f-overlay_width').count()===1 && await photo.locator('#wpbn-f-height').isDisabled() && await photo.locator('[data-key="height_unit"] option[value="auto"]').count()===1,'Its Width; its Height on Auto (the number greyed)');
-        assert.deepEqual(await photo.locator('.wpbn-position-button').allTextContents(),['Position','Image position'],'Two buttons: where it stands, and the point of its photo in view');
+        assert.ok((await photo.locator('#wpbn-settings .wpbn-position-button').allTextContents()).join()==='Image position' && await photo.locator(POS).getAttribute('data-kind')==='place','Image position in its settings (the point of its photo in view); its Position (where it stands) on the tile');
         assert.ok(await photo.locator('[data-key="fit"]').isDisabled(),'Height Auto: Image fit greyed (nothing is cropped)');await photo.locator('#wpbn-settings .wpbn-card:has(#wpbn-f-fill_scene)').screenshot({path:path.join(__dirname,'image-object.png')});
         await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         const objFrame=photo.frames().find(f=>f.name()==='wpbn_preview_frame');
         const ob=await objFrame.locator('.wpbn-layer--object').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),i=el.querySelector('img');return {w:r.width/s.width,h:r.height,ratio:i.naturalHeight/i.naturalWidth*r.width,left:(r.left-s.left+r.width/2)/s.width,top:(r.top-s.top+r.height/2)/s.height};});
         assert.ok(Math.abs(ob.w-0.5)<0.01 && Math.abs(ob.h-ob.ratio)<2 && Math.abs(ob.left-0.5)<0.01 && Math.abs(ob.top-0.5)<0.01,'On the site: half the scene wide, as tall as the image, centred ('+JSON.stringify(ob)+')');
         // Its Position: the box, placed as a title is (dragged within the scene).
-        await photo.click('[data-action="position"][data-kind="place"]');
-        assert.ok(!(await photo.locator('.wpbn-modal').evaluate(el=>el.classList.contains('is-focus'))) && await photo.locator('.wpbn-modal__what').textContent()==='Position','Position: where the image stands, not the point of its photo');
+        await photo.click(POS);
+        assert.ok(!(await photo.locator('.wpbn-modal--position').evaluate(el=>el.classList.contains('is-focus'))) && await photo.locator('.wpbn-modal__what').textContent()==='Position','Position: where the image stands, not the point of its photo');
         const ps=await photo.locator('.wpbn-focus__stage').boundingBox();
         await photo.mouse.click(ps.x+2,ps.y+2);
-        assert.ok((await photo.locator('.wpbn-focus__value').textContent()).split(' ').every(v=>parseFloat(v)<1),'Clicked at the corner: flush top left');
+        assert.ok((await focusValue(photo)).split(' ').every(v=>parseFloat(v)<1),'Clicked at the corner: flush top left');
         const tb=await photo.locator('.wpbn-focus__stage .wpbn-position-target').boundingBox();
         assert.ok(Math.abs(tb.x-ps.x)<2 && Math.abs(tb.y-ps.y)<2 && Math.abs(tb.width-ps.width/2)<2,'The box drawn at the corner, half as wide');
         await photo.click('.wpbn-modal__apply');
@@ -812,13 +850,41 @@ const server=http.createServer((req,res)=>{
         assert.equal(await photo.locator('#wpbn-settings .wpbn-card').first().locator('input').first().getAttribute('id'),'wpbn-f-name','Name: the first field');
         await photo.fill('#wpbn-f-name','Mountains photo');
         assert.ok((await photoData()).name==='Mountains photo' && (await photo.locator('.wpbn-layer-row.is-active .wpbn-layer-label').textContent()).startsWith('Mountains photo'),'Renamed, in the list too');
-        // Rotation (Position and size, per device), behind its switch: off by default; on, turned in the preview.
-        assert.ok(!(await photo.locator('#wpbn-f-use_rotate').isChecked()) && await photo.locator('#wpbn-f-rotate').count()===0,'Rotation off: its slider hidden');
-        await photo.click('label[for="wpbn-f-use_rotate"]');
+        // Rotation (Effect, per device), no switch: 0° by default; turned in the preview.
+        assert.ok(await photo.locator('#wpbn-f-use_rotate').count()===0 && await photo.locator('#wpbn-f-rotate').inputValue()==='0','Rotation: no switch, 0°');
         await photo.fill('#wpbn-f-rotate','12');
-        assert.ok((await photoData()).use_rotate===true && (await photoData()).rotate===12,'Rotation on: 12°');
-        // Shadow (the title's block), in Position and size: on, along the image's outline in the preview.
-        assert.equal(await photo.locator('#wpbn-settings .wpbn-card:has(.wpbn-subheading:text-is("Position and size")) #wpbn-f-use_shadow').count(),1,'The image\'s Shadow in Position and size');
+        assert.ok((await photoData()).use_rotate===true && (await photoData()).rotate===12,'Rotation: 12°');
+        // Border (Effect, 2026-11-09): its switch; the four sides together while linked, one on its own once not; its line; on the picture.
+        await photo.click('label[for="wpbn-f-use_border"]');
+        assert.ok(await photo.locator('.wpbn-border-box [data-border-side]').count()===4 && await photo.locator('[data-border-link]').getAttribute('aria-pressed')==='true' && await photo.locator('#wpbn-f-border_style').count()===1,'Border on: four sides, linked, its line');
+        await photo.fill('#wpbn-f-border_top','6');
+        let bd=await photoData();
+        assert.ok(bd.border_top===6 && bd.border_right===6 && bd.border_bottom===6 && bd.border_left===6 && await photo.locator('#wpbn-f-border_left').inputValue()==='6','Linked: one width sets all four');
+        await photo.click('[data-border-link]');
+        await photo.fill('#wpbn-f-border_left','0');
+        bd=await photoData();
+        assert.ok(bd.border_linked===false && bd.border_left===0 && bd.border_top===6 && await photo.locator('.wpbn-border-box--border .wpbn-border-box__frame').evaluate(el=>el.style.borderLeft.indexOf('dashed')!==-1 && el.style.borderTop.indexOf('6px')===0),'Unlinked: one side on its own; the box drawn so');
+        await photo.selectOption('#wpbn-f-border_style','dashed');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const bdSite=await photo.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--border img').first().evaluate(el=>{const c=getComputedStyle(el);return [c.borderTopWidth,c.borderLeftWidth,c.borderTopStyle].join(' ');});
+        assert.equal(bdSite,'6px 0px dashed','On the site: on the picture, per side, its line');
+        // Radius (Effect, 2026-11-09): its switch; four corners linked; px or % beside each (the one in use pressed); on the picture.
+        await photo.click('label[for="wpbn-f-use_radius"]');
+        await photo.fill('#wpbn-f-radius_tl','20');
+        let rd=await photoData();
+        assert.ok(['tl','tr','br','bl'].every(c=>rd['radius_'+c]===20) && await photo.locator('[data-radius-unit="tl"][data-unit="px"]').getAttribute('aria-pressed')==='true','Radius linked: one corner sets all four, in px');
+        await photo.click('[data-radius-link]');
+        await photo.click('[data-radius-unit="br"][data-unit="%"]');
+        await photo.fill('#wpbn-f-radius_br','50');
+        rd=await photoData();
+        assert.ok(rd.radius_linked===false && rd.radius_br===50 && rd.radius_br_unit==='%' && rd.radius_tl_unit==='px' && await photo.locator('[data-radius-unit="br"][data-unit="%"]').getAttribute('aria-pressed')==='true','Unlinked: one corner in % on its own');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const rdSite=await photo.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--radius img').first().evaluate(el=>{const c=getComputedStyle(el);return [c.borderTopLeftRadius,c.borderBottomRightRadius].join(' ');});
+        assert.equal(rdSite,'20px 50%','On the site: the corners of the picture');
+        await photo.click('label[for="wpbn-f-use_radius"]');
+        await photo.click('label[for="wpbn-f-use_border"]');
+        // Shadow (the title's block), in Size: on, along the image's outline in the preview.
+        assert.equal(await photo.locator('#wpbn-block-effect .wpbn-card #wpbn-f-use_shadow').count(),1,'The image\'s Shadow in Effect');
         assert.equal(await photo.locator('#wpbn-f-use_shadow').isChecked(),false,'Image Shadow off by default');
         await photo.click('label[for="wpbn-f-use_shadow"]');
         assert.ok((await photoData()).use_shadow===true && await photo.locator('#wpbn-f-shadow_blur').count()===1,'Shadow on: its color, X, Y, Blur');
@@ -831,11 +897,13 @@ const server=http.createServer((req,res)=>{
         const ed=await browser.newPage({viewport:{width:1600,height:1000}});ed.on('pageerror',e=>errors.push(e.message));
         await ed.goto('http://127.0.0.1:'+server.address().port);
         const edTitle=async()=>JSON.parse(await ed.locator('#wpbn-data').inputValue()).layers[0];
-        await ed.click('#wpbn-add-toggle');await ed.click('#wpbn-settings [data-add="text"]');
-        // Animation: off, its fields hidden; on: Zoom with its Direction, On load. Another kind: its own start, end and Repeat.
-        assert.equal(await ed.locator('#wpbn-f-anim_type').count(),0,'Animation off: its fields hidden');
-        await ed.click('label[for="wpbn-f-use_anim"]');
-        assert.ok(await ed.locator('#wpbn-f-anim_type').inputValue()==='zoom' && await ed.locator('#wpbn-f-anim_origin').count()===1 && await ed.locator('#wpbn-f-anim_start').inputValue()==='load','On: Zoom, its Direction, On load');
+        await ed.click('#wpbn-add-toggle');await ed.click('.wpbn-modal--add [data-add="text"]');
+        // Loop animation: no switch (2026-11-09): its Type, None first; None: its other fields greyed. A kind: Zoom with its Direction, On load.
+        assert.ok(await ed.locator('#wpbn-f-use_anim').count()===0 && await ed.locator('#wpbn-f-anim_type').inputValue()==='none' && (await ed.locator('#wpbn-f-anim_type option').first().textContent())==='None' && !(await ed.locator('#wpbn-f-anim_type').isDisabled()) && !(await ed.locator('#wpbn-f-anim_start').isDisabled()),'Loop animation: None first, its fields active (2026-11-09)');
+        // Type and Starts each on a row of its own; the help in tips.
+        assert.ok(await ed.evaluate(()=>{const a=document.getElementById('wpbn-f-anim_type').getBoundingClientRect(),b=document.getElementById('wpbn-f-anim_start').getBoundingClientRect();return b.top>=a.bottom && Math.abs(a.width-b.width)<1;}) && await ed.locator('[data-base="anim_duration"] .wpbn-field__head .wpbn-tip').count()===1,'Type and Starts on rows of their own; tips');
+        await ed.selectOption('#wpbn-f-anim_type','zoom');
+        assert.ok((await edTitle()).use_anim===true && !(await ed.locator('#wpbn-f-anim_start').isDisabled()) && await ed.locator('#wpbn-f-anim_type').inputValue()==='zoom' && await ed.locator('#wpbn-f-anim_origin').count()===1 && await ed.locator('#wpbn-f-anim_start').inputValue()==='load','On: Zoom, its Direction, On load');
         // Undo keeps a step once nothing has changed for a moment.
         await ed.waitForTimeout(600);
         await ed.selectOption('#wpbn-f-anim_type','fade');
@@ -851,23 +919,32 @@ const server=http.createServer((req,res)=>{
         await ed.locator('#wpbn-layers').focus();await ed.keyboard.press('Control+z');
         assert.equal(await ed.locator('#wpbn-f-anim_type').inputValue(),'zoom','Ctrl + Z');
         // Entrance animation: off; on, Fade in, In view; a slide's Distance; in the preview, around the Loop animation.
-        assert.equal(await ed.locator('#wpbn-f-enter_type').count(),0,'Entrance animation off: its fields hidden');
-        await ed.click('label[for="wpbn-f-use_enter"]');
-        assert.ok(await ed.locator('#wpbn-f-enter_type').inputValue()==='fade' && await ed.locator('#wpbn-f-enter_start').inputValue()==='visible' && await ed.locator('#wpbn-f-enter_distance').count()===0,'On: Fade in, In view, no Distance');
+        assert.ok(await ed.locator('#wpbn-f-use_enter').count()===0 && await ed.locator('#wpbn-f-enter_type').inputValue()==='none' && (await ed.locator('#wpbn-f-enter_type option').first().textContent())==='None' && !(await ed.locator('#wpbn-f-enter_delay').isDisabled()),'Entrance animation: None first, its fields active (2026-11-09)');
+        assert.ok(await ed.evaluate(()=>{const a=document.getElementById('wpbn-f-enter_type').getBoundingClientRect(),b=document.getElementById('wpbn-f-enter_start').getBoundingClientRect();return b.top>=a.bottom;}) && await ed.locator('#wpbn-f-enter_delay').evaluate(el=>!!el.closest('.wpbn-field').querySelector('.wpbn-field__head .wpbn-tip')),'Type and Starts on rows of their own; tips');
+        await ed.selectOption('#wpbn-f-enter_type','fade');
+        assert.ok((await edTitle()).use_enter===true && await ed.locator('#wpbn-f-enter_type').inputValue()==='fade' && await ed.locator('#wpbn-f-enter_start').inputValue()==='visible' && await ed.locator('#wpbn-f-enter_distance').count()===0,'On: Fade in, In view, no Distance');
         await ed.selectOption('#wpbn-f-enter_type','slide-up');
         assert.equal(await ed.locator('#wpbn-f-enter_distance').inputValue(),'60','A slide: its Distance');
         await ed.click('#wpbn-refresh');await ed.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         assert.equal(await ed.frameLocator('#wpbn-frame').locator('.wpbn-enter > .wpbn-anim').evaluate(el=>getComputedStyle(el.parentElement).animationName),'wpbn-enter-slide','In the preview: the slide, around the Loop animation');
-        await ed.click('label[for="wpbn-f-use_enter"]');
-        // Follow the mouse: its Distance once on.
-        await ed.click('label[for="wpbn-f-use_mouse"]');
-        assert.ok((await edTitle()).use_mouse===true && await ed.locator('#wpbn-f-mouse').inputValue()==='20','Follow the mouse: on, 20px');
+        // From the left edge (2026-11-09): no Distance; in the preview it starts just outside the banner.
+        await ed.selectOption('#wpbn-f-enter_type','edge-left');
+        assert.equal(await ed.locator('#wpbn-f-enter_distance').count(),0,'From an edge: no Distance');
+        await ed.click('#wpbn-refresh');await ed.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const edge=await ed.frameLocator('#wpbn-frame').locator('.wpbn-enter--edge-left').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.parentElement.getBoundingClientRect();return {x:parseFloat(el.style.getPropertyValue('--wpbn-ex')),want:s.left-r.right,name:getComputedStyle(el).animationName};});
+        assert.ok(Math.abs(edge.x-edge.want)<1 && edge.x<0 && edge.name==='wpbn-enter-edge','From the left edge: it starts just outside the banner ('+JSON.stringify(edge)+')');
+        await ed.selectOption('#wpbn-f-enter_type','none');
+        assert.ok((await edTitle()).use_enter===false && (await edTitle()).enter_type==='edge-left','None: off, the type kept');
+        // Follow the mouse: no switch (2026-11-09), its Distance 0 to start with.
+        assert.ok(await ed.locator('#wpbn-f-use_mouse').count()===0 && (await edTitle()).use_mouse===true && await ed.locator('#wpbn-f-mouse').inputValue()==='0','Follow the mouse: no switch, 0px');
+        await ed.fill('#wpbn-f-mouse','20');
+        assert.equal(await ed.locator('[data-block="mouse"] .wpbn-menu-item__dot').count(),1,'A dot once it moves');
         // A title's Width: Auto; 50% of its container (93.125% of the scene here), drawn so in the Position window.
         assert.equal(await ed.locator('[data-key="text_width_unit"]').inputValue(),'auto','Width: Auto');
         await ed.selectOption('[data-key="text_width_unit"]','%');
         await ed.fill('#wpbn-f-text_width','50');
         assert.ok((await edTitle()).text_width_unit==='%' && (await edTitle()).text_width===50,'Width: 50%');
-        await ed.click('[data-action="position"]');
+        await ed.click(POS);
         const edWidth=await ed.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>el.style.width);
         assert.ok(Math.abs(parseFloat(edWidth)-93.125/2)<0.1,'The Position window draws it at its Width ('+edWidth+')');
         await ed.click('.wpbn-modal__cancel');
@@ -875,27 +952,67 @@ const server=http.createServer((req,res)=>{
         const tipsOff=await ed.evaluate(()=>[...document.querySelectorAll('#wpbn-settings .wpbn-tip')].filter(t=>t.offsetParent).map(t=>{const label=(t.closest('.wpbn-field')||t.parentElement).querySelector('label, .wpbn-field__label'),a=t.getBoundingClientRect(),b=label.getBoundingClientRect();return Math.abs((a.top+a.height/2)-(b.top+b.height/2))<2 && a.left>=b.right-1 && a.left-b.right<14 ? null : label.textContent.trim();}).filter(Boolean));
         assert.deepEqual(tipsOff,[],'Every tip beside its label');
         await ed.close();
-        // Tabs (2026-11-09): a layer's settings in Content, Position and Animation, one shown (the fixture shows all; not here).
+        // Blocks (2026-11-09, as WP Swiper's settings box): the menu at the left names a layer's blocks, the chosen one shows (the fixture shows all; not here).
         const tp=await browser.newPage({viewport:{width:1600,height:1000}});tp.on('pageerror',e=>errors.push(e.message));
         await tp.goto('http://127.0.0.1:'+server.address().port+'/?image');
-        await tp.evaluate(()=>document.getElementById('wpbn-test-all-tabs').remove());
+        await tp.evaluate(()=>document.getElementById('wpbn-test-all-blocks').remove());
         await tp.click('[data-select="0"]');
-        const tabState=()=>tp.evaluate(()=>[...document.querySelectorAll('#wpbn-settings [data-tab]')].map(b=>b.firstChild.textContent+(b.getAttribute('aria-selected')==='true'?'*':'')));
-        assert.deepEqual(await tabState(),['Content*','Position','Animation'],'Three tabs, Content first');
-        assert.ok(await tp.locator('#wpbn-f-name').isVisible() && !(await tp.locator('#wpbn-f-container').isVisible()),'Only the chosen tab\'s cards show');
-        await tp.click('[data-tab="position"]');
-        assert.ok(await tp.locator('#wpbn-f-container').isVisible() && !(await tp.locator('#wpbn-f-name').isVisible()),'Position: its cards');
-        await tp.keyboard.press('ArrowRight');
-        assert.deepEqual(await tabState(),['Content','Position','Animation*'],'Arrow keys along the tabs');
-        // The photo moves as the page scrolls (a scene from before the switches, with a travel): a dot; off, none.
-        assert.ok(await tp.locator('#wpbn-f-use_scroll').isChecked() && await tp.locator('[data-tab="animation"] .wpbn-tab__dot').count()===1,'A dot while it animates');
-        await tp.click('label[for="wpbn-f-use_scroll"]');
-        assert.ok(await tp.locator('#wpbn-settings .wpbn-tab__dot').count()===0 && (await tabState())[2]==='Animation*','No dot once nothing animates; the tab kept');
-        await tp.click('#wpbn-add-toggle');await tp.click('#wpbn-settings [data-add="text"]');
-        assert.deepEqual(await tabState(),['Content*','Position','Animation'],'A new layer opens on Content');
-        await tp.click('[data-tab="animation"]');
+        const menuState=()=>tp.evaluate(()=>[...document.querySelectorAll('#wpbn-menu [data-block]')].map(b=>b.querySelector('.wpbn-menu-item__title').textContent+(b.getAttribute('aria-current')==='true'?'*':'')));
+        assert.deepEqual(await menuState(),['Content*','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'An image\'s blocks, Content first (2026-11-09: Effect after Size, the animations then)');
+        assert.ok(await tp.evaluate(()=>['scale','opacity','rotate','use_shadow'].every(k=>document.getElementById('wpbn-f-'+k).closest('.wpbn-block').id==='wpbn-block-effect')),'Effect: Scale, Opacity, Rotation, Shadow');
+        assert.ok(await tp.locator('#wpbn-f-name').isVisible() && !(await tp.locator('#wpbn-f-container').isVisible()),'Only the chosen block shows');
+        await tp.click('[data-block="position"]');
+        assert.ok(await tp.locator('#wpbn-f-container').isVisible() && !(await tp.locator('#wpbn-f-name').isVisible()),'Size: its fields');
+        assert.ok(await tp.evaluate(()=>['rotate','use_shadow'].every(k=>!document.getElementById('wpbn-f-'+k).closest('.wpbn-field').querySelector('.wpbn-tip'))),'Rotation and Shadow without tips (2026-11-09)');
+        // A green dot on the desktop icon too where its value is not the standard one (2026-11-09); none at the standard one.
+        const dotOn=(base,dv)=>tp.locator('[data-base="'+base+'"] [data-field-device="'+dv+'"]').evaluate(el=>el.classList.contains('has-value'));
+        assert.ok(await dotOn('move_y','desktop') && !(await dotOn('scale','desktop')),'Desktop: a dot for a travel of its own, none for Scale at 100%');
+        await tp.click('[data-block="effect"]');
+        await tp.fill('#wpbn-f-scale','120');
+        assert.ok(await dotOn('scale','desktop'),'Scale changed: its desktop dot');
+        await tp.fill('#wpbn-f-scale','100');
+        assert.ok(!(await dotOn('scale','desktop')),'Back to the standard: no dot');
+        await tp.click('[data-block="position"]');
+        assert.ok(await tp.locator('#wpbn-settings legend').textContent()==='Size' && await tp.locator('#wpbn-block-position .wpbn-subheading').count()===0,'The section titled by its block, the card without a title of its own');
+        await tp.keyboard.press('ArrowDown');
+        assert.equal((await menuState())[2],'Effect*','Arrow keys along the menu: Effect after Size');
+        await tp.keyboard.press('ArrowDown');
+        assert.equal((await menuState())[3],'Filters*','Arrow keys along the menu');
+        await tp.click('[data-block="scroll"]');
+        // The photo moves as the page scrolls (a scene from before the switches, with a travel): a dot; at rest, none.
+        assert.ok(await tp.locator('[data-block="scroll"] .wpbn-menu-item__dot').count()===1 && await tp.locator('#wpbn-block-title .wpbn-tip').count()===1,'A dot while it animates; its help beside the title');
+        await tp.fill('#wpbn-f-move_y','0');
+        assert.ok(await tp.locator('#wpbn-menu .wpbn-menu-item__dot').count()===0 && (await menuState())[6]==='Scroll animation*','No dot once nothing animates; the block kept');
+        await tp.click('#wpbn-scene-settings');
+        assert.deepEqual(await menuState(),['Size*','Placement','Attributes'],'The scene\'s blocks');
+        await tp.click('#wpbn-add-toggle');await tp.click('.wpbn-modal--add [data-add="text"]');
+        assert.deepEqual(await menuState(),['Content*','Title style','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'A new title opens on Content');
+        await tp.click('[data-block="scroll"]');
         await tp.click('[data-select="0"]');
-        assert.equal((await tabState())[2],'Animation*','The tab kept from layer to layer');
+        assert.equal((await menuState())[6],'Scroll animation*','The block kept from layer to layer');
+        // Padding (Size, 2026-11-09): a title has one, a photo filling the scene none; four sides linked; one side in % on its own; on the site.
+        assert.equal(await tp.locator('#wpbn-block-position [data-pad-side]').count(),0,'A photo filling the scene: no Padding');
+        await tp.click('[data-select="1"]');await tp.click('[data-block="position"]');
+        assert.ok(await tp.locator('#wpbn-f-use_padding').count()===1 && await tp.locator('[data-pad-side]').count()===0,'Padding behind its switch: off, its sides hidden');
+        await tp.click('label[for="wpbn-f-use_padding"]');
+        await tp.fill('#wpbn-f-padding_top','20');
+        const padOf=async()=>JSON.parse(await tp.locator('#wpbn-data').inputValue()).layers[1];
+        let pd=await padOf();
+        assert.ok(['top','right','bottom','left'].every(s=>pd['padding_'+s]===20) && await tp.locator('[data-pad-side="left"]').inputValue()==='20','Padding linked: one side sets all four');
+        await tp.click('[data-pad-link]');await tp.click('[data-pad-unit="left"][data-unit="%"]');await tp.fill('#wpbn-f-padding_left','5');
+        pd=await padOf();
+        assert.ok(pd.padding_linked===false && pd.padding_left===5 && pd.padding_left_unit==='%' && pd.padding_top_unit==='px' && pd.padding_top===20,'Unlinked: the left side in % on its own');
+        await tp.click('#wpbn-refresh');await tp.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const pdSite=await tp.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--text').evaluate(el=>{const c=getComputedStyle(el),w=el.closest('.wpbn-scene').getBoundingClientRect().width;return c.paddingTop+' '+Math.round(parseFloat(c.paddingLeft)/w*100);});
+        assert.equal(pdSite,'20px 5','On the site: 20px, the left 5 percent of the banner width');
+        await tp.click('[data-select="0"]');
+        // An image layer's device note is an "i" beside Image on every device, not the note above its blocks; a title keeps the note (not on desktop).
+        assert.match(await tp.locator('[data-base="image"] .wpbn-field__head .wpbn-tip').getAttribute('data-tip'),/^Desktop values. Tablet and mobile follow them/,'Image on desktop: its tip too');
+        await tp.click('[data-preview-device="tablet"]');await tp.click('[data-block="content"]');
+        assert.ok(await tp.locator('#wpbn-settings .wpbn-device-note').count()===0 && /^Tablet values. Settings without a green dot follow Desktop/.test(await tp.locator('[data-base="image"] .wpbn-field__head .wpbn-tip').getAttribute('data-tip')),'Image: the device note in its tip');
+        await tp.click('[data-select="1"]');
+        assert.equal(await tp.locator('#wpbn-settings .wpbn-device-note').count(),1,'A title: the note above its blocks');
+        await tp.click('[data-preview-device="desktop"]');
         await tp.close();
         // A Shape layer (WPBN_Shape): an SVG uploaded, its objects under the layer, one chosen in the drawing; Fill Photo shows
         // the photo through it, in colour over its black and white self; glass greys Edge and Filters (not hidden).
@@ -904,7 +1021,7 @@ const server=http.createServer((req,res)=>{
         const shData=async()=>JSON.parse(await sh.locator('#wpbn-data').inputValue());
         await sh.click('[data-select="0"]');
         await sh.fill('#wpbn-f-f_grayscale','100');
-        await sh.click('#wpbn-add-toggle');await sh.click('#wpbn-settings [data-add="shape"]');
+        await sh.click('#wpbn-add-toggle');await sh.click('.wpbn-modal--add [data-add="shape"]');
         const [chooser]=await Promise.all([sh.waitForEvent('filechooser'),sh.click('[data-action="shape-upload"]')]);
         await chooser.setFiles({name:'strips.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg/>')});
         await sh.waitForSelector('.wpbn-object-row');
@@ -913,7 +1030,7 @@ const server=http.createServer((req,res)=>{
         assert.ok(sd.layers[0].uid && sd.layers[1].shape_objects.every(o=>o.fill==='layer' && o.source===sd.layers[0].uid),'New objects show the photo layer');
         assert.equal(await sh.locator('.wpbn-object-row').count(),3,'Its objects under the layer');
         await sh.locator('.wpbn-shape-canvas [data-object="0"] rect').click();
-        assert.equal(await sh.locator('#wpbn-settings legend').textContent(),'Object settings','A click in the drawing chooses an object');
+        assert.equal(await sh.locator('#wpbn-settings legend').textContent(),'Object','A click in the drawing chooses an object');
         await sh.click('[data-choice="fill"][data-value="glass"]');
         assert.ok(await sh.locator('#wpbn-f-stroke').isDisabled() && await sh.locator('#wpbn-f-f_grayscale').isDisabled(),'Glass: Edge and Filters greyed, not hidden');
         await sh.click('[data-choice="fill"][data-value="layer"]');

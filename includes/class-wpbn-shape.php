@@ -144,8 +144,9 @@ class WPBN_Shape {
         foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200), 'move_x'=>array(-1000, 1000), 'move_y'=>array(-1000, 1000)) as $key=>$range) {
             $out[$key] = self::num($o[$key] ?? null, $d[$key], $range[0], $range[1]);
         }
-        // Its Scroll animation's switch; saved before it: on where it had a travel.
-        $out['use_scroll'] = array_key_exists('use_scroll', $o) ? !empty($o['use_scroll']) : ($out['move_x'] || $out['move_y']);
+        // Scroll animation: no switch since 2026-11-09 (user's request), always on; saved with it off: no travel (it stays as it was).
+        if (array_key_exists('use_scroll', $o) && empty($o['use_scroll'])) { $out['move_x'] = 0; $out['move_y'] = 0; }
+        $out['use_scroll'] = true;
         return $out + WPBN_Settings::filters($o);
     }
 

@@ -36,8 +36,8 @@
     const anchored = l => textual(l) || l.type === 'overlay' || imageObject(l);
     // A field with its help behind an "i" beside the label (the dark tooltip), instead of under it.
     const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
-    // adding: the settings column shows the elements to add instead of a layer's settings.
-    let selected = -1, dark = false, adding = false;
+    // dev: Developer mode in the preview (preview-dev.js), kept as the preview is redrawn.
+    let selected = -1, dark = false, dev = false;
     // A Shape layer's SVGs by attachment id (WPBN_Shape::editor()); the object chosen in the selected Shape layer
     // (-1: none); an upload under way and why the last one failed.
     const shapes = boot.shapes || {};
@@ -85,7 +85,20 @@
         while (d !== 'desktop' && (l[dkey(base, d)] === null || l[dkey(base, d)] === undefined)) d = UP[d];
         return l[dkey(base, d)];
     }
-    const ownValues = (l, base) => ({tablet: l[dkey(base, 'tablet')] != null, mobile: l[dkey(base, 'mobile')] != null});
+    /*
+     * The standard settings (user's request, 2026-11-09: a green dot on the desktop icon where the desktop value is not one of
+     * them): a layer's as a new one of its kind has them (addLayer() takes them from here), the scene's as a new scene's; a Loop
+     * animation's start and end its kind's own.
+     */
+    const TYPE_NEW = {text:{container:'theme'}, button:{container:'theme'}, shortcode:{container:'theme'}, overlay:{color:boot.overlayColor || 'rgba(0,0,0,0.4)'},
+        richtext:{content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'}};
+    const standard = o => o === scene ? (boot.sceneDefaults || {}) : Object.assign({}, boot.layer, {container:'full', move_y:0}, TYPE_NEW[o.type] || {});
+    function isStandard(o, key) {
+        let def = standard(o)[key];
+        if ((key === 'anim_from' || key === 'anim_to') && ANIM && ANIM.types[o.anim_type]) def = ANIM.types[o.anim_type].def[key === 'anim_from' ? 0 : 1];
+        return String(o[key] ?? '') === String(def ?? '');
+    }
+    const ownValues = (l, base) => ({desktop: !isStandard(l, base), tablet: l[dkey(base, 'tablet')] != null, mobile: l[dkey(base, 'mobile')] != null});
 
     // Fields, as WP Swiper draws them: a label row (with the device icons for
     // per-device values), the control, a help text; grouped in grey cards.
@@ -121,10 +134,12 @@
     // A per-device slider and number. On tablet / mobile an empty number takes the larger screen's value (its placeholder).
     function respRange(base, label, o) {
         const l = current(), d = device(), key = dkey(base, d), own = l[key], value = escape(eff(l, base, d)), id = 'wpbn-f-' + key;
-        return '<div class="wpbn-field" data-base="' + base + '">' + head(id, label, devices(ownValues(l, base))) + '<div class="wpbn-field__row">'
+        // o.note: a help text under it; o.tip: behind an "i" beside its label.
+        const html = '<div class="wpbn-field" data-base="' + base + '">' + head(id, label, devices(ownValues(l, base))) + '<div class="wpbn-field__row">'
             + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="' + (o.step || 1) + '" value="' + value + '" aria-label="' + label + '">'
             + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + value + '" aria-label="' + label + '"' + (d === 'desktop' ? '' : ' data-inherit="' + base + '"') + '>'
             + resetButton(l, key, base, label) + '</div>' + note(o.note) + '</div>';
+        return o.tip ? withTip(html, o.tip) : html;
     }
     // A per-device select. extra: more of the field after the select (as its own children).
     function respSelect(base, label, options, extra) {
@@ -147,10 +162,11 @@
     function range(keys, label, o) {
         const perDevice = typeof keys !== 'string';
         const key = perDevice ? keys[device()] : keys, id = 'wpbn-f-' + key, value = escape(current()[key]);
-        return '<div class="wpbn-field">' + head(id, label, perDevice ? devices() : '') + '<div class="wpbn-field__row">'
+        const html = '<div class="wpbn-field">' + head(id, label, perDevice ? devices() : '') + '<div class="wpbn-field__row">'
             + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="' + (o.step || 1) + '" value="' + value + '" aria-label="' + label + '">'
             + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + value + '">'
             + (key in DEFAULTS ? resetButton(current(), key, null, label) : '') + '</div>' + note(o.note) + '</div>';
+        return o.tip ? withTip(html, o.tip) : html;
     }
     function select(key, label, options, help) {
         const id = 'wpbn-f-' + key;
@@ -589,6 +605,38 @@
         if (option) chooseFont(option.dataset.family);
     });
     app.addEventListener('input', event => { if (fontBox && event.target.classList.contains('wpbn-font__search')) listFonts(); });
+    // A side's padding typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
+    app.addEventListener('input', event => {
+        const input = event.target.closest && event.target.closest('[data-pad-side]'), l = input && current();
+        if (!l) return;
+        const d = device(), s0 = input.dataset.padSide;
+        let value = null;
+        if (input.value === '') { if (d === 'desktop') return; }
+        else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(PADDING_MAX[l['padding_' + s0 + '_unit']] || 500, Math.round(n))); }
+        (l.padding_linked ? BORDER_SIDES : [s0]).forEach(s => { l[dkey('padding_' + s, d)] = value; });
+        refreshPadding(); changed();
+    });
+    // A corner's radius typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
+    app.addEventListener('input', event => {
+        const input = event.target.closest && event.target.closest('[data-radius-corner]'), l = input && current();
+        if (!l) return;
+        const d = device(), c0 = input.dataset.radiusCorner;
+        let value = null;
+        if (input.value === '') { if (d === 'desktop') return; }
+        else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(RADIUS_MAX[l['radius_' + c0 + '_unit']] || 1000, Math.round(n))); }
+        (l.radius_linked ? RADIUS_CORNERS : [c0]).forEach(c => { l[dkey('radius_' + c, d)] = value; });
+        refreshRadius(); changed();
+    });
+    app.addEventListener('input', event => {
+        const input = event.target.closest && event.target.closest('[data-border-side]'), l = input && current();
+        if (!l) return;
+        const d = device();
+        let value = null;
+        if (input.value === '') { if (d === 'desktop') return; }
+        else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(100, Math.round(n))); }
+        (l.border_linked ? BORDER_SIDES : [input.dataset.borderSide]).forEach(s => { l[dkey('border_' + s, d)] = value; });
+        refreshBorder(); changed();
+    });
     // A font under the pointer: the one looked at (the sample shows it).
     app.addEventListener('mouseover', event => {
         const option = fontBox && event.target.closest('.wpbn-font__option');
@@ -636,24 +684,127 @@
             tip:'On a narrower screen it keeps 15px clear on each side. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'}
     };
     // A title's Shadow: its switch with an "i"; on, its color, offset (X right, Y down) and Blur in a row (WPBN_Settings::shadow()).
+    /*
+     * Border (Effect, 2026-11-09, user's request): its switch, as Shadow's; on, a box drawn as the four sides (refreshBorder()) with
+     * each side's width beside it (px, per device: tablet / mobile empty follow the larger screen) and, in its middle, the link
+     * that sets them together; under it, its line and its colour on one row. Its fields have their own handler (data-border-side).
+     */
+    const BORDER_SIDES = ['top', 'right', 'bottom', 'left'];
+    const BORDER_STYLES = {solid:'Solid', dashed:'Dashed', dotted:'Dotted', double:'Double'};
+    const borderOwn = (l, dv) => BORDER_SIDES.some(s => dv === 'desktop' ? !isStandard(l, 'border_' + s) : l['border_' + s + '_' + dv] != null);
+    function borderField(l) {
+        const toggle = check('use_border', 'Border');
+        if (!l.use_border) return toggle;
+        const d = device();
+        const side = s => {
+            const v = l[dkey('border_' + s, d)], name = s[0].toUpperCase() + s.slice(1);
+            return '<span class="wpbn-number-unit wpbn-border-box__side wpbn-border-box__side--' + s + '"><input type="number" id="wpbn-f-border_' + s + '" data-border-side="' + s + '" min="0" max="100" step="1" value="' + (v == null ? '' : escape(v)) + '" placeholder="' + escape(eff(l, 'border_' + s, d)) + '" aria-label="' + name + ' border width (px)"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span>';
+        };
+        const linked = !!l.border_linked, link = linked ? 'The sides are set together: click to set each on its own' : 'Each side on its own: click to set them together';
+        return toggle + '<div class="wpbn-field wpbn-field--border"><div class="wpbn-field__head"><span class="wpbn-field__label">Width</span>' + devices({desktop:borderOwn(l, 'desktop'), tablet:borderOwn(l, 'tablet'), mobile:borderOwn(l, 'mobile')}) + '</div>'
+            + '<div class="wpbn-border-box wpbn-border-box--border"><span class="wpbn-border-box__frame" aria-hidden="true"></span>' + BORDER_SIDES.map(side).join('')
+            + '<button type="button" class="wpbn-border-box__link" data-border-link aria-pressed="' + linked + '" aria-label="' + link + '" title="' + link + '">' + icons.link + '</button></div></div>'
+            + '<div class="wpbn-row wpbn-row--line">' + select('border_style', 'Line', BORDER_STYLES) + colorField('border_color', 'Color', {alpha:true, def:'#ffffff'}) + '</div>';
+    }
+    /*
+     * Radius (Effect, 2026-11-09, user's request): its switch, under Border's; on, a box as Border's with each corner's radius at
+     * that corner (per device: tablet / mobile empty follow the larger screen), px or % picked beside its number (both shown, one
+     * above the other: the one in use dark and bold; one unit per corner for every device), the link in the middle.
+     */
+    const RADIUS_CORNERS = ['tl', 'tr', 'br', 'bl'];
+    const RADIUS_NAMES = {tl:'Top left', tr:'Top right', br:'Bottom right', bl:'Bottom left'};
+    const RADIUS_MAX = {px:1000, '%':50};
+    const radiusOwn = (l, dv) => RADIUS_CORNERS.some(c => dv === 'desktop' ? !isStandard(l, 'radius_' + c) || !isStandard(l, 'radius_' + c + '_unit') : l['radius_' + c + '_' + dv] != null);
+    function radiusField(l) {
+        const toggle = check('use_radius', 'Radius');
+        if (!l.use_radius) return toggle;
+        const d = device();
+        const corner = c => {
+            const v = l[dkey('radius_' + c, d)], unit = l['radius_' + c + '_unit'] || 'px';
+            return '<span class="wpbn-radius-input wpbn-border-box__corner wpbn-border-box__corner--' + c + '"><input type="number" id="wpbn-f-radius_' + c + '" data-radius-corner="' + c + '" min="0" max="' + RADIUS_MAX[unit] + '" step="1" value="' + (v == null ? '' : escape(v)) + '" placeholder="' + escape(eff(l, 'radius_' + c, d)) + '" aria-label="' + RADIUS_NAMES[c] + ' radius (' + unit + ')">'
+                + '<span class="wpbn-unit-pick" role="group" aria-label="' + RADIUS_NAMES[c] + ' radius unit">' + Object.keys(RADIUS_MAX).map(u => '<button type="button" data-radius-unit="' + c + '" data-unit="' + u + '" aria-pressed="' + (u === unit) + '">' + u + '</button>').join('') + '</span></span>';
+        };
+        const linked = !!l.radius_linked, link = linked ? 'The corners are set together: click to set each on its own' : 'Each corner on its own: click to set them together';
+        return toggle + '<div class="wpbn-field wpbn-field--radius"><div class="wpbn-field__head"><span class="wpbn-field__label">Corners</span>' + devices({desktop:radiusOwn(l, 'desktop'), tablet:radiusOwn(l, 'tablet'), mobile:radiusOwn(l, 'mobile')}) + '</div>'
+            + '<div class="wpbn-border-box wpbn-radius-box"><span class="wpbn-border-box__frame wpbn-radius-box__frame" aria-hidden="true"></span>' + RADIUS_CORNERS.map(corner).join('')
+            + '<button type="button" class="wpbn-border-box__link" data-radius-link aria-pressed="' + linked + '" aria-label="' + link + '" title="' + link + '">' + icons.link + '</button></div></div>';
+    }
+    /*
+     * Padding (Size, 2026-11-09, user's request): its switch, as Border's; on, a box as Border's, each side's space beside it (per
+     * device: tablet / mobile empty follow the larger screen), px or % (of the banner's width) picked beside its number, one
+     * unit per side for every device; the link in the middle. The box shows the spaces green, as a browser's inspector does.
+     */
+    const PADDING_MAX = {px:500, '%':50};
+    const SIDE_NAMES = {top:'Top', right:'Right', bottom:'Bottom', left:'Left'};
+    const padOwn = (l, dv) => BORDER_SIDES.some(s => dv === 'desktop' ? !isStandard(l, 'padding_' + s) || !isStandard(l, 'padding_' + s + '_unit') : l['padding_' + s + '_' + dv] != null);
+    function paddingField(l) {
+        // Its switch (user's request, 2026-11-09), with the help beside it; on, its sides.
+        const toggle = withTip(check('use_padding', 'Padding'), 'Space inside the layer\'s box: its content keeps away from its edges, e.g. a title from the edge of the screen on a phone (its lines wrap inside it). % is of the banner\'s width.');
+        if (!l.use_padding) return toggle;
+        const d = device();
+        const side = s => {
+            const v = l[dkey('padding_' + s, d)], unit = l['padding_' + s + '_unit'] || 'px';
+            return '<span class="wpbn-radius-input wpbn-border-box__side wpbn-border-box__side--' + s + '"><input type="number" id="wpbn-f-padding_' + s + '" data-pad-side="' + s + '" min="0" max="' + PADDING_MAX[unit] + '" step="1" value="' + (v == null ? '' : escape(v)) + '" placeholder="' + escape(eff(l, 'padding_' + s, d)) + '" aria-label="' + SIDE_NAMES[s] + ' padding (' + unit + ')">'
+                + '<span class="wpbn-unit-pick" role="group" aria-label="' + SIDE_NAMES[s] + ' padding unit">' + Object.keys(PADDING_MAX).map(u => '<button type="button" data-pad-unit="' + s + '" data-unit="' + u + '" aria-pressed="' + (u === unit) + '">' + u + '</button>').join('') + '</span></span>';
+        };
+        const linked = !!l.padding_linked, link = linked ? 'The sides are set together: click to set each on its own' : 'Each side on its own: click to set them together';
+        return toggle + '<div class="wpbn-field wpbn-field--padding"><div class="wpbn-field__head"><span class="wpbn-field__label">Sides</span>' + devices({desktop:padOwn(l, 'desktop'), tablet:padOwn(l, 'tablet'), mobile:padOwn(l, 'mobile')}) + '</div>'
+            + '<div class="wpbn-border-box wpbn-pad-box"><span class="wpbn-border-box__frame wpbn-pad-box__frame" aria-hidden="true"></span>' + BORDER_SIDES.map(side).join('')
+            + '<button type="button" class="wpbn-border-box__link" data-pad-link aria-pressed="' + linked + '" aria-label="' + link + '" title="' + link + '">' + icons.link + '</button></div></div>';
+    }
+    // The box's spaces drawn green as they are (px scaled down, % of a 600px banner), the fields' values and the device dots.
+    function refreshPadding() {
+        const box = $('settings').querySelector('.wpbn-pad-box'), l = current();
+        if (!box || !l) return;
+        const d = device(), frame = box.querySelector('.wpbn-pad-box__frame');
+        BORDER_SIDES.forEach(s => {
+            const v = Number(eff(l, 'padding_' + s, d)) || 0, px = l['padding_' + s + '_unit'] === '%' ? v * 6 : v, input = box.querySelector('[data-pad-side="' + s + '"]'), own = l[dkey('padding_' + s, d)];
+            frame.style['border' + s[0].toUpperCase() + s.slice(1) + 'Width'] = (px ? Math.min(s === 'top' || s === 'bottom' ? 10 : 24, Math.max(2, px / 4)) : 0) + 'px';
+            if (input && document.activeElement !== input) input.value = own == null ? '' : own;
+            if (input) input.placeholder = eff(l, 'padding_' + s, d);
+        });
+        const field = box.closest('.wpbn-field');
+        Object.keys(DEVICES).forEach(dv => { const b = field.querySelector('[data-field-device="' + dv + '"]'); if (b) b.classList.toggle('has-value', padOwn(l, dv)); });
+    }
+    // The box's corners drawn as the radii are (px scaled down, % as they are), the fields' values and the device dots.
+    function refreshRadius() {
+        const box = $('settings').querySelector('.wpbn-radius-box'), l = current();
+        if (!box || !l) return;
+        const d = device(), frame = box.querySelector('.wpbn-radius-box__frame');
+        frame.style.borderRadius = RADIUS_CORNERS.map(c => { const v = Number(eff(l, 'radius_' + c, d)) || 0; return (l['radius_' + c + '_unit'] === '%' ? v + '%' : Math.min(40, v / 2) + 'px'); }).join(' ');
+        RADIUS_CORNERS.forEach(c => {
+            const input = box.querySelector('[data-radius-corner="' + c + '"]'), own = l[dkey('radius_' + c, d)];
+            if (input && document.activeElement !== input) input.value = own == null ? '' : own;
+            if (input) input.placeholder = eff(l, 'radius_' + c, d);
+        });
+        const field = box.closest('.wpbn-field');
+        Object.keys(DEVICES).forEach(dv => { const b = field.querySelector('[data-field-device="' + dv + '"]'); if (b) b.classList.toggle('has-value', radiusOwn(l, dv)); });
+    }
+    // The box's sides drawn as the widths are (1–6px, its line; none: a light dashed line), the fields' values and the device dots.
+    function refreshBorder() {
+        // Its own box (Padding's and Radius's are drawn as it is too).
+        const box = $('settings').querySelector('.wpbn-border-box--border'), l = current();
+        if (!box || !l) return;
+        const d = device(), frame = box.querySelector('.wpbn-border-box__frame');
+        BORDER_SIDES.forEach(s => {
+            const v = Number(eff(l, 'border_' + s, d)) || 0, input = box.querySelector('[data-border-side="' + s + '"]'), own = l[dkey('border_' + s, d)];
+            frame.style['border' + s[0].toUpperCase() + s.slice(1)] = v ? Math.min(6, Math.max(1, v)) + 'px ' + (l.border_style || 'solid') + ' #8c8f94' : '1px dashed #c3c4c7';
+            if (input && document.activeElement !== input) input.value = own == null ? '' : own;
+            if (input) input.placeholder = eff(l, 'border_' + s, d);
+        });
+        const field = box.closest('.wpbn-field');
+        Object.keys(DEVICES).forEach(dv => { const b = field.querySelector('[data-field-device="' + dv + '"]'); if (b) b.classList.toggle('has-value', borderOwn(l, dv)); });
+    }
     function shadowField(l) {
         const id = 'wpbn-f-use_shadow';
         const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_shadow"' + (l.use_shadow ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>Shadow</span></label>'
-            + tip(l.key !== undefined
-                // A Shape layer's object's: along its outline (WPBN_Shape).
-                ? 'A shadow along the object\'s outline, e.g. a strip of paper lifted off the photo. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
-                : l.type === 'image'
-                // An image's: along its outline (a PNG's transparent parts cast none), as CSS drop-shadow (WPBN_Render).
-                ? 'A shadow along the image\'s outline (a transparent PNG casts it from its shape): for a cutout or an image object; a photo that fills the scene hides it. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
-                // An overlay's: around its box (box-shadow), or Inside it.
-                : l.type === 'overlay'
-                ? 'A shadow around the overlay, for a band or a panel smaller than the scene (one over the whole scene hides it). Inside: within its edges instead, e.g. a vignette darkening the scene\'s edges. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
-                : 'A shadow behind the letters: its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).') + '</div></div>';
+            // No tip (user's request, 2026-11-09).
+            + '</div></div>';
         if (!l.use_shadow) return toggle;
         const px = (key, label, min, max) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<span class="wpbn-number-unit"><input id="wpbn-f-' + key + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(l[key]) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>';
         return toggle + '<div class="wpbn-row wpbn-shadow">' + colorField('shadow_color', 'Color', {alpha:true, def:boot.layer.shadow_color})
             + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>'
-            // An overlay's shadow can fall Inside its edges (a vignette); its help is the Shadow tip's.
+            // An overlay's shadow can fall Inside its edges (a vignette).
             + (l.type === 'overlay' ? check('shadow_inset', 'Inside') : '');
     }
     function inlineFor(l, kind, d) { const key = INLINE[kind].keys[d]; return d === 'desktop' || l[key] != null ? l[key] : inlineFor(l, kind, UP[d]); }
@@ -663,19 +814,10 @@
     function deviceNumberField(l, kind) {
         const o = INLINE[kind], d = device(), key = o.keys[d], id = 'wpbn-f-' + key;
         return '<div class="wpbn-field wpbn-field--device-number"><div class="wpbn-field__head"><label for="' + id + '">' + o.label + '</label>' + (o.tip ? tip(o.tip) : '')
-            + devices({tablet:l[o.keys.tablet] != null, mobile:l[o.keys.mobile] != null}) + '</div>'
+            + devices({desktop:!isStandard(l, o.keys.desktop), tablet:l[o.keys.tablet] != null, mobile:l[o.keys.mobile] != null}) + '</div>'
             + '<span class="wpbn-number-unit"><input id="' + id + '" data-inline="' + kind + '" data-' + kind + '="' + d + '" type="number" min="' + o.min + '" max="' + o.max[d] + '" step="' + o.step + '"'
             + ' value="' + (l[key] != null ? escape(l[key]) : '') + '" placeholder="' + escape(inlineFor(l, kind, d)) + '" aria-label="' + o.label + ' — ' + DEVICES[d][1] + '">'
             + (o.unit ? '<span class="wpbn-number-unit__unit" aria-hidden="true">' + o.unit + '</span>' : '') + '</span></div>';
-    }
-    // A setting with a switch (OPTIONAL): the switch with the setting's name; on, the slider (per device)
-    // under it, the device icons beside the switch. Width, Scale and Opacity of a text layer: the slider alone.
-    function optionalRange(l, base, label, o) {
-        if (!switched(l, base)) return respRange(base, label, o);
-        const flag = OPTIONAL[base][0], on = !!l[flag], id = 'wpbn-f-' + flag;
-        const toggle = '<label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + flag + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label>';
-        if (!on) return '<div class="wpbn-field wpbn-field--check">' + toggle + '</div>';
-        return respRange(base, label, o).replace(/<div class="wpbn-field__head"><label for="[^"]*">[^<]*<\/label>/, '<div class="wpbn-field__head">' + toggle);
     }
     /*
      * Animation (WPBN_Animation): motion of the layer's own, running by itself from the moment the page loads,
@@ -686,49 +828,53 @@
     const ANIM = boot.animations || null;
     // Follow the mouse (Motion): its switch; on, how far the layer moves with the pointer at the scene's edge. One value for every
     // device: only devices with a mouse have it. Layers in front moving further than those behind gives depth.
-    function mouseField(l) {
-        const toggle = withTip(check('use_mouse', 'Follow the mouse'), 'On computers: the layer moves a little as the pointer moves over the banner. Give front layers more than back ones for depth; negative moves against the pointer.');
-        return l.use_mouse ? toggle + range('mouse', 'Distance (px)', {min:-200, max:200, from:-80, to:80, note:'How far it moves with the pointer at the banner\'s edge.'}) : toggle;
-    }
+    // Follow the mouse: no switch (user's request, 2026-11-09): 0 does not move. Its help: the tip beside the section's title.
+    const MOUSE_TIP = 'On computers: the layer moves a little as the pointer moves over the banner. Give front layers more than back ones for depth; negative moves against the pointer.';
+    const mouseField = () => range('mouse', 'Distance (px)', {min:-200, max:200, from:-80, to:80, tip:'How far it moves with the pointer at the banner\'s edge; 0: it stays.'});
     /*
      * Entrance animation (WPBN_Entrance): how the layer comes in, once: its switch; on: its kind, when it starts, a slide's
      * distance or a zoom's start size, its duration, delay and easing. Not for a Shape layer.
      */
     const ENTER = boot.entrance || null;
+    /*
+     * Entrance and Loop animation have no switch (user's request, 2026-11-09): their Type, None first, is it (use_enter / use_anim
+     * off with None; the type chosen before is kept). Its own change handler (data-anim-kind, not data-key).
+     */
+    function kindSelect(which, l, types, help) {
+        const flag = which === 'enter' ? 'use_enter' : 'use_anim', key = which + '_type', id = 'wpbn-f-' + key, value = l[flag] ? l[key] : 'none';
+        return withTip('<div class="wpbn-field">' + head(id, 'Type') + '<select id="' + id + '" data-anim-kind="' + which + '">'
+            + Object.entries(Object.assign({none:'None'}, types)).map(([v, t]) => '<option value="' + v + '"' + (v === value ? ' selected' : '') + '>' + escape(t) + '</option>').join('') + '</select></div>', help);
+    }
     function entranceCard(l) {
         if (!ENTER || l.type === 'shape') return '';
-        const toggle = withTip(check('use_enter', 'Entrance animation'), 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
-        if (!l.use_enter) return card('Entrance animation', toggle);
+        const toggle = kindSelect('enter', l, ENTER.types, 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
         const starts = ANIM ? ANIM.starts : {load:'On load', visible:'In view'};
-        return card('Entrance animation', toggle
-            + '<div class="wpbn-row">' + select('enter_type', 'Type', ENTER.types) + withTip(select('enter_start', 'Starts', starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.') + '</div>'
-            + (/^slide/.test(l.enter_type) ? range('enter_distance', 'Distance (px)', {min:0, max:1000, to:300, note:'How far away it starts.'}) : '')
-            + (l.enter_type === 'zoom' ? range('enter_scale', 'Start size (%)', {min:10, max:300, from:50, to:150, note:'Under 100: it grows into place; over 100: it shrinks into place.'}) : '')
+        // Its fields always active (user's request, 2026-11-09): with None they do nothing, their values kept.
+        return card('Entrance animation', toggle + (withTip(select('enter_start', 'Starts', starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.')
+            + (/^slide/.test(l.enter_type) ? range('enter_distance', 'Distance (px)', {min:0, max:1000, to:300, tip:'How far away it starts.'}) : '')
+            + (l.enter_type === 'zoom' ? range('enter_scale', 'Start size (%)', {min:10, max:300, from:50, to:150, tip:'Under 100: it grows into place; over 100: it shrinks into place.'}) : '')
             + range('enter_duration', 'Duration (s)', {min:ENTER.duration[0], max:ENTER.duration[1], step:0.1, to:3})
-            + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, note:'E.g. the title a moment after the photo.'})
-            + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : ''));
+            + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, tip:'E.g. the title a moment after the photo.'})
+            + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : '')));
     }
     function animationCard(l) {
         if (!ANIM || l.type === 'overlay') return '';
         const kinds = Object.keys(ANIM.types), type = ANIM.types[l.anim_type] || ANIM.types[kinds[0]];
-        // Its switch with the help behind an "i" beside it, as Shadow's; named after the kind while there is only one.
-        const id = 'wpbn-f-use_anim', name = kinds.length > 1 ? 'Loop animation' : type.switch;
-        const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_anim"' + (l.use_anim ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + escape(name) + '</span></label>'
-            + tip('Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.') + '</div></div>';
-        if (!l.use_anim) return card('Loop animation', toggle);
+        // Its Type, None first (no switch: user's request, 2026-11-09), the help behind an "i" beside it.
+        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(ANIM.types).map(([k, t]) => [k, t.label])), 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
         // Reset takes the kind's own start and end.
         [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
         const min = l.type === 'image' && l.fill_scene && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
         const span = {min, max:type.max, from:Math.max(min, type.span[0]), to:type.span[1]};
         // What and when; then the kind's own fields; then how it runs.
-        return card('Loop animation', toggle
-            + '<div class="wpbn-row">' + (kinds.length > 1 ? select('anim_type', 'Type', Object.fromEntries(Object.entries(ANIM.types).map(([k, t]) => [k, t.label]))) : '') + withTip(select('anim_start', 'Starts', ANIM.starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.') + '</div>'
+        // Its fields always active (user's request, 2026-11-09): with None they do nothing, their values kept; Type and Starts each on a row.
+        return card('Loop animation', toggle + (withTip(select('anim_start', 'Starts', ANIM.starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.')
             + (type.origin ? select('anim_origin', 'Direction', ANIM.origins) : '')
             + respRange('anim_from', type.from, span)
-            + respRange('anim_to', type.to, Object.assign({note:type.note}, span))
-            + respRange('anim_duration', 'Duration (s)', {min:ANIM.duration[0], max:ANIM.duration[1], from:1, to:30, step:0.1, note:'One run, from start to end.'})
+            + respRange('anim_to', type.to, Object.assign({tip:type.note}, span))
+            + respRange('anim_duration', 'Duration (s)', {min:ANIM.duration[0], max:ANIM.duration[1], from:1, to:30, step:0.1, tip:'One run, from start to end.'})
             + '<div class="wpbn-row">' + withTip(select('anim_repeat', 'Repeat', ANIM.repeats), 'Back & forth: to the end and back again, endlessly. Loop: from the start again each time. Once: it plays and stays at its end.') + select('anim_easing', 'Easing', ANIM.easings) + '</div>'
-            + range('anim_delay', 'Delay (s)', {min:ANIM.delay[0], max:ANIM.delay[1], to:10, step:0.1, note:'Before the first run, on every device: e.g. the title a moment after the photo.'}));
+            + range('anim_delay', 'Delay (s)', {min:ANIM.delay[0], max:ANIM.delay[1], to:10, step:0.1, tip:'Before the first run, on every device: e.g. the title a moment after the photo.'})));
     }
     // Placed by class: the scene fills its block.
     // Placement by class only with the desktop Height on Auto (as WPBN_Settings::placed_by_class()).
@@ -789,12 +935,16 @@
         if (d !== 'desktop' && l.image_tablet) return l.image_tablet;
         return l.image;
     }
+    // Which device's values the fields show: desktop's are followed by the smaller screens; tablet's and mobile's without a green dot follow the larger screen.
+    const deviceNote = d => d === 'desktop' ? 'Desktop values. Tablet and mobile follow them, except settings given their own values there (a green dot on the device).'
+        : DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.';
     function picker(layer) {
         const d = device(), own = layer[imageKey(d)], id = imageFor(layer, d), url = images[id];
         const inherit = d !== 'desktop' && !own;
         // One row: the thumbnail, the file's name and size, then Change at the right end. No Remove on
         // desktop (an image layer has an image); tablet / mobile can go back to the larger screen's.
-        return '<div class="wpbn-field" data-base="image"><div class="wpbn-field__head"><span class="wpbn-field__label">Image</span>' + devices({tablet:!!layer.image_tablet, mobile:!!layer.image_mobile}) + '</div><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (url ? '<img src="' + escape(url) + '" alt="">' : '') + '</span>'
+        // The device note is an "i" beside Image on every device (user's request), not the note above the blocks.
+        return '<div class="wpbn-field" data-base="image"><div class="wpbn-field__head"><span class="wpbn-field__label">Image</span>' + tip(deviceNote(d)) + devices({tablet:!!layer.image_tablet, mobile:!!layer.image_mobile}) + '</div><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (url ? '<img src="' + escape(url) + '" alt="">' : '') + '</span>'
             + imageDetails(id)
             + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="image">' + (own ? 'Change' : inherit ? 'Choose its own' : 'Choose') + '</button>'
             + (own && d !== 'desktop' ? '<button type="button" class="button-link wpbn-picker__remove" data-action="clear">Use ' + DEVICES[UP[d]][1] + '\'s</button>' : '') + '</span></div>'
@@ -820,15 +970,16 @@
             value: '<p class="wpbn-position-value">' + value + (mine ? ' <button type="button" class="button-link wpbn-position-reset" data-action="position-inherit">Use ' + DEVICES[UP[d]][1] + '\'s</button>' : '') + '</p>'
         };
     }
-    // A title: Container with Position at its right, as tall, Position's value over the button (the same
-    // grid as Image fit's, in admin.css).
+    // A placed layer (a title, a text, a button, an overlay, an image object): its Container; its Position is the button on its
+    // tile (user's request, 2026-11-09). On tablet / mobile with a Position of its own: the value and a link back to the larger screen's.
     function containerPositionField(layer) {
-        const p = positionParts(layer, true), html = containerSelect(layer);
-        return html.slice(0, html.lastIndexOf('</div>')).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"') + p.button + p.value + '</div>';
+        const d = device(), mine = d !== 'desktop' && (layer[dkey('x', d)] != null || layer[dkey('y', d)] != null);
+        return containerSelect(layer) + (mine ? '<p class="wpbn-position-value wpbn-position-own">Position of its own on ' + DEVICES[d][1] + ': ' + escape(eff(layer, 'x', d)) + '% ' + escape(eff(layer, 'y', d)) + '%. <button type="button" class="button-link wpbn-position-reset" data-action="position-inherit">Use ' + DEVICES[UP[d]][1] + '\'s</button></p>' : '');
     }
-    // An image layer: Image fit (its label and device icons over the select) and Position beside it,
-    // Position's value under its button (laid out by a grid in admin.css).
+    // An image layer: Image fit. An image object also has Image position beside it (the point of its photo in view; its
+    // Position, where it stands, is the tile's), its value under the button (laid out by a grid in admin.css).
     function fitPositionField(layer) {
+        if (!imageObject(layer)) return respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'});
         const p = positionParts(layer);
         return respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'}, p.button + p.value).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"');
     }
@@ -905,42 +1056,53 @@
         return html;
     }
     /*
-     * A layer's settings in tabs (2026-11-09, user's choice: too many cards in one column): Content (what it shows), Position
-     * (where and how large, its turn and shadow), Animation (scroll, mouse, entrance, loop). The tab chosen stays as another
-     * layer is chosen (setting one thing on every layer in turn); a tab a layer has nothing for is left out, and with one
-     * tab only no tab bar. lit: tabs with something switched on (a dot), e.g. an animation. Every panel is in the page, the
-     * others hidden: switching shows another (showTab()), nothing is drawn again.
+     * A layer's (or the scene's) settings as blocks (2026-11-09, user's request: as WP Swiper's settings box): the menu in
+     * the left column (#wpbn-menu) names them, the chosen one shows beside it. Each block: [key, title, dashicon, html, on, tip];
+     * one without html is left out; on: something in it switched on (a green dot), e.g. an animation. The block chosen
+     * stays as another layer is chosen (setting one thing on every layer in turn); a layer without it opens on its first.
+     * Every block is in the page, the others hidden: choosing one shows it (showBlock()), nothing is drawn again.
      */
-    const TABS = {content:'Content', position:'Position', animation:'Animation'};
-    let tab = 'content';
-    function tabbed(groups, lit) {
-        const keys = Object.keys(TABS).filter(k => groups[k]);
-        if (keys.length < 2) return keys.map(k => groups[k]).join('');
-        const shown = keys.includes(tab) ? tab : keys[0];
-        return '<div class="wpbn-tabs" role="tablist" aria-label="Settings">' + keys.map(k => '<button type="button" class="wpbn-tab" role="tab" id="wpbn-tab-' + k + '" data-tab="' + k + '" aria-selected="' + (k === shown) + '" aria-controls="wpbn-tabpanel-' + k + '"' + (k === shown ? '' : ' tabindex="-1"') + '>' + TABS[k]
-            + (lit && lit[k] ? '<span class="wpbn-tab__dot" aria-hidden="true"></span><span class="screen-reader-text"> (on)</span>' : '') + '</button>').join('') + '</div>'
-            + keys.map(k => '<div class="wpbn-tabpanel" id="wpbn-tabpanel-' + k + '" role="tabpanel" aria-labelledby="wpbn-tab-' + k + '"' + (k === shown ? '' : ' hidden') + '>' + groups[k] + '</div>').join('');
+    let block = 'content', menuHtml = '', blockTitles = {}, blockTips = {}, shownBlock = '';
+    // The section's title: the block shown (user's request, 2026-11-09: not "Layer settings" over a card of the same name).
+    const legend = '<legend id="wpbn-block-title"></legend>';
+    function blocks(list) {
+        list = list.filter(b => b && b[3]);
+        const shown = list.some(b => b[0] === block) ? block : list.length ? list[0][0] : '';
+        blockTitles = Object.fromEntries(list.map(b => [b[0], b[1]])); blockTips = Object.fromEntries(list.map(b => [b[0], b[5] || ''])); shownBlock = shown;
+        menuHtml = list.map(([key, title, icon, , on]) => '<button type="button" class="wpbn-menu-item" data-block="' + key + '" aria-controls="wpbn-block-' + key + '" aria-current="' + (key === shown) + '">'
+            + '<span class="dashicons dashicons-' + icon + '" aria-hidden="true"></span><span class="wpbn-menu-item__title">' + title + '</span>'
+            + (on ? '<span class="wpbn-menu-item__dot" aria-hidden="true"></span><span class="screen-reader-text"> (on)</span>' : '') + '</button>').join('');
+        return list.map(([key, , , html]) => '<div class="wpbn-block" id="wpbn-block-' + key + '" data-block-pane="' + key + '"' + (key === shown ? '' : ' hidden') + '>' + html.replace(/^<div class="wpbn-card"><p class="wpbn-subheading">[^<]*<\/p>/, '<div class="wpbn-card">') + '</div>').join('');
     }
-    function showTab(k) {
-        tab = k;
-        $('settings').querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
-        $('settings').querySelectorAll('.wpbn-tabpanel').forEach(p => { p.hidden = p.id !== 'wpbn-tabpanel-' + k; });
-        // The pickers belong to the panel left; the text editor starts once its panel shows.
+    // The section's title: the block's name, with its help behind an "i" where it has one (Scroll animation, Follow the mouse).
+    function blockTitle(k) { $('block-title').innerHTML = escape(blockTitles[k] || '') + (blockTips[k] ? tip(blockTips[k]) : ''); }
+    function showBlock(k) {
+        block = k; shownBlock = k;
+        blockTitle(k);
+        $('menu').querySelectorAll('[data-block]').forEach(b => b.setAttribute('aria-current', String(b.dataset.block === k)));
+        $('settings').querySelectorAll('.wpbn-block').forEach(p => { p.hidden = p.dataset.blockPane !== k; });
+        // The pickers belong to the block left; the text editor starts once its block shows.
         closePicker(); closeFonts(); startEditor(); refreshFontSample(); drawGradient();
     }
     // A layer's name (the layer list shows it), the top field of its settings.
     const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>';
     // A layer's turn around its middle, per device (degrees, clockwise; WPBN_Settings::RESPONSIVE rotate).
     /*
-     * Scroll animation: one switch for the whole card (use_scroll; a layer's own motion switches follow it, WPBN_Settings::sanitize());
-     * on, its fields with no switches of their own.
+     * Scroll animation: no switch (user's request, 2026-11-09): its values apply as set, at rest (0 travel, 0 zoom, Opacity at
+     * the end as its Opacity) nothing moves (WPBN_Settings::sanitize()). Its help: the tip beside the section's title (SCROLL_TIP).
      */
-    function scrollCard(o, fields) {
-        const toggle = withTip(check('use_scroll', 'Scroll animation'), 'Moves the layer as the page scrolls: from where it is at the top of the page to these values once the banner has scrolled out of view.');
-        return card('Scroll animation', o.use_scroll ? toggle + fields : toggle);
+    const SCROLL_TIP = 'Moves the layer as the page scrolls: from where it is at the top of the page to these values once the banner has scrolled out of view.';
+    const scrollCard = (o, fields) => card('Scroll animation', fields);
+    // Something moves as the page scrolls (the green dot on Scroll animation): a travel or zoom on some device, or an Opacity at the end
+    // other than its Opacity (100% without its switch).
+    function scrolls(o) {
+        const own = k => [o[k], o[k + '_tablet'], o[k + '_mobile']].some(v => v != null && Number(v) !== 0);
+        if (['move_x', 'move_y', 'zoom'].some(own)) return true;
+        if (o.end_opacity == null) return false;
+        return Object.keys(DEVICES).some(d => Number(eff(o, 'end_opacity', d)) !== (o.use_opacity && o.type === 'image' ? Number(eff(o, 'opacity', d)) : 100));
     }
-    // Behind its switch (as Scale): off, the switch alone (in a head row, so its tip stays beside it); on, the slider per device.
-    const rotateField = () => withTip(current().use_rotate ? optionalRange(current(), 'rotate', 'Rotation (°)', {min:-180, max:180}) : check('use_rotate', 'Rotation (°)'), 'Turns the layer around its middle; negative: anticlockwise. A photo that fills the scene grows so its corners never show.');
+    // Behind its switch (as Scale): off, the switch alone; on, the slider per device. No tip (user's request, 2026-11-09).
+    const rotateField = () => respRange('rotate', 'Rotation (°)', {min:-180, max:180, from:-180, to:180});
     // Filters (an image layer's, a Shape object's): WPBN_Settings::FILTERS.
     const FILTER_FIELDS = [['f_grayscale', 'Black and white (%)', 0, 100], ['f_blur', 'Blur (px)', 0, 40], ['f_brightness', 'Brightness (%)', 0, 200], ['f_contrast', 'Contrast (%)', 0, 200], ['f_saturate', 'Saturation (%)', 0, 300]];
     const filterFields = () => FILTER_FIELDS.map(([key, label, min, max]) => range(key, label, {min, max})).join('');
@@ -951,10 +1113,10 @@
         const o = selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
         const svg = card('Shape', (o ? '' : nameField()) + withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
         if (!o) {
-            return '<legend>Layer settings</legend>' + svg
-                + (shapes[l.shape] ? card('Fit', withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch'}),
-                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Choose a device to give it its own.')) : '')
-                + '<p class="description wpbn-after-cards">Choose an object (in the drawing or under the layer in the list) to set what fills it, its edge, shadow and motion. The layer itself stays in place.</p>';
+            return legend + blocks([['content', 'Shape', 'art', svg
+                + '<p class="description wpbn-after-cards">Choose an object (in the drawing or under the layer\'s tile) to set what fills it, its edge, shadow and motion. The layer itself stays in place.</p>'],
+                ['fit', 'Fit', 'editor-contract', shapes[l.shape] ? card('Fit', withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch'}),
+                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Choose a device to give it its own.')) : '']]);
         }
         let fill = '';
         if (o.fill === 'layer') {
@@ -978,18 +1140,19 @@
         }
         const choice = '<div class="wpbn-field">' + head('wpbn-f-fill', 'Fill') + '<div class="wpbn-fill-choice wpbn-fill-choice--wrap" role="group" aria-label="Fill">'
             + Object.entries(FILL_NAMES).map(([value, name], i) => '<button type="button" class="wpbn-device-button"' + (i ? '' : ' id="wpbn-f-fill"') + ' data-choice="fill" data-value="' + value + '" aria-pressed="' + (o.fill === value) + '">' + name + '</button>').join('') + '</div></div>';
-        return '<legend>Object settings</legend>' + svg + tabbed({content:card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
+        // The drawing stays above the object's blocks: a click in it chooses another object.
+        return legend + svg + blocks([['content', 'Object', 'marker', card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
                 + range('opacity', 'Opacity (%)', {min:0, max:100})
                 + withTip(check('invert', 'Invert'), 'The object becomes a hole: its fill covers the whole scene except the object\'s shape, e.g. a panel with a window cut in it.')
-                + '<p><button type="button" class="button" data-object-hide="' + selectedObject + '" data-layer="' + selected + '">' + (o.hidden ? 'Show the object' : 'Hide the object') + '</button> <button type="button" class="button-link" data-action="object-none">Layer settings</button></p>')
-            + card('Fill', choice + fill)
+                + '<p><button type="button" class="button" data-object-hide="' + selectedObject + '" data-layer="' + selected + '">' + (o.hidden ? 'Show the object' : 'Hide the object') + '</button> <button type="button" class="button-link" data-action="object-none">Layer settings</button></p>')],
+            ['fill', 'Fill', 'art', card('Fill', choice + fill)],
             // Greyed where they do not apply (the values kept): Filters change a picture (Photo, Image); glass has no Edge or
             // Shadow (a filter around it would leave it nothing to blur: an object with Fill None and an Edge over it instead).
-            + card('Filters', needsAll(filterFields(), 'pictured'))
-            + card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
-                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged')),
-            animation:scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
-                + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative: up.'}))}, {animation:!!o.use_scroll});
+            ['filters', 'Filters', 'image-filter', card('Filters', needsAll(filterFields(), 'pictured'))],
+            ['edge', 'Edge and shadow', 'admin-appearance', card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
+                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged'))],
+            ['scroll', 'Scroll animation', 'sort', scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
+                + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'Negative: up.'})), scrolls(o), SCROLL_TIP]]);
     }
     // An SVG chosen on this computer: sent to the server, which cleans it and keeps it in the media library.
     function uploadShape(l) {
@@ -1025,52 +1188,79 @@
         };
         input.click();
     }
-    // Layers: the front one at the top, as in Photoshop. Each row selects its
-    // layer; its icons hide, copy or remove it; drag (or Alt + arrows) reorders.
+    /*
+     * An overlay's thumbnail (user's requests, 2026-11-09): the layer alone, not the scene: its box in its proportions (its desktop
+     * Width and Height in the scene), as large as fits, over the checkerboard, in its fill, with its blur (of the checkerboard
+     * behind it) and its shadow made as small as the box is.
+     */
+    function overlayThumb(l) {
+        const d = 'desktop', sw = sceneWidth(d), sh = sceneHeight(d);
+        const pw = Math.max(1, Math.min(100, overlayWidth(l, d)) / 100 * sw), ph = Math.max(1, overlayHeight(l, d) / 100 * sh), ratio = pw / ph;
+        // In % of the thumbnail (4:3), 86% of it at most on its long side.
+        const w = ratio > 4 / 3 ? 86 : 86 * ratio * 3 / 4, h = ratio > 4 / 3 ? 86 * 4 / 3 / ratio : 86;
+        const k = 132 * w / 100 / pw, blur = inlineFor(l, 'blur', d);
+        const shadow = l.use_shadow ? (l.shadow_inset ? 'inset ' : '') + l.shadow_x * k + 'px ' + l.shadow_y * k + 'px ' + l.shadow_blur * k + 'px ' + l.shadow_color : '';
+        const style = 'left:' + (100 - w) / 2 + '%;top:' + (100 - h) / 2 + '%;width:' + w + '%;height:' + h + '%;background:' + overlayFill(l) + ';'
+            + (blur ? 'backdrop-filter:blur(' + Math.max(1.5, blur * k) + 'px);' : '') + (shadow ? 'box-shadow:' + shadow + ';' : '');
+        return '<span class="wpbn-layer-thumb wpbn-layer-thumb--overlay" aria-hidden="true"><span class="wpbn-overlay-thumb" style="' + escape(style) + '"></span></span>';
+    }
+    // Layers: tiles from the back one (1) to the front one, so a new layer, put in front, is the last tile, beside Add element
+    // (user's request, 2026-11-09). Each tile selects its layer; its icons hide, place, copy or remove it; drag (or Alt + arrows) reorders.
     function list() {
         const box = $('layers');
         box.replaceChildren();
         if (!scene.layers.length) { box.innerHTML = '<p class="wpbn-empty">Add a background image, a title and a transparent front image.</p>'; return; }
-        for (let i = scene.layers.length - 1; i >= 0; i--) {
+        for (let i = 0; i < scene.layers.length; i++) {
             const l = scene.layers[i], name = escape(l.name || TYPE_NAMES[l.type] || 'Layer');
             // Not draggable: the browser's own image drag would stop the row's.
             const thumb = l.type === 'overlay'
-                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--overlay" aria-hidden="true"><span style="background:' + escape(overlayFill(l)) + '"></span></span>'
+                ? overlayThumb(l)
                 : l.type === 'shortcode'
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--shortcode" aria-hidden="true"><span class="dashicons dashicons-shortcode"></span></span>'
                 : l.type === 'button'
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--button" aria-hidden="true"><span class="dashicons dashicons-button"></span></span>'
                 : l.type === 'richtext'
-                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--richtext" aria-hidden="true"><span class="dashicons dashicons-editor-paragraph"></span></span>'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--richtext" aria-hidden="true"><span class="wpbn-thumb-word">Text</span></span>'
                 : l.type === 'text'
-                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--text" aria-hidden="true"><span class="dashicons dashicons-editor-textcolor"></span></span>'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--text" aria-hidden="true"><span class="wpbn-thumb-word">Title</span></span>'
                 : l.type === 'shape'
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--shape" aria-hidden="true">' + (shapes[l.shape] ? shapeSvg(l, -1) : '<span class="dashicons dashicons-art"></span>') + '</span>'
                 : '<span class="wpbn-layer-thumb" aria-hidden="true">' + (images[l.image] ? '<img src="' + escape(images[l.image]) + '" alt="" draggable="false">' : '<span class="dashicons dashicons-format-image"></span>') + '</span>';
+            // Its number (1: the back layer) in the thumbnail's corner.
+            const numbered = thumb.replace(/<\/span>$/, '<span class="wpbn-tile__number">' + (i + 1) + '</span></span>');
             const row = document.createElement('div');
-            row.className = 'wpbn-layer-row' + (i === selected && !adding ? ' is-active' : '') + (l.hidden ? ' is-hidden' : '');
+            row.className = 'wpbn-layer-row wpbn-tile' + (i === selected ? ' is-active' : '') + (l.hidden ? ' is-hidden' : '');
             row.setAttribute('role', 'listitem');
             row.dataset.index = i;
-            row.innerHTML = '<span class="wpbn-layer-grip" aria-hidden="true"></span><button type="button" class="wpbn-layer-select" data-select="' + i + '" aria-current="' + (i === selected && !adding) + '" title="Drag, or Alt + ↑ / ↓, to change the depth">' + thumb
+            // Its thumbnail, name and kind; between the thumbnail and the name (admin.css): hide and duplicate at the left, delete at the right.
+            row.innerHTML = '<button type="button" class="wpbn-layer-select" data-select="' + i + '" aria-current="' + (i === selected) + '" title="Drag, or Alt + ← / →, to change the depth">' + numbered
                 + '<span class="wpbn-layer-label">' + name + '<small>' + (TYPE_NAMES[l.type] || 'Image') + (l.hidden ? ' · hidden' : '') + '</small></span></button>'
                 + '<span class="wpbn-layer-tools">'
                 + '<button type="button" class="wpbn-icon-button" data-row-action="hide" data-index="' + i + '" aria-pressed="' + l.hidden + '" aria-label="' + (l.hidden ? 'Show ' : 'Hide ') + name + '" title="' + (l.hidden ? 'Show' : 'Hide') + '"><span class="dashicons dashicons-' + (l.hidden ? 'hidden' : 'visibility') + '" aria-hidden="true"></span></button>'
+                // Position (not a Shape layer's): where it stands, or a photo filling the scene its point in view; its value in its title
+                // (the browser's tooltip on hover, as Hide's and Duplicate's).
+                + (l.type === 'shape' ? '' : '<button type="button" class="wpbn-icon-button wpbn-tile-position" data-row-action="position" data-index="' + i + '" data-kind="' + (anchored(l) ? 'place' : 'focus') + '" aria-label="' + escape(positionTip(l)) + ' (' + name + ')" title="' + escape(positionTip(l)) + '">' + icons.position + '</button>')
                 + '<button type="button" class="wpbn-icon-button" data-row-action="duplicate" data-index="' + i + '" aria-label="Duplicate ' + name + '" title="Duplicate"' + (scene.layers.length >= 40 ? ' disabled' : '') + '>' + icons.clone + '</button>'
+                + '</span><span class="wpbn-layer-tools wpbn-layer-tools--end">'
                 + '<button type="button" class="wpbn-icon-button wpbn-icon-button--danger" data-row-action="delete" data-index="' + i + '" aria-label="Delete ' + name + '" title="Delete"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>'
                 + '</span>';
-            box.append(row);
-            // A Shape layer's objects under its row, the front one at the top (as the layers).
+            // A Shape layer's objects in its tile, under its name, the front one at the top.
             if (l.type === 'shape' && shapes[l.shape]) {
+                const objects = document.createElement('div');
+                objects.className = 'wpbn-objects';
+                objects.setAttribute('role', 'list');
                 for (let j = l.shape_objects.length - 1; j >= 0; j--) {
-                    const o = l.shape_objects[j], label = escape(o.name || 'Object'), active = i === selected && j === selectedObject && !adding;
+                    const o = l.shape_objects[j], label = escape(o.name || 'Object'), active = i === selected && j === selectedObject;
                     const sub = document.createElement('div');
                     sub.className = 'wpbn-object-row' + (active ? ' is-active' : '') + (o.hidden || l.hidden ? ' is-hidden' : '');
                     sub.setAttribute('role', 'listitem');
                     sub.innerHTML = '<button type="button" class="wpbn-object-select" data-object="' + j + '" data-layer="' + i + '" aria-current="' + active + '"><span class="wpbn-object-thumb" aria-hidden="true">' + shapeSvg(l, j, '', j) + '</span><span class="wpbn-layer-label">' + label + '</span></button>'
                         + '<button type="button" class="wpbn-icon-button" data-object-hide="' + j + '" data-layer="' + i + '" aria-pressed="' + !!o.hidden + '" aria-label="' + (o.hidden ? 'Show ' : 'Hide ') + label + '" title="' + (o.hidden ? 'Show' : 'Hide') + '"><span class="dashicons dashicons-' + (o.hidden ? 'hidden' : 'visibility') + '" aria-hidden="true"></span></button>';
-                    box.append(sub);
+                    objects.append(sub);
                 }
+                row.append(objects);
             }
+            box.append(row);
         }
     }
     function focusRow(index, action) {
@@ -1086,10 +1276,23 @@
         list(); changed();
         return true;
     }
+    // The value the tile's Position button shows on hover: where the layer stands on the device being edited, or, for a photo
+    // filling the scene, the point of it kept in view (on every device).
+    function positionTip(l) {
+        const d = device();
+        if (!anchored(l) && l.type === 'image' && images[l.image]) return 'Image position: ' + l.focus_x + '% ' + l.focus_y + '%';
+        return 'Position' + (d === 'desktop' ? '' : ' on ' + DEVICES[d][1]) + ': ' + eff(l, 'x', d) + '% ' + eff(l, 'y', d) + '%';
+    }
     function rowAction(action, index) {
         const l = scene.layers[index];
         if (!l) return;
         const keep = scene.layers[selected];
+        // Position: the layer chosen (its settings shown), then its Position window.
+        if (action === 'position') {
+            if (index !== selected || selectedObject >= 0) { selected = index; selectedObject = -1; list(); settings(); }
+            openPosition(l, $('layers').querySelector('[data-row-action="position"][data-index="' + index + '"]'));
+            return;
+        }
         if (action === 'hide') {
             l.hidden = !l.hidden;
             list(); changed(); focusRow(index, 'hide');
@@ -1097,7 +1300,7 @@
             if (scene.layers.length >= 40) return;
             // A deep copy: a Shape layer's objects are its own, not shared with the original.
             scene.layers.splice(index + 1, 0, Object.assign(JSON.parse(JSON.stringify(l)), {name: l.name + ' copy', uid: newUid()}));
-            selected = index + 1; adding = false; selectedObject = -1;
+            selected = index + 1; selectedObject = -1;
             list(); settings(); changed(); focusRow(selected);
         } else if (action === 'delete') {
             scene.layers.splice(index, 1);
@@ -1140,12 +1343,14 @@
     };
     // The scene's Height, or (obj: an overlay) the layer's Height or Width (kind), as the scene's Height: the number,
     // its unit, Inherit on tablet / mobile.
+    // Its green dots: desktop with a height (or width) and unit other than the standard ones, tablet / mobile with a unit of their own.
+    const heightDots = (o, k) => ({desktop:!isStandard(o, SIZE[k].desktop[0]) || !isStandard(o, SIZE[k].desktop[1]), tablet:o[SIZE[k].tablet[1]] != null, mobile:o[SIZE[k].mobile[1]] != null});
     function heightField(obj, kind) {
         const layer = !!obj, o = obj || scene, k = kind || 'height', wide = k !== 'height', label = wide ? 'Width' : 'Height';
         const d = device(), [key, unitKey] = SIZE[k][d], own = o[unitKey] != null, [number, unit] = effSize(k, d, o), id = 'wpbn-f-' + key, off = unit === 'auto';
         const [min, max] = unit === 'px' ? [layer ? 1 : 160, wide ? 3000 : 2400] : unit === 'auto' ? [1, wide ? 3000 : 2400] : [1, layer && (unit === '%' || wide) ? 100 : 200];
         const inherit = d === 'desktop' ? '' : '<option value=""' + (own ? '' : ' selected') + '>Inherit</option>';
-        const dots = {tablet:o[SIZE[k].tablet[1]] != null, mobile:o[SIZE[k].mobile[1]] != null};
+        const dots = heightDots(o, k);
         return '<div class="wpbn-field wpbn-field--height">' + head(id, label, (layer ? '' : heightTip()) + devices(dots)) + '<div class="wpbn-field__row">'
             + '<input id="' + id + '" data-height="' + d + '" data-size="' + k + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
             + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? (o.type === 'image' && k === 'height' ? ['auto'].concat(LAYER_UNITS.height) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
@@ -1223,33 +1428,83 @@
             mediaButtons: false
         });
     }
+    /*
+     * Add element (user's request, 2026-11-09): a window with the kinds of element (ELEMENTS); choosing one adds that
+     * layer in front of the others and selects it; Close, the backdrop or Esc leave the scene as it was. In the page's
+     * body, as the Position window (the editor box is a size container: it would hold a fixed window inside it).
+     */
+    const addModal = document.createElement('div');
+    addModal.className = 'wpbn-modal wpbn-modal--add'; addModal.hidden = true;
+    addModal.setAttribute('role', 'dialog'); addModal.setAttribute('aria-modal', 'true'); addModal.setAttribute('aria-labelledby', 'wpbn-add-title');
+    addModal.innerHTML = '<div class="wpbn-modal__backdrop"></div><div class="wpbn-modal__box"><div class="wpbn-modal__head"><h2 class="wpbn-modal__title" id="wpbn-add-title">Add element</h2>'
+        + '<button type="button" class="wpbn-modal__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
+        + '<div class="wpbn-modal__body"><div class="wpbn-elements" role="group" aria-label="Elements">'
+        + Object.entries(ELEMENTS).map(([type, [icon, name, about]]) => '<button type="button" class="wpbn-element" data-add="' + type + '"><span class="dashicons dashicons-' + icon + '" aria-hidden="true"></span><span class="wpbn-element__name">' + name + '</span><span class="wpbn-element__about">' + escape(about) + '</span></button>').join('')
+        + '</div><p class="description wpbn-add-note">The new layer goes in front of the others: the last tile. Drag it to change its depth.</p></div></div>';
+    document.body.append(addModal);
+    function openAdd() {
+        addModal.hidden = false; document.body.classList.add('wpbn-modal-open');
+        $('add-toggle').setAttribute('aria-expanded', 'true');
+        addModal.querySelectorAll('[data-add]').forEach(b => { b.disabled = scene.layers.length >= 40; });
+        const first = addModal.querySelector('[data-add]:not(:disabled)') || addModal.querySelector('.wpbn-modal__close');
+        first.focus();
+    }
+    function closeAdd(focusBack) {
+        if (addModal.hidden) return;
+        addModal.hidden = true; document.body.classList.remove('wpbn-modal-open');
+        $('add-toggle').setAttribute('aria-expanded', 'false');
+        if (focusBack) $('add-toggle').focus();
+    }
+    function addLayer(type) {
+        if (scene.layers.length >= 40) return;
+        // A new title in the theme's container (it lines up with the page); a new image fills the whole scene.
+        // Its kind's standard settings (standard(), TYPE_NEW): a title, a button or a shortcode in the theme's container (it lines up
+        // with the page), an image the whole scene; an overlay a see-through black; a text a paragraph at a reading size; none moves.
+        const layer = Object.assign(standard({type}), {type, name:TYPE_NAMES[type] + ' ' + (scene.layers.length + 1)});
+        // Its own list of objects (boot.layer's one would be shared by every new layer).
+        layer.shape_objects = []; layer.uid = newUid(); selectedObject = -1; shapeError = ''; block = 'content';
+        scene.layers.push(layer); selected = scene.layers.length - 1;
+        list(); settings(); changed(); focusRow(selected);
+    }
+    addModal.addEventListener('click', event => {
+        const button = event.target.closest('[data-add]');
+        if (button) { closeAdd(false); addLayer(button.dataset.add); return; }
+        if (event.target.closest('.wpbn-modal__close, .wpbn-modal__backdrop')) closeAdd(true);
+    });
+    // Esc closes it; Tab stays inside it.
+    document.addEventListener('keydown', event => {
+        if (addModal.hidden) return;
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeAdd(true); return; }
+        if (event.key !== 'Tab') return;
+        const controls = [...addModal.querySelectorAll('button:not(:disabled)')], first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
     function settings() {
         let html;
-        if (adding) {
-            html = '<legend>Add element</legend><div class="wpbn-card"><p class="wpbn-subheading">Elements</p><div class="wpbn-elements" role="group" aria-label="Elements">'
-                + Object.entries(ELEMENTS).map(([type, [icon, name, about]]) => '<button type="button" class="wpbn-element" data-add="' + type + '" title="' + escape(about) + '"><span class="dashicons dashicons-' + icon + '" aria-hidden="true"></span><span class="wpbn-element__name">' + name + '</span></button>').join('')
-                + '</div></div><p class="description wpbn-after-cards">The new layer goes in front of the others; drag it in the list to change its depth.</p>';
-        } else if (selected < 0) {
-            html = '<legend>Scene settings</legend>'
-                + card('Size', heightField())
-                + card('Placement', targetField())
-                // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name).
-                + card('Attributes', '<div class="wpbn-row">' + withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
-                    + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class above, which places the banner in a block.') + '</div>');
+        if (selected < 0) {
+            html = legend + blocks([
+                ['size', 'Size', 'editor-expand', card('Size', heightField())],
+                ['placement', 'Placement', 'layout', card('Placement', targetField())],
+                // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name), one under the other.
+                ['attributes', 'Attributes', 'tag', card('Attributes', withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
+                    + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class in Placement, which places the banner in a block.'))]]);
         } else if (scene.layers[selected].type === 'shape') {
             html = shapeSettings(scene.layers[selected]);
         } else {
             const l = scene.layers[selected];
             const d = device();
-            let first = '', cards = '';
-            // An image: its picture here; its Shadow (along its outline: the title's block, its keys) in Position and size.
+            // first: what it shows (in Content, an overlay's in Fill); cards: a title's, a text's or a button's style, a block of its own.
+            let first = '';
+            const cards = [];
+            // An image: its picture here; its Shadow (along its outline: the title's block, its keys) in Size.
             if (l.type === 'image') first += picker(l);
             else if (l.type === 'overlay') {
                 // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
                 first += fillChoice(l) + (l.use_gradient ? gradientField(l)
-                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size and place: Position and size.'))
+                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size: Size; its place: Position on its tile.'))
                     // Blur, for Color and Gradient alike; then its Shadow (Inside: a vignette).
-                    + deviceNumberField(l, 'blur') + shadowField(l);
+                    + deviceNumberField(l, 'blur');
             } else if (l.type === 'shortcode') {
                 first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It shows in this layer\'s place (layers above it cover it) and can be clicked and swiped. Its height is its own. Press Update to see it in the preview.');
             } else if (l.type === 'button') {
@@ -1259,26 +1514,26 @@
                     + needs(check('button_new_tab', 'Open in a new window'), 'link');
                 const sizes = {};
                 Object.entries(BUTTON_SIZES).forEach(([value, [name]]) => { sizes[value] = name; });
-                cards += card('Button style', buttonChoice(l, 'button_style', 'Background', {filled:'Filled', bordered:'Border', underline:'Underline'})
+                cards.push(['style', 'Button style', 'admin-appearance', card('Button style', buttonChoice(l, 'button_style', 'Background', {filled:'Filled', bordered:'Border', underline:'Underline'})
                     + needs(buttonChoice(l, 'button_shape', 'Corners', {square:'Square', rounded:'Rounded', round:'Round'}), 'corners')
                     + withTip(respSelect('button_size', 'Size', sizes), 'Preset sizes: padding, height and font size together.')
                     + '<div class="wpbn-colors">' + withTip(colorField('button_color', 'Fill / border color', {alpha:true, def:'#2271b1'}), 'Filled: the button\'s color; Border and Underline: their line\'s.')
-                    + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>');
+                    + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>')]);
             } else if (l.type === 'richtext') {
                 // WordPress's editor, as WP Swiper's slide texts (startEditor() after the fields are drawn); a plain box without it.
                 first += withTip('<div class="wpbn-field wpbn-richtext">' + head(EDITOR_ID, 'Text') + '<textarea id="' + EDITOR_ID + '" data-key="content" rows="6">' + escape(l.content || '') + '</textarea></div>',
                     'Choose Paragraph or a heading in the first menu of the toolbar. Enter starts a new paragraph, Shift + Enter a new line. Headings keep the theme\'s font and size; links can be clicked on the banner.');
-                cards += card('Text style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s text font.')
+                cards.push(['style', 'Text style', 'editor-textcolor', card('Text style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s text font.')
                         : withTip(field('font_family', 'Font', 'text'), 'Empty: the page\'s text font. As CSS takes it, e.g. "Open Sans", sans-serif; the font must be loaded on the site.'))
                     + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
                     + deviceNumberField(l, 'font')
                     + withTip(colorField('color', 'Color', {alpha:true, def:boot.layer.color}), 'The text\'s color; words colored in the editor keep theirs.')
-                    + shadowField(l));
+                    )]);
             } else {
                 first += withTip(textarea('text', 'Title'), 'Enter starts a new line. Wrap words in <u></u> to show them in the Accent color, e.g. Discover <u>Norway</u>.')
                     + withTip(select('tag', 'Heading', {h1:'h1', h2:'h2', h3:'h3', h4:'h4', h5:'h5'}), 'h1 only if this title is the page\'s main title (one h1 per page); otherwise h2, or h3–h5 under other headings. It matters for SEO and screen readers; the size and weight come from the settings below.');
                 // Font and Weight on one row with the font sample under them, then Font size, then Color and Accent color.
-                cards += card('Title style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s heading font.')
+                cards.push(['style', 'Title style', 'editor-textcolor', card('Title style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s heading font.')
                         : withTip(field('font_family', 'Font', 'text'), 'Empty: the theme\'s heading font. As CSS takes it, e.g. "Playfair Display", serif; the font must be loaded on the site.'))
                     + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
                     // Font size and Letter spacing (per device; each a row of its own: the device icons beside the label), Case and Style, the colours, then Shadow.
@@ -1286,47 +1541,57 @@
                     + '<div class="wpbn-row">' + select('text_transform', 'Case', {none:'Normal', uppercase:'UPPERCASE', lowercase:'lowercase', capitalize:'Capitalize'}) + select('font_style', 'Style', {normal:'Normal', italic:'Italic'}) + '</div>'
                     + '<div class="wpbn-colors">' + colorField('color', 'Color', {alpha:true, def:boot.layer.color})
                     + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>'
-                    + shadowField(l));
+                    )]);
             }
-            html = '<legend>Layer settings</legend>'
-                + (d === 'desktop' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.</span></p>')
-                + tabbed({
-                // Content: its name first (shown in the layer list; given when it is added: "Title 2", a copy adds "copy"; an overlay's
-                // Fill its own card), what it shows, an image's Filters (WPBN_Settings::FILTERS).
-                content:(l.type === 'overlay' ? card('Layer', nameField()) + card('Fill', first) : card('Layer', nameField() + first)) + cards
-                    + (l.type === 'image' ? card('Filters', filterFields()) : ''),
-                // Position: where and how large, its turn, an image's Shadow.
-                position:(l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l) + rotateField()) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
-                    + containerField(l)
-                    // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
-                    + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
-                    // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
-                    + (l.type === 'text' || l.type === 'richtext' ? heightField(l, 'textwidth') : '')
-                    // Scale and Opacity: image layers only (a title has neither).
-                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100}))
-                    // Its turn (every layer but a Shape), then an image's Shadow.
-                    + rotateField() + (l.type === 'image' ? shadowField(l) : ''))),
-                // Animation: as the page scrolls (an overlay: only its Opacity at the end), with the mouse, coming in, running on.
-                animation:(l.type === 'overlay' ? scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'}))
-                    : scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
-                    + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: up.'})
-                    + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
-                    + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out, 100 leaves it as it is.'}))
-                    // Follow the mouse: a card of its own (it is not the scroll's; user's choice, 2026-11-09).
-                    + card('Follow the mouse', mouseField(l)))
-                    + entranceCard(l) + animationCard(l)
-                }, {animation:!!(l.use_scroll || l.use_enter || l.use_anim || (l.use_mouse && l.type !== 'overlay'))});
+            html = legend
+                // On tablet / mobile: which values these are (an image layer: an "i" beside its Image instead, picker()).
+                + (d === 'desktop' || l.type === 'image' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + deviceNote(d) + '</span></p>')
+                + blocks([
+                    // Content: its name first (shown on its tile; given when it is added: "Title 2", a copy adds "copy"), what it shows;
+                    // an overlay's Fill a block of its own. Then its style, Size, Effect, an image's Filters (WPBN_Settings::FILTERS), the
+                    // animations coming in and running on, then the scroll's and the mouse's (the order: user's choice, 2026-11-09).
+                    ['content', 'Content', 'edit', card('Content', nameField() + (l.type === 'overlay' ? '' : first))],
+                    l.type === 'overlay' ? ['fill', 'Fill', 'art', card('Fill', first)] : null,
+                    ...cards,
+                    // Where and how large.
+                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
+                        + containerField(l)
+                        // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
+                        + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
+                        // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
+                        + (l.type === 'text' || l.type === 'richtext' ? heightField(l, 'textwidth') : '')
+                        // Padding (2026-11-09): a title's, a text's, a button's, a shortcode's or an image object's.
+                        + (textual(l) || imageObject(l) ? paddingField(l) : '')
+                        )],
+                    // Effect (user's request, 2026-11-09): an image's Scale and Opacity, every layer's Rotation, a Shadow (an image's along its
+                    // outline, a title's or a text's behind its letters, an overlay's around its box or Inside it).
+                    ['effect', 'Effect', 'admin-customizer', card('Effect', (l.type !== 'image' ? '' : respRange('scale', 'Scale (%)', {min:10, max:300, to:200, tip:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + respRange('opacity', 'Opacity (%)', {min:0, max:100}))
+                        + rotateField() + (['image', 'text', 'richtext', 'overlay'].includes(l.type) ? shadowField(l) : '') + borderField(l) + radiusField(l))],
+                    l.type === 'image' ? ['filters', 'Filters', 'image-filter', card('Filters', filterFields())] : null,
+                    ['entrance', 'Entrance animation', 'migrate', entranceCard(l), !!l.use_enter],
+                    ['loop', 'Loop animation', 'controls-repeat', animationCard(l), !!l.use_anim],
+                    // As the page scrolls (an overlay: only its Opacity at the end), with the mouse (not an overlay), coming in, running on.
+                    ['scroll', 'Scroll animation', 'sort', l.type === 'overlay' ? scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, tip:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'}))
+                        : scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: to the left.'})
+                        + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: up.'})
+                        + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, tip:'Size added by the end of the scroll; negative shrinks the layer.'})
+                        + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, tip:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out, 100 leaves it as it is.'})), scrolls(l), SCROLL_TIP],
+                    // Follow the mouse: a block of its own (it is not the scroll's; user's choice, 2026-11-09).
+                    l.type === 'overlay' ? null : ['mouse', 'Follow the mouse', 'move', card('Follow the mouse', mouseField(l)), Number(l.mouse) !== 0, MOUSE_TIP]
+                ]);
         }
         // The picker and the Font list belong to fields about to be redrawn.
         closePicker(); closeFonts(); stopEditor();
+        $('menu').innerHTML = menuHtml;
         $('settings').innerHTML = '<fieldset class="wpbn-section">' + html + '</fieldset>';
+        blockTitle(shownBlock);
         applyStates();
+        refreshBorder(); refreshRadius(); refreshPadding();
         targetWarning();
         refreshFontSample();
         drawGradient();
         startEditor();
-        $('scene-settings').setAttribute('aria-current', String(!adding && selected < 0));
-        $('add-toggle').setAttribute('aria-current', String(adding));
+        $('scene-settings').setAttribute('aria-current', String(selected < 0));
     }
     // One device for the preview and for the fields' device icons.
     function setDevice(value, focusField) {
@@ -1335,7 +1600,29 @@
         if (focusField) { const button = $('settings').querySelector('[data-field-device="' + value + '"]'); if (button) button.focus(); }
     }
     // The preview is redrawn only by Update; until then the button is lit (as WP Swiper's).
-    function changed() { sync(); $('refresh').classList.add('is-stale'); clearTimeout(historyTimer); historyTimer = setTimeout(remember, HISTORY_PAUSE); }
+    function changed() { sync(); $('refresh').classList.add('is-stale'); clearTimeout(historyTimer); historyTimer = setTimeout(remember, HISTORY_PAUSE); motionDots(); overlayTile(); }
+    // An overlay's thumbnail follows its settings as they change (its tile's thumbnail only: the tiles are not drawn again).
+    function overlayTile() {
+        const l = selected >= 0 && scene.layers[selected], thumb = l && l.type === 'overlay' && $('layers').querySelector('[data-select="' + selected + '"] .wpbn-layer-thumb');
+        if (!thumb) return;
+        const number = thumb.querySelector('.wpbn-tile__number');
+        thumb.outerHTML = overlayThumb(l).replace(/<\/span>$/, number ? number.outerHTML + '</span>' : '</span>');
+    }
+    // Scroll animation and Follow the mouse have no switch: their green dot in the menu follows their values as they are typed.
+    function menuDot(key, on) {
+        const b = $('menu').querySelector('[data-block="' + key + '"]');
+        if (!b) return;
+        const dot = b.querySelector('.wpbn-menu-item__dot');
+        if (on && !dot) b.querySelector('.wpbn-menu-item__title').insertAdjacentHTML('afterend', '<span class="wpbn-menu-item__dot" aria-hidden="true"></span><span class="screen-reader-text"> (on)</span>');
+        if (!on && dot) { if (dot.nextElementSibling) dot.nextElementSibling.remove(); dot.remove(); }
+    }
+    function motionDots() {
+        if (selected < 0) return;
+        const o = current();
+        if (!o) return;
+        menuDot('scroll', scrolls(o));
+        menuDot('mouse', Number(o.mouse) !== 0);
+    }
     /*
      * Undo and Redo: the scene as it was after each change since the page opened (the last HISTORY_MAX). Changes close
      * together (a slider dragged, a number typed) are one step: the scene is kept once nothing has changed for HISTORY_PAUSE ms.
@@ -1353,7 +1640,6 @@
         const data = JSON.parse(json);
         Object.keys(scene).forEach(key => { delete scene[key]; });
         Object.assign(scene, data);
-        adding = false;
         if (selected >= scene.layers.length) selected = scene.layers.length - 1;
         const shape = scene.layers[selected];
         if (!shape || shape.type !== 'shape' || selectedObject >= (shape.shape_objects || []).length) selectedObject = -1;
@@ -1388,7 +1674,7 @@
             else if (Number.isFinite(input.valueAsNumber)) l[key] = Math.round(Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber)) * 100) / 100;
             else return;
             // The green dots: tablet / mobile with a value of their own.
-            input.closest('.wpbn-field').querySelectorAll('[data-field-device]').forEach(b => b.classList.toggle('has-value', b.dataset.fieldDevice !== 'desktop' && l[INLINE[kind].keys[b.dataset.fieldDevice]] != null));
+            input.closest('.wpbn-field').querySelectorAll('[data-field-device]').forEach(b => b.classList.toggle('has-value', b.dataset.fieldDevice === 'desktop' ? !isStandard(l, INLINE[kind].keys.desktop) : l[INLINE[kind].keys[b.dataset.fieldDevice]] != null));
             refreshFontSample();
             changed(); return;
         }
@@ -1401,8 +1687,8 @@
             if (!Number.isFinite(input.valueAsNumber)) return;
             if (o[uk] == null) o[uk] = effSize(kind, d, o)[1];
             o[hk] = Math.min(Number(input.max), Math.max(Number(input.min), input.valueAsNumber));
-            refreshDots(input.closest('.wpbn-field'));
-            const dot = input.closest('.wpbn-field').querySelector('[data-field-device="' + d + '"]'); if (dot && d !== 'desktop') dot.classList.add('has-value');
+            const own = heightDots(o, kind);
+            input.closest('.wpbn-field').querySelectorAll('[data-field-device]').forEach(b => b.classList.toggle('has-value', !!own[b.dataset.fieldDevice]));
             changed(); return;
         }
         const key = input.dataset.key || input.dataset.rangeFor;
@@ -1411,7 +1697,6 @@
         if (input.type === 'checkbox') {
             obj[key] = input.checked;
             // Scroll animation: a layer's travel, zoom and opacity at the end on or off together (WPBN_Settings::sanitize()).
-            if (key === 'use_scroll' && obj.type) ['use_move_x', 'use_move_y', 'use_zoom', 'use_end_opacity'].forEach(flag => { obj[flag] = input.checked; });
             // Placement: a class ready to copy; the height note follows it.
             // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
             if (key === 'fill_scene' && !input.checked && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
@@ -1457,11 +1742,29 @@
         if ((key === 'color' && obj.type === 'overlay') || key === 'name') list();
         changed();
     });
+    // Entrance / Loop animation's Type: None switches it off; another type switches it on (a Loop animation's kind: its own start, end and Repeat).
+    app.addEventListener('change', event => {
+        const sel = event.target.closest && event.target.closest('[data-anim-kind]');
+        if (!sel) return;
+        const o = current(), which = sel.dataset.animKind, value = sel.value;
+        if (which === 'enter') { o.use_enter = value !== 'none'; if (value !== 'none') o.enter_type = value; }
+        else {
+            o.use_anim = value !== 'none';
+            if (value !== 'none' && o.anim_type !== value && ANIM && ANIM.types[value]) {
+                o.anim_type = value; [o.anim_from, o.anim_to] = ANIM.types[value].def;
+                o.anim_repeat = ANIM.types[value].repeat || o.anim_repeat;
+                ['tablet', 'mobile'].forEach(dv => { o[dkey('anim_from', dv)] = null; o[dkey('anim_to', dv)] = null; });
+            }
+        }
+        settings(); changed();
+        const again = $('settings').querySelector('[data-anim-kind="' + which + '"]'); if (again) again.focus();
+    });
     app.addEventListener('change', event => {
         if (!event.target.matches('select[data-key]')) return;
         const key = event.target.dataset.key;
         current()[key] = event.target.value === '' && event.target.dataset.inherit ? null : event.target.value;
         if (key === 'font_weight' || key === 'text_transform' || key === 'font_style') refreshFontSample();
+        if (key === 'border_style') refreshBorder();
         // Container: its width field shows for Custom only.
         if (key === 'container') { settings(); $('settings').querySelector('[data-key="container"]').focus(); }
         // An Entrance animation's Type: its own fields (a slide's Distance, a zoom's Start size).
@@ -1476,7 +1779,56 @@
         const button = event.target.closest('button');
         if (!button || !app.contains(button)) return;
         if (button.dataset.previewDevice) { setDevice(button.dataset.previewDevice); return; }
-        if (button.dataset.tab) { showTab(button.dataset.tab); button.focus(); return; }
+        // Border: the sides set together (from then on; the top's width on every side of this device) or each on its own.
+        // Radius: a corner's unit (every corner's while linked; values over 50% brought down to it), and the link (from then on;
+        // the top left's radius and unit on every corner of this device).
+        // Padding: a side's unit (every side's while linked; values over 50% brought down to it), and the link (from then on; the
+        // top's space and unit on every side of this device).
+        if (button.dataset.padUnit) {
+            const l = current(), unit = button.dataset.unit;
+            (l.padding_linked ? BORDER_SIDES : [button.dataset.padUnit]).forEach(s => {
+                l['padding_' + s + '_unit'] = unit;
+                Object.keys(DEVICES).forEach(dv => { const k = dkey('padding_' + s, dv); if (l[k] != null) l[k] = Math.min(PADDING_MAX[unit], l[k]); });
+            });
+            settings(); changed();
+            const again = $('settings').querySelector('[data-pad-unit="' + button.dataset.padUnit + '"][data-unit="' + unit + '"]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.padLink !== undefined) {
+            const l = current(), d = device();
+            l.padding_linked = !l.padding_linked;
+            if (l.padding_linked) { const v = l[dkey('padding_top', d)], u = l.padding_top_unit; BORDER_SIDES.forEach(s => { l[dkey('padding_' + s, d)] = v; l['padding_' + s + '_unit'] = u; }); }
+            settings(); changed();
+            const again = $('settings').querySelector('[data-pad-link]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.radiusUnit) {
+            const l = current(), unit = button.dataset.unit;
+            (l.radius_linked ? RADIUS_CORNERS : [button.dataset.radiusUnit]).forEach(c => {
+                l['radius_' + c + '_unit'] = unit;
+                Object.keys(DEVICES).forEach(dv => { const k = dkey('radius_' + c, dv); if (l[k] != null) l[k] = Math.min(RADIUS_MAX[unit], l[k]); });
+            });
+            settings(); changed();
+            const again = $('settings').querySelector('[data-radius-unit="' + button.dataset.radiusUnit + '"][data-unit="' + unit + '"]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.radiusLink !== undefined) {
+            const l = current(), d = device();
+            l.radius_linked = !l.radius_linked;
+            if (l.radius_linked) { const v = l[dkey('radius_tl', d)], u = l.radius_tl_unit; RADIUS_CORNERS.forEach(c => { l[dkey('radius_' + c, d)] = v; l['radius_' + c + '_unit'] = u; }); }
+            settings(); changed();
+            const again = $('settings').querySelector('[data-radius-link]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.borderLink !== undefined) {
+            const l = current(), d = device();
+            l.border_linked = !l.border_linked;
+            if (l.border_linked) { const top = l[dkey('border_top', d)]; BORDER_SIDES.forEach(s => { l[dkey('border_' + s, d)] = top; }); }
+            settings(); changed();
+            const again = $('settings').querySelector('[data-border-link]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.block) { showBlock(button.dataset.block); button.focus(); return; }
         // An overlay's fill: Color or Gradient.
         if (button.dataset.fill) {
             const l = current(), gradient = button.dataset.fill === 'gradient';
@@ -1492,10 +1844,10 @@
             return;
         }
         if (button.dataset.fieldDevice) { setDevice(button.dataset.fieldDevice, true); return; }
-        if (button.dataset.select !== undefined) { adding = false; selected = Number(button.dataset.select); selectedObject = -1; list(); settings(); focusRow(selected); return; }
+        if (button.dataset.select !== undefined) { selected = Number(button.dataset.select); selectedObject = -1; list(); settings(); focusRow(selected); return; }
         // A Shape layer's object: chosen from its row under the layer, or hidden / shown.
         if (button.dataset.object !== undefined && button.dataset.layer !== undefined) {
-            adding = false; selected = Number(button.dataset.layer); selectedObject = Number(button.dataset.object);
+            selected = Number(button.dataset.layer); selectedObject = Number(button.dataset.object);
             list(); settings();
             const again = $('layers').querySelector('[data-object="' + selectedObject + '"][data-layer="' + selected + '"]'); if (again) again.focus();
             return;
@@ -1518,23 +1870,8 @@
             if (number) number.focus();
             return;
         }
-        if (button.id === 'wpbn-add-toggle') { adding = true; list(); settings(); $('settings').querySelector('[data-add]').focus(); return; }
-        if (button.dataset.add) {
-            const type = button.dataset.add;
-            if (scene.layers.length >= 40) return;
-            // A new title in the theme's container (it lines up with the page); a new image fills the whole scene.
-            const layer = Object.assign({}, boot.layer, {type, name:TYPE_NAMES[type] + ' ' + (scene.layers.length + 1), container:type === 'text' || type === 'button' || type === 'shortcode' ? 'theme' : 'full'});
-            // A new overlay: a see-through black (the photo under it shaded) or, with its Gradient, darker towards the bottom.
-            if (type === 'overlay') layer.color = OVERLAY_COLOR;
-            // A new text: a paragraph to start from, at a reading size and weight, in the theme's container.
-            if (type === 'richtext') Object.assign(layer, {content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'});
-            // A new layer does not move; turning a motion on starts it from 0.
-            layer.move_y = 0;
-            // Its own list of objects (boot.layer's one would be shared by every new layer).
-            layer.shape_objects = []; layer.uid = newUid(); selectedObject = -1; shapeError = ''; tab = 'content';
-            scene.layers.push(layer); selected = scene.layers.length - 1;
-            adding = false;
-        } else if (button.dataset.action && selected >= 0) {
+        if (button.id === 'wpbn-add-toggle') { openAdd(); return; }
+        if (button.dataset.action && selected >= 0) {
             const l = scene.layers[selected];
             switch (button.dataset.action) {
             case 'position': openPosition(l, button); return;
@@ -1570,14 +1907,15 @@
         } else return;
         list(); settings(); changed();
     });
-    $('settings').addEventListener('keydown', event => {
-        const current = event.target.closest && event.target.closest('[data-tab]');
-        if (!current || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-        const all = [...$('settings').querySelectorAll('[data-tab]')], i = all.indexOf(current);
-        const next = event.key === 'Home' ? all[0] : event.key === 'End' ? all[all.length - 1] : all[(i + (event.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+    // The menu: ↑ / ↓ (Home, End) to the next block.
+    $('menu').addEventListener('keydown', event => {
+        const current = event.target.closest && event.target.closest('[data-block]');
+        if (!current || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        const all = [...$('menu').querySelectorAll('[data-block]')], i = all.indexOf(current);
+        const next = event.key === 'Home' ? all[0] : event.key === 'End' ? all[all.length - 1] : all[(i + (event.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length];
         event.preventDefault(); next.click();
     });
-    $('scene-settings').onclick = () => { adding = false; selected = -1; selectedObject = -1; list(); settings(); };
+    $('scene-settings').onclick = () => { selected = -1; selectedObject = -1; list(); settings(); };
     // A Shape layer's drawing in its card: a click on an object chooses it, beside them none.
     $('settings').addEventListener('click', event => {
         const canvas = event.target.closest && event.target.closest('.wpbn-shape-canvas');
@@ -1588,64 +1926,107 @@
         selectedObject = j; list(); settings();
     });
     const layersBox = $('layers');
+    const freshTip = event => {
+        const b = event.target.closest && event.target.closest('[data-row-action="position"]'), l = b && scene.layers[Number(b.dataset.index)];
+        if (!l) return;
+        b.title = positionTip(l); b.setAttribute('aria-label', positionTip(l) + ' (' + (l.name || TYPE_NAMES[l.type] || 'Layer') + ')');
+    };
+    layersBox.addEventListener('pointerover', freshTip);
+    layersBox.addEventListener('focusin', freshTip);
     layersBox.addEventListener('keydown', event => {
         const button = event.target.closest('[data-select]');
-        if (!button || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+        if (!button || !event.altKey || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
         event.preventDefault();
-        const index = Number(button.dataset.select), to = index + (event.key === 'ArrowUp' ? 1 : -1);
+        // The back layer is first (left): → / ↑ brings it forward (a higher index), ← / ↓ sends it back.
+        const index = Number(button.dataset.select), to = index + (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1);
         focusRow(move(index, to) ? to : index);
     });
-    // Reordering by dragging a row (pointer events, so the cursor stays a
-    // grabbing hand): the row follows the pointer, a line shows where it lands.
+    /*
+     * Reordering by dragging a tile (pointer events, so the cursor stays a grabbing hand): the tile follows the pointer and the
+     * others make room as it goes, sliding to where they will stand once it is dropped (user's request, 2026-11-09); dropped,
+     * the order is the one shown. Over the left half of another tile it goes before it (behind it), over its right half after it.
+     */
     let sorting = null, skipClick = false;
-    function clearDrop() { layersBox.querySelectorAll('.is-drop-before,.is-drop-after').forEach(row => row.classList.remove('is-drop-before', 'is-drop-after')); }
-    // The first other row whose middle is below the pointer: the dragged one lands above it; none: below the last.
-    function dropTarget(y, dragged) {
-        const rows = Array.from(layersBox.querySelectorAll('.wpbn-layer-row')).filter(row => row !== dragged);
-        if (!rows.length) return null;
-        const row = rows.find(r => { const b = r.getBoundingClientRect(); return y < b.top + b.height / 2; });
-        return row ? {row, before:true} : {row:rows[rows.length - 1], before:false};
+    // The strip (positioned): the tiles' offsets are from it, as laid out (not moved by a transform).
+    const strip = layersBox.parentElement;
+    const slot = row => ({left:row.offsetLeft, top:row.offsetTop, width:row.offsetWidth, height:row.offsetHeight});
+    function dropTarget(x, y, dragged) {
+        const o = strip.getBoundingClientRect();
+        x -= o.left; y -= o.top;
+        let best = null, far = Infinity;
+        layersBox.querySelectorAll('.wpbn-layer-row').forEach(row => {
+            if (row === dragged) return;
+            const b = slot(row), dx = Math.max(b.left - x, 0, x - b.left - b.width), dy = Math.max(b.top - y, 0, y - b.top - b.height), d = dx * dx + 4 * dy * dy;
+            if (d < far) { far = d; best = {row, before:x < b.left + b.width / 2}; }
+        });
+        return best;
+    }
+    // The dragged tile under the pointer, where it was taken, wherever its place in the strip now is.
+    function follow(event) {
+        const o = strip.getBoundingClientRect(), s = slot(sorting.row);
+        sorting.row.style.transform = 'translate(' + (event.clientX - o.left - sorting.offX - s.left) + 'px,' + (event.clientY - o.top - sorting.offY - s.top) + 'px)';
+    }
+    // The dragged tile moved among the others; they slide from where they stood to their new places.
+    function makeRoom(row, target) {
+        const ref = target.before ? target.row : target.row.nextElementSibling;
+        if (ref === row || row.nextElementSibling === ref) return;
+        const others = [...layersBox.querySelectorAll('.wpbn-layer-row')].filter(r => r !== row), from = new Map(others.map(r => [r, slot(r)]));
+        layersBox.insertBefore(row, ref);
+        others.forEach(r => {
+            const a = from.get(r), b = slot(r);
+            if (a.left === b.left && a.top === b.top) return;
+            r.style.transition = 'none';
+            r.style.transform = 'translate(' + (a.left - b.left) + 'px,' + (a.top - b.top) + 'px)';
+            r.getBoundingClientRect();
+            r.style.transition = 'transform .18s ease';
+            r.style.transform = '';
+        });
     }
     function endSort() {
         if (!sorting) return;
-        if (sorting.active) { sorting.row.style.transform = ''; sorting.row.classList.remove('is-dragging'); document.body.classList.remove('wpbn-sorting'); clearDrop(); }
+        if (sorting.active) {
+            layersBox.querySelectorAll('.wpbn-layer-row').forEach(r => { r.style.transform = ''; r.style.transition = ''; });
+            sorting.row.classList.remove('is-dragging'); document.body.classList.remove('wpbn-sorting');
+        }
         sorting = null;
     }
     layersBox.addEventListener('pointerdown', event => {
-        if (event.button !== 0 || event.target.closest('.wpbn-layer-tools')) return;
+        if (event.button !== 0 || event.target.closest('.wpbn-layer-tools, .wpbn-objects')) return;
         const row = event.target.closest('.wpbn-layer-row');
-        if (row) sorting = {row, index:Number(row.dataset.index), y:event.clientY, active:false};
+        if (!row) return;
+        const r = row.getBoundingClientRect();
+        sorting = {row, x:event.clientX, y:event.clientY, offX:event.clientX - r.left, offY:event.clientY - r.top, active:false};
     });
     document.addEventListener('pointermove', event => {
         if (!sorting) return;
-        const dy = event.clientY - sorting.y;
         if (!sorting.active) {
-            if (Math.abs(dy) < 4) return;
+            if (Math.hypot(event.clientX - sorting.x, event.clientY - sorting.y) < 4) return;
             sorting.active = true;
             sorting.row.classList.add('is-dragging');
             document.body.classList.add('wpbn-sorting');
         }
         event.preventDefault();
-        sorting.row.style.transform = 'translateY(' + dy + 'px)';
-        const target = dropTarget(event.clientY, sorting.row);
-        clearDrop();
-        if (target) target.row.classList.add(target.before ? 'is-drop-before' : 'is-drop-after');
+        const target = dropTarget(event.clientX, event.clientY, sorting.row);
+        if (target) makeRoom(sorting.row, target);
+        follow(event);
     });
-    document.addEventListener('pointerup', event => {
+    document.addEventListener('pointerup', () => {
         if (!sorting) return;
-        const {active, row, index} = sorting;
-        const target = active ? dropTarget(event.clientY, row) : null;
+        const active = sorting.active;
         endSort();
         if (!active) return;
-        // The click that ends a drag does not select the row.
+        // The click that ends a drag does not select the tile.
         skipClick = true; setTimeout(() => { skipClick = false; }, 0);
-        if (!target) return;
-        // Above a row means in front of it: a higher index.
-        let to = Number(target.row.dataset.index) + (target.before ? 1 : 0);
-        if (index < to) to--;
-        move(index, to);
+        // The order shown (the back layer first) is the new depth.
+        const order = [...layersBox.querySelectorAll('.wpbn-layer-row')].map(r => scene.layers[Number(r.dataset.index)]);
+        if (order.every((l, i) => l === scene.layers[i])) return;
+        const keep = scene.layers[selected];
+        scene.layers.splice(0, scene.layers.length, ...order);
+        selected = keep ? scene.layers.indexOf(keep) : -1;
+        list(); changed();
     });
-    document.addEventListener('pointercancel', endSort);
+    // Cancelled: the tiles back in their order.
+    document.addEventListener('pointercancel', () => { if (sorting) { const active = sorting.active; endSort(); if (active) list(); } });
     layersBox.addEventListener('click', event => { if (skipClick) { event.stopPropagation(); event.preventDefault(); } }, true);
     /*
      * A Shortcode layer's real height, as the preview draws it (the editor cannot draw another plugin's element):
@@ -1692,6 +2073,7 @@
             win.document.body.classList.toggle('wpbn-black',dark);
             win.document.body.style.background=dark?'#121212':'';
             if (win.wpbnPreviewProgress) win.wpbnPreviewProgress(Number($('progress').value)/100);
+            if (win.wpbnDev) win.wpbnDev(dev);
         } catch (error) { /* Frame navigation is in progress. */ }
     }
     // A screen size of one's own per device (the fields above the preview). Typed sizes apply with
@@ -1799,6 +2181,7 @@
         const finish=()=>{if(turnAnimation===animation){stage.classList.remove('is-turning');turnAnimation=null;}};
         animation.finished.then(finish,finish);
     };
+    $('dev').onclick=()=>{dev=!dev;$('dev').setAttribute('aria-pressed',String(dev));frameState();};
     $('dark').onclick=()=>{dark=!dark;$('dark').setAttribute('aria-pressed',String(dark));$('preview-stage').classList.toggle('is-dark',dark);$('frame').style.background=dark?'#121212':'';frameState();};
     // Scroll simulation played with Play (0 → 100 → 0).
     const PLAY_TIME=2400;
@@ -1870,7 +2253,8 @@
         +'<div class="wpbn-modal__body"><p class="description wpbn-position-help"></p>'
         +'<div class="wpbn-focus"><div class="wpbn-focus__main"><div class="wpbn-focus__stage" tabindex="0" role="slider" aria-label="Layer position" aria-valuemin="0" aria-valuemax="100"><img class="wpbn-focus__image" alt="" draggable="false"><div class="wpbn-position-canvas"></div><span class="wpbn-focus__point" aria-hidden="true"></span></div></div>'
         +'<div class="wpbn-focus__frames" aria-hidden="true">'+Object.entries(DEVICES).map(([d,[icon,name]])=>'<figure class="wpbn-focus__device" data-device="'+d+'"><span class="wpbn-focus__frame"><span class="wpbn-position-canvas"></span></span><figcaption><span class="dashicons dashicons-'+icon+'"></span>'+name+'</figcaption></figure>').join('')+'</div></div>'
-        +'<p class="wpbn-focus__value"></p><p class="wpbn-position-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span class="wpbn-position-warning__text"></span></p></div>'
+        // Its X and Y: shown as it is dragged, and typed (user's request, 2026-11-09); Enter applies.
+        +'<p class="wpbn-focus__value">'+[['x','X','Horizontal position'],['y','Y','Vertical position']].map(([k,name,full])=>'<span class="wpbn-axis"><label class="wpbn-axis__name" for="wpbn-pos-'+k+'" title="'+full+' (%)">'+name+'</label><input type="number" id="wpbn-pos-'+k+'" min="0" max="100" step="0.1" inputmode="decimal"><span class="wpbn-axis__unit" aria-hidden="true">%</span></span>').join('')+'</p><p class="wpbn-position-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span class="wpbn-position-warning__text"></span></p></div>'
         +'<div class="wpbn-modal__foot"><button type="button" class="button-link wpbn-focus__reset">Reset to centre</button><button type="button" class="button wpbn-modal__cancel">Cancel</button><button type="button" class="button button-primary wpbn-modal__apply">Apply</button></div></div>';
     document.body.append(positionModal);
     const focusStage=positionModal.querySelector('.wpbn-focus__stage');
@@ -1933,7 +2317,8 @@
     function showPosition() {
         const [x,y]=positionDraft, layer=withDraft();
         focusPoint.style.left=(focusMode() ? x : inScene(positionLayer,$('device').value,x))+'%';focusPoint.style.top=y+'%';
-        positionModal.querySelector('.wpbn-focus__value').textContent=x+'% '+y+'%';
+        // The fields: the one being typed in is left as it is.
+        [x,y].forEach((value,i)=>{const input=positionInputs[i];if(document.activeElement!==input)input.value=value;});
         focusStage.setAttribute('aria-valuenow',x);focusStage.setAttribute('aria-valuetext','Horizontal '+x+'%, vertical '+y+'%');
         positionModal.querySelectorAll('.wpbn-position-canvas').forEach(canvas=>{
             const target=canvas.querySelector('.wpbn-position-target'), d=canvasDevice(canvas);
@@ -2031,7 +2416,7 @@
         if(apply && focusMode()){positionLayer.focus_x=positionDraft[0];positionLayer.focus_y=positionDraft[1];settings();changed();}
         else if(apply){positionLayer[dkey('x',positionDevice)]=positionDraft[0];positionLayer[dkey('y',positionDevice)]=positionDraft[1];settings();changed();}
         positionModal.hidden=true;document.body.classList.remove('wpbn-modal-open');dragging=null;positionLayer=null;
-        const button=positionReturn && positionReturn.isConnected?positionReturn:$('settings').querySelector('[data-action="position"]');
+        const button=positionReturn && positionReturn.isConnected?positionReturn:positionReturn && positionReturn.dataset.rowAction?$('layers').querySelector('[data-row-action="position"][data-index="'+positionReturn.dataset.index+'"]'):$('settings').querySelector('[data-action="position"]');
         if(button)button.focus();
     }
     const percent=value=>Math.round(Math.max(0,Math.min(100,value))*10)/10;
@@ -2079,11 +2464,18 @@
     positionModal.querySelector('.wpbn-modal__close').onclick=()=>closePosition(false);
     positionModal.querySelector('.wpbn-modal__backdrop').onclick=()=>closePosition(false);
     positionModal.querySelector('.wpbn-focus__reset').onclick=()=>{positionDraft=[50,50];showPosition();};
+    // Typed X / Y: the layer goes there as it is typed (0–100); Enter applies, a field left shows the value used.
+    const positionInputs=[positionModal.querySelector('#wpbn-pos-x'),positionModal.querySelector('#wpbn-pos-y')];
+    positionInputs.forEach((input,i)=>{
+        input.addEventListener('input',()=>{if(input.value===''||!isFinite(Number(input.value)))return;positionDraft[i]=percent(Number(input.value));showPosition();});
+        input.addEventListener('change',()=>{input.value=positionDraft[i];});
+        input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();positionDraft[i]=input.value===''?positionDraft[i]:percent(Number(input.value));closePosition(true);}});
+    });
     document.addEventListener('keydown',event=>{
         if(positionModal.hidden)return;
         if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closePosition(false);}
         if(event.key==='Tab'){
-            const controls=Array.from(positionModal.querySelectorAll('button,[tabindex="0"]'));
+            const controls=Array.from(positionModal.querySelectorAll('button,input,[tabindex="0"]'));
             const first=controls[0],last=controls[controls.length-1];
             if(event.shiftKey && document.activeElement===first){event.preventDefault();last.focus();}
             else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}

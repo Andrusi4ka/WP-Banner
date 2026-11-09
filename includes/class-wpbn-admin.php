@@ -80,15 +80,19 @@ class WPBN_Admin {
         $boot['shapeNonce'] = wp_create_nonce(WPBN_Shape::AJAX);
         $boot['maxData'] = self::MAX_DATA;
         $boot['tooLarge'] = __('The scene settings are too large to be saved. Remove some layers or shorten their texts, then update the scene again.', 'wp-banner');
-        $boot['icons'] = array('position'=>self::icon('position.svg'), 'clone'=>self::icon('clone.svg'), 'reset'=>self::icon('reset.svg'));
+        $boot['icons'] = array('position'=>self::icon('position.svg'), 'clone'=>self::icon('clone.svg'), 'reset'=>self::icon('reset.svg'), 'link'=>self::icon('border-link.svg'));
+        // A new scene's settings: the standard ones, for the device icons' green dots (admin.js standard()).
+        $boot['sceneDefaults'] = WPBN_Settings::defaults();
         echo '<div id="wpbn-app"><script type="application/json" id="wpbn-boot">'.wp_json_encode($boot, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).'</script>';
         echo '<input type="hidden" name="wpbn_data" id="wpbn-data" value="'.esc_attr(wp_json_encode($s)).'">';
-        // Same three columns as WP Swiper's settings: menu (scene + layers), the chosen card, the preview.
-        echo '<div class="wpbn-workspace"><aside class="wpbn-sidebar">';
-        echo '<button type="button" class="wpbn-menu-item" id="wpbn-scene-settings" aria-current="false"><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span>'.esc_html__('Scene settings','wp-banner').'</button>';
-        echo '<fieldset class="wpbn-section wpbn-layers"><legend>'.esc_html__('Layers','wp-banner').'</legend><p class="description">'.esc_html__('Front layers are at the top. Drag a layer to change its depth.','wp-banner').'</p><div id="wpbn-layers" role="list"></div>';
-        // Add element: a block like a layer row; it opens the kinds of element in the settings column (admin.js ELEMENTS).
-        echo '<div class="wpbn-add" id="wpbn-add"><button type="button" class="wpbn-add__toggle" id="wpbn-add-toggle" aria-current="false"><span class="wpbn-add__plus dashicons dashicons-plus-alt2" aria-hidden="true"></span><span class="wpbn-add__label">'.esc_html__('Add element','wp-banner').'</span></button></div></fieldset></aside>';
+        // As WP Swiper's Slides box: the layers as tiles across the top (Scene settings first, Add element last), the front one first.
+        echo '<fieldset class="wpbn-section wpbn-layers"><legend>'.esc_html__('Layers','wp-banner').'</legend><p class="description">'.esc_html__('The back layer is first, the front one last. Drag a layer to change its depth.','wp-banner').'</p><div class="wpbn-strip">';
+        echo '<button type="button" class="wpbn-tile wpbn-scene-tile" id="wpbn-scene-settings" aria-current="false"><span class="wpbn-tile__thumb" aria-hidden="true"><span class="dashicons dashicons-admin-generic"></span></span><span class="wpbn-layer-label">'.esc_html__('Scene settings','wp-banner').'<small>'.esc_html__('Size, placement','wp-banner').'</small></span></button>';
+        echo '<div id="wpbn-layers" role="list"></div>';
+        // Add element: a dashed tile; it opens a window with the kinds of element (admin.js ELEMENTS, openAdd()).
+        echo '<div class="wpbn-add" id="wpbn-add"><button type="button" class="wpbn-add__toggle" id="wpbn-add-toggle" aria-haspopup="dialog" aria-expanded="false"><span class="wpbn-add__plus dashicons dashicons-plus-alt2" aria-hidden="true"></span><span class="wpbn-add__label">'.esc_html__('Add element','wp-banner').'</span></button></div></div></fieldset>';
+        // Under it, as WP Swiper's settings box: the menu of the chosen layer's (or the scene's) blocks, the chosen block, the preview.
+        echo '<div class="wpbn-workspace"><aside class="wpbn-sidebar"><nav class="wpbn-menu" id="wpbn-menu" aria-label="'.esc_attr__('Settings','wp-banner').'"></nav></aside>';
         echo '<div class="wpbn-settings" id="wpbn-settings"></div>';
         echo '<div class="wpbn-preview"><div class="wpbn-toolbar"><span class="wpbn-preview-title">'.esc_html__('Preview','wp-banner').'</span>';
         $devices = array('desktop'=>array('desktop', __('Desktop','wp-banner')), 'tablet'=>array('tablet', __('Tablet','wp-banner')), 'mobile'=>array('smartphone', __('Mobile','wp-banner')));
@@ -99,6 +103,9 @@ class WPBN_Admin {
         echo '<button type="button" class="button" id="wpbn-rotate" aria-pressed="false" aria-label="'.$rotate.'" title="'.$rotate.'">'.self::icon('rotate.svg').'</button>';
         $dark = esc_attr__('Dark screen','wp-banner');
         echo '<button type="button" class="button" id="wpbn-dark" aria-pressed="false" aria-label="'.$dark.'" title="'.$dark.'">'.self::icon('light-dark.svg').'</button>';
+        // Developer mode (as WP Swiper's): the scene's and the layers' boxes, sizes and distances over the preview (assets/js/preview-dev.js).
+        $dev = esc_attr__('Developer mode: the boxes of the scene and its layers, with their sizes and distances','wp-banner');
+        echo '<button type="button" class="button" id="wpbn-dev" aria-pressed="false" aria-label="'.$dev.'" title="'.$dev.'">'.self::icon('developer-mode.svg').'</button>';
         // A screen size of one's own for the device being previewed (admin.js), small, beside the Dark button; empty = the device's usual size.
         echo '<div class="wpbn-resolution" role="group" aria-labelledby="wpbn-res-label"><span class="wpbn-resolution__label" id="wpbn-res-label">'.esc_html__('Screen','wp-banner').'</span>'
             .'<input type="number" id="wpbn-res-w" min="240" max="3840" step="1" aria-label="'.esc_attr__('Screen width (px)','wp-banner').'"><span aria-hidden="true">×</span>'
@@ -112,11 +119,11 @@ class WPBN_Admin {
             .'<button type="button" class="button" id="wpbn-redo" aria-label="'.$redo.'" title="'.$redo.'" disabled><span class="dashicons dashicons-redo" aria-hidden="true"></span></button></span>';
         echo '<div class="wpbn-preview-devices" role="group" aria-label="'.esc_attr__('Preview device','wp-banner').'">';
         foreach ($devices as $device=>$d) {
-            echo '<button type="button" class="wpbn-device-button" data-preview-device="'.esc_attr($device).'" aria-pressed="'.($device==='desktop'?'true':'false').'"><span class="dashicons dashicons-'.$d[0].'" aria-hidden="true"></span>'.esc_html($d[1]).'</button>';
+            echo '<button type="button" class="wpbn-device-button" data-preview-device="'.esc_attr($device).'" aria-pressed="'.($device==='desktop'?'true':'false').'" aria-label="'.esc_attr($d[1]).'" title="'.esc_attr($d[1]).'"><span class="dashicons dashicons-'.$d[0].'" aria-hidden="true"></span></button>';
         }
         echo '</div><button type="button" class="button" id="wpbn-refresh"><span class="dashicons dashicons-update" aria-hidden="true"></span>'.esc_html__('Update','wp-banner').'</button></div></div>';
         $play = esc_attr__('Play the scroll','wp-banner');
-        echo '<div id="wpbn-preview-stage"><div id="wpbn-device-shell"><iframe id="wpbn-frame" name="wpbn_preview_frame" title="'.esc_attr__('Banner preview','wp-banner').'" sandbox="allow-scripts allow-same-origin"></iframe></div></div><div class="wpbn-scrub"><button type="button" class="button" id="wpbn-play" aria-pressed="false" aria-label="'.$play.'" title="'.$play.'"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span></button><label for="wpbn-progress">'.esc_html__('Scroll simulation','wp-banner').'</label><input type="range" id="wpbn-progress" min="0" max="100" step="0.1" value="0"></div><p class="description">'.esc_html__('Preview uses unsaved settings: press Update to see your changes. Publish or update the scene to apply them on the site.','wp-banner').'</p></div></div></div>';
+        echo '<div id="wpbn-preview-stage"><div id="wpbn-device-shell"><iframe id="wpbn-frame" name="wpbn_preview_frame" title="'.esc_attr__('Banner preview','wp-banner').'" sandbox="allow-scripts allow-same-origin"></iframe></div></div><div class="wpbn-scrub"><button type="button" class="button" id="wpbn-play" aria-pressed="false" aria-label="'.$play.'" title="'.$play.'"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span></button><label for="wpbn-progress">'.esc_html__('Scroll simulation','wp-banner').'</label><input type="range" id="wpbn-progress" min="0" max="100" step="0.1" value="0"></div></div></div></div>';
     }
     public static function save($id) {
         if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE || wp_is_post_revision($id) || !current_user_can('manage_options') || !current_user_can('edit_post',$id)) { return; }
@@ -187,7 +194,7 @@ class WPBN_Admin {
         }
         nocache_headers();
         header('Content-Type: text/html; charset='.get_option('blog_charset'));
-        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style>'.$head.'</head><body>'.$markup.self::PAGE.$foot.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script></body></html>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/preview-dev.css?ver='.wpbn_asset('assets/css/preview-dev.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style>'.$head.'</head><body>'.$markup.self::PAGE.$foot.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script><script src="'.esc_url(WPBN_URL.'assets/js/preview-dev.js?ver='.wpbn_asset('assets/js/preview-dev.js')).'"></script></body></html>';
         exit;
     }
     // Under the scene in the preview: the rest of a page, drawn as grey blocks (a heading, text,

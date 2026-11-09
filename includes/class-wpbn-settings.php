@@ -117,6 +117,52 @@ class WPBN_Settings {
     // A title's Case (CSS text-transform) and its Shadow's colour to start with.
     const CASES = array('none', 'uppercase', 'lowercase', 'capitalize');
     const SHADOW_COLOR = 'rgba(0,0,0,0.5)';
+    // A Border's sides (in CSS's order) and its lines.
+    const BORDER_SIDES = array('top', 'right', 'bottom', 'left');
+    const BORDER_STYLES = array('solid', 'dashed', 'dotted', 'double');
+    // A Radius's corners (in CSS's order: top left, top right, bottom right, bottom left), its units and their largest values.
+    const RADIUS_CORNERS = array('tl', 'tr', 'br', 'bl');
+    // Padding's largest values per unit (% of the banner's width, as CSS takes it).
+    const PADDING_MAX = array('px'=>500, '%'=>50);
+    // The layers with a Padding: a title, a text, a button, a shortcode, an image object.
+    public static function padded($l) { return self::textual($l) || self::object($l); }
+    // A layer's Padding per device as CSS padding ("T R B L"), '' where it has none or none anywhere.
+    public static function paddings($l) {
+        if (empty($l['use_padding']) || !self::padded($l)) { return ''; }
+        $out = array();
+        $any = false;
+        foreach (array('desktop', 'tablet', 'mobile') as $device) {
+            $sides = array();
+            foreach (self::BORDER_SIDES as $side) { $p = self::resolved($l, 'padding_'.$side)[$device]; $any = $any || $p > 0; $sides[] = $p.$l['padding_'.$side.'_unit']; }
+            $out[$device] = implode(' ', $sides);
+        }
+        return $any ? $out : '';
+    }
+    const RADIUS_MAX = array('px'=>1000, '%'=>50);
+    // A layer's Radius per device as CSS border-radius, '' with its switch off or none anywhere.
+    public static function radii($l) {
+        if (empty($l['use_radius']) || $l['type'] === 'shape') { return ''; }
+        $out = array();
+        $any = false;
+        foreach (array('desktop', 'tablet', 'mobile') as $device) {
+            $corners = array();
+            foreach (self::RADIUS_CORNERS as $c) { $r = self::resolved($l, 'radius_'.$c)[$device]; $any = $any || $r > 0; $corners[] = $r.$l['radius_'.$c.'_unit']; }
+            $out[$device] = implode(' ', $corners);
+        }
+        return $any ? $out : '';
+    }
+    // A layer's Border per device as CSS border-width ("T R B L"), '' with its switch off or no width anywhere.
+    public static function borders($l) {
+        if (empty($l['use_border']) || $l['type'] === 'shape') { return ''; }
+        $out = array();
+        $any = false;
+        foreach (array('desktop', 'tablet', 'mobile') as $device) {
+            $widths = array();
+            foreach (self::BORDER_SIDES as $side) { $w = self::resolved($l, 'border_'.$side)[$device]; $any = $any || $w > 0; $widths[] = $w.'px'; }
+            $out[$device] = implode(' ', $widths);
+        }
+        return $any ? $out : '';
+    }
     // Filters (an image layer's, a Shape layer's object's): key => [min, max, value at rest, CSS function, unit].
     const FILTERS = array('f_grayscale'=>array(0, 100, 0, 'grayscale', '%'), 'f_blur'=>array(0, 40, 0, 'blur', 'px'), 'f_brightness'=>array(0, 200, 100, 'brightness', '%'),
         'f_contrast'=>array(0, 200, 100, 'contrast', '%'), 'f_saturate'=>array(0, 300, 100, 'saturate', '%'));
@@ -142,6 +188,24 @@ class WPBN_Settings {
             // A title's Letter spacing (px, per device as Font size), Case (text-transform), Style (italic) and Shadow.
             'letter_spacing'=>0, 'tablet_letter_spacing'=>null, 'mobile_letter_spacing'=>null, 'text_transform'=>'none', 'font_style'=>'normal',
             'use_shadow'=>false, 'shadow_color'=>self::SHADOW_COLOR, 'shadow_x'=>0, 'shadow_y'=>2, 'shadow_blur'=>10,
+            // Border (Effect, 2026-11-09): behind its switch; a width per side (px) and device (tablet / mobile null: the larger
+            // screen's), its line, its colour; border_linked: the editor sets the four sides together.
+            'use_border'=>false, 'border_style'=>'solid', 'border_color'=>'#ffffff', 'border_linked'=>true,
+            'border_top'=>2, 'border_right'=>2, 'border_bottom'=>2, 'border_left'=>2,
+            'border_top_tablet'=>null, 'border_right_tablet'=>null, 'border_bottom_tablet'=>null, 'border_left_tablet'=>null,
+            'border_top_mobile'=>null, 'border_right_mobile'=>null, 'border_bottom_mobile'=>null, 'border_left_mobile'=>null,
+            // Radius (Effect, 2026-11-09): behind its switch; each corner's per device (tablet / mobile null: the larger screen's) in
+            // its unit (px or %, one per corner for every device); radius_linked: the editor sets the four corners together.
+            'use_radius'=>false, 'radius_linked'=>true,
+            'radius_tl'=>12, 'radius_tr'=>12, 'radius_br'=>12, 'radius_bl'=>12, 'radius_tl_unit'=>'px', 'radius_tr_unit'=>'px', 'radius_br_unit'=>'px', 'radius_bl_unit'=>'px',
+            'radius_tl_tablet'=>null, 'radius_tr_tablet'=>null, 'radius_br_tablet'=>null, 'radius_bl_tablet'=>null,
+            'radius_tl_mobile'=>null, 'radius_tr_mobile'=>null, 'radius_br_mobile'=>null, 'radius_bl_mobile'=>null,
+            // Padding (Size, 2026-11-09): behind its switch; a title's, a text's, a button's, a shortcode's or an image object's space inside its box, per
+            // side and device (tablet / mobile null: the larger screen's), each side in its unit (px or %, of the banner's width).
+            'use_padding'=>false, 'padding_linked'=>true, 'padding_top'=>0, 'padding_right'=>0, 'padding_bottom'=>0, 'padding_left'=>0,
+            'padding_top_unit'=>'px', 'padding_right_unit'=>'px', 'padding_bottom_unit'=>'px', 'padding_left_unit'=>'px',
+            'padding_top_tablet'=>null, 'padding_right_tablet'=>null, 'padding_bottom_tablet'=>null, 'padding_left_tablet'=>null,
+            'padding_top_mobile'=>null, 'padding_right_mobile'=>null, 'padding_bottom_mobile'=>null, 'padding_left_mobile'=>null,
             // An overlay's Shadow Inside its edges (a vignette) instead of around it.
             'shadow_inset'=>false,
             // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
@@ -159,7 +223,8 @@ class WPBN_Settings {
             // The layer's own name for others to point to it (a Shape object showing it: WPBN_Shape), given by the editor; '' none yet.
             'uid'=>'',
             // Follow the mouse (px): how far the layer moves as the pointer crosses the scene (devices with a mouse; WPBN_Render, frontend.js).
-            'use_mouse'=>false, 'mouse'=>20,
+            // No switch since 2026-11-09 (user's request): always on, 0 by default (it stays).
+            'use_mouse'=>true, 'mouse'=>0,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'rotate'=>0, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>100,
             'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
             // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
@@ -168,9 +233,10 @@ class WPBN_Settings {
             // (tablet and mobile null: the larger screen's), Fill / border color and Text color.
             'button_text'=>'Learn more', 'button_url'=>'', 'button_new_tab'=>false, 'button_style'=>'filled', 'button_shape'=>'square',
             'button_size'=>'default', 'button_size_tablet'=>null, 'button_size_mobile'=>null, 'button_color'=>'#2271b1', 'button_text_color'=>'#ffffff',
-            'use_scale'=>false, 'use_opacity'=>false, 'use_rotate'=>false,
-            // Scroll animation: one switch (use_scroll) for the travel, zoom and opacity at the end; their own switches follow it (sanitize()).
-            'use_scroll'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false)
+            // Scale, Opacity and Rotation: no switch since 2026-11-09 (user's request): always on, at rest 100%, 100%, 0° (sanitize()).
+            'use_scale'=>true, 'use_opacity'=>true, 'use_rotate'=>true,
+            // Scroll animation: no switch since 2026-11-09 (user's request): always on, the values at rest do nothing (sanitize()).
+            'use_scroll'=>true, 'use_move_x'=>true, 'use_move_y'=>true, 'use_zoom'=>true, 'use_end_opacity'=>true)
             // Animation (WPBN_Animation): motion of its own, running by itself; off by default.
             + WPBN_Animation::defaults()
             // Entrance animation (WPBN_Entrance): how it comes in, once; off by default.
@@ -378,6 +444,43 @@ class WPBN_Settings {
             $l['text_transform'] = self::choice($raw['text_transform'] ?? null, self::CASES, 'none');
             $l['font_style'] = self::choice($raw['font_style'] ?? null, array('normal', 'italic'), 'normal');
             $l['use_shadow'] = !empty($raw['use_shadow']);
+            $l['use_border'] = !empty($raw['use_border']);
+            $l['border_linked'] = array_key_exists('border_linked', $raw) ? !empty($raw['border_linked']) : true;
+            $l['border_style'] = self::choice($raw['border_style'] ?? null, self::BORDER_STYLES, 'solid');
+            $l['border_color'] = self::color($raw['border_color'] ?? null, '#ffffff');
+            $l['padding_linked'] = array_key_exists('padding_linked', $raw) ? !empty($raw['padding_linked']) : true;
+            foreach (self::BORDER_SIDES as $side) {
+                $key = 'padding_'.$side;
+                $unit = self::choice($raw[$key.'_unit'] ?? null, array_keys(self::PADDING_MAX), 'px');
+                $l[$key.'_unit'] = $unit;
+                $l[$key] = (int) round(self::number($raw[$key] ?? null, 0, 0, self::PADDING_MAX[$unit]));
+                foreach (array('_tablet', '_mobile') as $suffix) {
+                    $value = $raw[$key.$suffix] ?? null;
+                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, self::PADDING_MAX[$unit]));
+                }
+            }
+            // Its switch (2026-11-09); a layer saved before it: on where some side, on some device, has a space.
+            $l['use_padding'] = array_key_exists('use_padding', $raw) ? !empty($raw['use_padding']) : (bool) array_filter(array_intersect_key($l, array_flip(array_merge(...array_map(function ($side) { return array('padding_'.$side, 'padding_'.$side.'_tablet', 'padding_'.$side.'_mobile'); }, self::BORDER_SIDES)))));
+            $l['use_radius'] = !empty($raw['use_radius']);
+            $l['radius_linked'] = array_key_exists('radius_linked', $raw) ? !empty($raw['radius_linked']) : true;
+            foreach (self::RADIUS_CORNERS as $c) {
+                $key = 'radius_'.$c;
+                $unit = self::choice($raw[$key.'_unit'] ?? null, array_keys(self::RADIUS_MAX), 'px');
+                $l[$key.'_unit'] = $unit;
+                $l[$key] = (int) round(self::number($raw[$key] ?? null, 12, 0, self::RADIUS_MAX[$unit]));
+                foreach (array('_tablet', '_mobile') as $suffix) {
+                    $value = $raw[$key.$suffix] ?? null;
+                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, self::RADIUS_MAX[$unit]));
+                }
+            }
+            foreach (self::BORDER_SIDES as $side) {
+                $key = 'border_'.$side;
+                $l[$key] = (int) round(self::number($raw[$key] ?? null, 2, 0, 100));
+                foreach (array('_tablet', '_mobile') as $suffix) {
+                    $value = $raw[$key.$suffix] ?? null;
+                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
+                }
+            }
             $l['shadow_inset'] = !empty($raw['shadow_inset']);
             $l['shadow_color'] = self::color($raw['shadow_color'] ?? null, self::SHADOW_COLOR);
             foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200)) as $key=>$range) {
@@ -395,6 +498,13 @@ class WPBN_Settings {
                 list($flag, $off) = $o;
                 if ($off === null) { continue; }
                 $l[$flag] = array_key_exists($flag, $raw) ? !empty($raw[$flag]) : count(array_filter(array($l[$key], $l[$key.'_tablet'], $l[$key.'_mobile']), function ($v) use ($off) { return $v !== null && (float) $v !== (float) $off; })) > 0;
+            }
+            // Scale, Opacity and Rotation have no switch since 2026-11-09 (user's request): always on, their values applying as set.
+            // One switched off before (or saved before the switches at rest): its value at rest, so the site shows it as it did.
+            foreach (array('scale', 'opacity', 'rotate') as $key) {
+                list($flag, $off) = self::OPTIONAL[$key];
+                if (empty($l[$flag])) { $l[$key] = $off; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+                $l[$flag] = true;
             }
             $l['use_end_opacity'] = !empty($raw['use_end_opacity']);
             // Scenes saved with "Fade" (opacity added by the end): the opacity it ended at, on each device.
@@ -416,11 +526,11 @@ class WPBN_Settings {
             // Scroll animation: one switch for the travel, the zoom and the opacity at the end (2026-11-09, user's request); each
             // keeps its own switch key, always the same as it (OPTIONAL, effective() and fade() read them). A layer saved before:
             // on where one of them was on; the ones that were off at rest, so it moves as it did.
+            // Since 2026-11-09 (user's request) it has no switch: always on, the values apply as set. A layer saved with it off: its
+            // values at rest (it stays as it was on the site).
             $scroll = array('move_x'=>'use_move_x', 'move_y'=>'use_move_y', 'zoom'=>'use_zoom', 'end_opacity'=>'use_end_opacity');
-            if (array_key_exists('use_scroll', $raw)) {
-                $l['use_scroll'] = !empty($raw['use_scroll']);
-            } else {
-                $l['use_scroll'] = (bool) array_filter(array_intersect_key($l, array_flip($scroll)));
+            if (array_key_exists('use_scroll', $raw) && empty($raw['use_scroll'])) { foreach ($scroll as $flag) { $l[$flag] = false; } }
+            if (!array_key_exists('use_scroll', $raw) || empty($raw['use_scroll'])) {
                 $start = self::resolved(self::effective($l), 'opacity');
                 foreach ($scroll as $key=>$flag) {
                     if ($l[$flag]) { continue; }
@@ -433,7 +543,8 @@ class WPBN_Settings {
                     }
                 }
             }
-            foreach ($scroll as $flag) { $l[$flag] = $l['use_scroll']; }
+            $l['use_scroll'] = true;
+            foreach ($scroll as $flag) { $l[$flag] = true; }
             // Container. Titles saved while it was the scene's (before it was each layer's): the scene's.
             $from_scene = $l['type'] === 'text' && !array_key_exists('container', $raw) && isset($input['container']);
             $l['container'] = self::choice($from_scene ? $input['container'] : ($raw['container'] ?? null), self::CONTAINERS, 'full');
@@ -453,8 +564,9 @@ class WPBN_Settings {
             }
             $l['uid'] = is_string($raw['uid'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $raw['uid']) ? $raw['uid'] : '';
             $l = array_merge($l, self::filters($raw));
-            $l['use_mouse'] = !empty($raw['use_mouse']);
-            $l['mouse'] = round(self::number($raw['mouse'] ?? null, 20, -200, 200));
+            // Follow the mouse: no switch since 2026-11-09 (user's request); 0 stays. A layer saved with it off: 0.
+            $l['mouse'] = array_key_exists('use_mouse', $raw) && empty($raw['use_mouse']) ? 0 : round(self::number($raw['mouse'] ?? null, 0, -200, 200));
+            $l['use_mouse'] = true;
             // Fill the scene (an image layer); off: an object. Layers saved before: on.
             $l['fill_scene'] = array_key_exists('fill_scene', $raw) ? !empty($raw['fill_scene']) : true;
             // An overlay's Height: px, vh or % of the scene (no Auto); tablet and mobile without a unit follow the larger screen.

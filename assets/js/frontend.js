@@ -98,10 +98,28 @@
         return true;
     }
 
+    /*
+     * An Entrance animation from the banner's edge (WPBN_Entrance): the layer starts just outside it, as far as from where it
+     * stands at rest to that edge (its box, the wrapper's parent: the animation does not move it). Measured again as the
+     * banner is sized; until then the markup's screen width or height.
+     */
+    function edges(s) {
+        const box = s.el.getBoundingClientRect();
+        s.el.querySelectorAll('.wpbn-enter--edge').forEach(function (el) {
+            const r = el.parentElement.getBoundingClientRect(), c = el.classList;
+            if (!r.width && !r.height) return;
+            if (c.contains('wpbn-enter--edge-left')) el.style.setProperty('--wpbn-ex', (box.left - r.right).toFixed(1) + 'px');
+            else if (c.contains('wpbn-enter--edge-right')) el.style.setProperty('--wpbn-ex', (box.right - r.left).toFixed(1) + 'px');
+            else if (c.contains('wpbn-enter--edge-top')) el.style.setProperty('--wpbn-ey', (box.top - r.bottom).toFixed(1) + 'px');
+            else if (c.contains('wpbn-enter--edge-bottom')) el.style.setProperty('--wpbn-ey', (box.bottom - r.top).toFixed(1) + 'px');
+        });
+    }
+
     // Edges kept out of view: the image layers that fill the scene at rest grow,
     // all by the same factor and around the scene's middle (so a photo and its
     // cutout stay aligned), just enough that their edges never show while they move.
     function bleed(s) {
+        edges(s);
         const W = s.el.clientWidth, H = s.el.clientHeight, d = device();
         const fills = [];
         let k = 1;

@@ -100,13 +100,13 @@ require_once __DIR__.'/../includes/class-wpbn-palette.php';
 require_once __DIR__.'/../includes/class-wpbn-fonts.php';
 require_once __DIR__.'/../includes/class-wpbn-admin.php';
 if (($argv[1] ?? '')==='--editor') {
-    echo '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/vendor/pickr/classic.min.css"><link rel="stylesheet" href="/assets/css/admin.css"><style id="wpbn-test-all-tabs">.wpbn-tabpanel[hidden]{display:block!important}</style><style>body{font:13px Arial;margin:20px}.button{padding:6px;cursor:pointer}input,select{padding:5px;box-sizing:border-box}</style></head><body><form id="post"><div id="wpbn-editor"><div class="inside">';
+    echo '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/vendor/pickr/classic.min.css"><link rel="stylesheet" href="/assets/css/admin.css"><style id="wpbn-test-all-blocks">.wpbn-block[hidden]{display:block!important}</style><style>body{font:13px Arial;margin:20px}.button{padding:6px;cursor:pointer}input,select{padding:5px;box-sizing:border-box}</style></head><body><form id="post"><div id="wpbn-editor"><div class="inside">';
     WPBN_Admin::editor((object)array('ID'=>7));
     echo '</div></div></form><script src="/assets/vendor/pickr/pickr.min.js"></script><script src="/assets/js/admin.js"></script></body></html>'; exit;
 }
 if (($argv[1] ?? '')==='--preview') {
     $s=WPBN_Settings::sanitize(json_decode(stream_get_contents(STDIN),true));
-    echo '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/frontend.css"><style>'.WPBN_Admin::PAGE_CSS.WPBN_Admin::theme_css().'</style></head><body>'.WPBN_Admin::preview_markup($s).WPBN_Admin::PAGE.'<script src="/assets/js/frontend.js"></script></body></html>'; exit;
+    echo '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/frontend.css"><link rel="stylesheet" href="/assets/css/preview-dev.css"><style>'.WPBN_Admin::PAGE_CSS.WPBN_Admin::theme_css().'</style></head><body>'.WPBN_Admin::preview_markup($s).WPBN_Admin::PAGE.'<script src="/assets/js/frontend.js"></script><script src="/assets/js/preview-dev.js"></script></body></html>'; exit;
 }
 // The answer to an SVG uploaded in the editor (admin-ajax wpbn_shape_upload): attachment 900 (tests/motion.cjs).
 if (($argv[1] ?? '')==='--shape') { echo wp_json_encode(array('success'=>true, 'data'=>WPBN_Shape::editor(900))); exit; }
@@ -154,7 +154,7 @@ $sw=WPBN_Settings::sanitize(array('layers'=>array(
 )));
 $swm=WPBN_Render::markup($sw);
 check(substr_count($swm,'--wpbn-width:100%;')===2 && strpos($swm,'--wpbn-width:60%')===false,'Every layer as wide as its container (the scene here): no Width setting, a stored one not used');
-check(strpos($swm,'--wpbn-scale:1;')!==false && $sw['layers'][0]['scale']===130.0,'Scale switched off: 100%, its value kept');
+check(strpos($swm,'--wpbn-scale:1;')!==false && $sw['layers'][0]['scale']==100 && $sw['layers'][0]['use_scale']===true,'Scale saved switched off: at rest, 100% (no switch since 2026-11-09)');
 check(motion_of($swm,0)['move_y']===array(-80,-80,-80) && motion_of($swm,0)['zoom']===array(0,0,0),'Motion applies only with its switch on');
 check(motion_of($swm,1)['move_y']===array(0,0,0),'Text motion switched off: none');
 
@@ -401,8 +401,9 @@ check(strpos($animCss,"@supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}")!==false && strpos($animCss,'will-change:')===false && strpos($animCss,'rotate(.01deg)')===false,'Smooth slow zooms in Firefox: drawn in perspective (no snapping to whole pixels), no layer hints');
 check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}')!==false && strpos($animCss,'.wpbn-scene .wpbn-anim{animation:none}')!==false,'Waits until in view, paused off the screen, none with reduced motion');
 // Follow the mouse: per layer, an overlay never. No Decorative switch (removed at the user's request, 2026-11-09).
-$m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
-check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0,'Follow the mouse: bounded, not for an overlay, only with its switch');
+// Follow the mouse: no switch since 2026-11-09 (always on, 0 by default); saved with it off: 0.
+$m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','use_mouse'=>0,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
+check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0 && motion_of($m,3)['mouse']==30 && WPBN_Settings::layer()['mouse']===0,'Follow the mouse: bounded, not for an overlay, 0 where it was switched off, 0 for a new layer');
 check(strpos($animCss,'+ var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px))')!==false,'The pointer\'s offset in the layer\'s place');
 check(!array_key_exists('decorative',$lay(array('type'=>'image','decorative'=>1))),'No Decorative switch: an image\'s alt text is the media library\'s');
 // Rotation (per device, degrees; 2026-11-09): bounded, its CSS per device, in the layer's transform; a Shape layer is not turned.
@@ -410,7 +411,7 @@ $rot=WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','ro
 check($rot['layers'][0]['rotate']==-180 && $rot['layers'][0]['rotate_tablet']===null && $rot['layers'][0]['rotate_mobile']==15,'Rotation bounded, per device');
 $rotm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'rotate'=>10,'rotate_mobile'=>-5))))));
 check(strpos($rotm,'--wpbn-rot:10deg;--wpbn-rot-t:10deg;--wpbn-rot-m:-5deg;')!==false && motion_of($rotm,0)['box_rotate']==array(10,10,-5),'Rotation rendered per device, and for frontend.js (a turned photo grows to hide its corners)');
-check(WPBN_Settings::effective($lay(array('type'=>'text','rotate'=>30,'use_rotate'=>0)))['rotate']===0 && $lay(array('type'=>'text','rotate'=>30))['use_rotate']===true && $lay(array('type'=>'text'))['use_rotate']===false,'Rotation behind its switch: off, none (its value kept); a turn saved before the switch: on');
+check($lay(array('type'=>'text','rotate'=>30,'use_rotate'=>0))['rotate']==0 && $lay(array('type'=>'text','rotate'=>30))['rotate']==30 && $lay(array('type'=>'text'))['use_rotate']===true && WPBN_Settings::layer()['use_scale']===true,'Rotation without a switch: one saved switched off at rest; a turn saved before the switch kept');
 check(WPBN_Settings::effective($rot['layers'][1])['rotate']===0 && strpos($animCss,',0) rotate(var(--wpbn-r)) scale(')!==false && strpos($animCss,'--wpbn-r:var(--wpbn-rot-m,var(--wpbn-rot,0deg))')!==false,'A Shape layer not turned; the turn in the layer\'s transform, per device');
 // An image's Shadow (the title's keys): drop-shadow along its outline, only with its switch on.
 $sh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_shadow'=>1,'shadow_x'=>4,'shadow_y'=>12,'shadow_blur'=>24,'shadow_color'=>'rgba(0,0,0,0.4)')),$lay(array('type'=>'image','image'=>3,'shadow_y'=>12))))));
@@ -419,21 +420,44 @@ check(strpos($animCss,'.wpbn-scene .wpbn-layer--shadow img{filter:drop-shadow(va
 // An overlay's Shadow: around its box, or Inside it (a vignette); only with its switch on.
 $osh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_shadow'=>1,'shadow_y'=>8,'shadow_blur'=>30)),$lay(array('type'=>'overlay','use_shadow'=>1,'shadow_inset'=>1,'shadow_blur'=>120,'shadow_color'=>'rgba(0,0,0,0.6)')),$lay(array('type'=>'overlay','shadow_inset'=>1))))));
 check(strpos($osh,'box-shadow:0px 8px 30px rgba(0,0,0,0.5);')!==false && strpos($osh,'box-shadow:inset 0px 2px 120px rgba(0,0,0,0.6);')!==false && substr_count($osh,'box-shadow')===2,'Overlay Shadow: around it or Inside, only with its switch on');
+// An overlay's fill in a box of its own (2026-11-09), so its Entrance animation brings it in.
+$oen=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','color'=>'#ff0000','backdrop_blur'=>8,'use_enter'=>1,'enter_type'=>'fade','enter_delay'=>2,'enter_start'=>'load'))))));
+check(strpos($oen,'<div class="wpbn-overlay wpbn-layer--blur wpbn-enter wpbn-enter--fade" style="background:#ff0000;--wpbn-ed:1s;--wpbn-edl:2s;"></div>')!==false && substr_count($oen,'wpbn-enter')===2,'An overlay: its fill in a box that its Entrance animation brings in (no wrapper: its blur would see nothing)');
+// Border (Effect, 2026-11-09): behind its switch; a width per side and device (bounded, tablet / mobile following), its line and colour.
+$bd=$lay(array('type'=>'image','image'=>3,'use_border'=>1,'border_top'=>4,'border_right'=>500,'border_bottom'=>0,'border_left'=>-3,'border_left_tablet'=>8,'border_style'=>'groove','border_color'=>'#ff0000'));
+check($bd['border_right']===100 && $bd['border_left']===0 && $bd['border_style']==='solid' && $bd['border_linked']===true && $bd['border_top_mobile']===null && WPBN_Settings::layer()['use_border']===false,'Border: widths bounded, unknown line solid, linked by default, off for a new layer');
+check(WPBN_Settings::borders($bd)===array('desktop'=>'4px 100px 0px 0px','tablet'=>'4px 100px 0px 8px','mobile'=>'4px 100px 0px 8px') && WPBN_Settings::borders($lay(array('use_border'=>0)))==='' && WPBN_Settings::borders($lay(array('use_border'=>1,'border_top'=>0,'border_right'=>0,'border_bottom'=>0,'border_left'=>0)))==='','Its widths per device (following the larger screen); off or none: no border');
+$bdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($bd))));
+check(strpos($bdm,'wpbn-layer--border')!==false && strpos($bdm,'--wpbn-brw:4px 100px 0px 0px;--wpbn-brw-t:4px 100px 0px 8px;--wpbn-brw-m:4px 100px 0px 8px;--wpbn-brs:solid;--wpbn-brc:#ff0000;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--border.wpbn-layer--image img')!==false,'Rendered: on the picture, per device');
+// Radius (Effect, 2026-11-09): behind its switch; per corner and device, px or % (one unit per corner), bounded by its unit.
+$rd=$lay(array('type'=>'image','image'=>3,'use_radius'=>1,'radius_tl'=>24,'radius_tr'=>5000,'radius_br'=>80,'radius_br_unit'=>'%','radius_bl'=>0,'radius_bl_unit'=>'em','radius_tl_mobile'=>8));
+check($rd['radius_tr']===1000 && $rd['radius_br']===50 && $rd['radius_bl_unit']==='px' && $rd['radius_linked']===true && WPBN_Settings::layer()['use_radius']===false,'Radius: bounded by its unit (px 1000, % 50), unknown unit px, linked by default, off for a new layer');
+check(WPBN_Settings::radii($rd)===array('desktop'=>'24px 1000px 50% 0px','tablet'=>'24px 1000px 50% 0px','mobile'=>'8px 1000px 50% 0px') && WPBN_Settings::radii($lay(array('use_radius'=>0)))==='','Its corners per device (following the larger screen); off: none');
+$rdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($rd))));
+check(strpos($rdm,'wpbn-layer--radius')!==false && strpos($rdm,'--wpbn-brr:24px 1000px 50% 0px;--wpbn-brr-t:24px 1000px 50% 0px;--wpbn-brr-m:8px 1000px 50% 0px;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img')!==false,'Rendered: on the picture, per device');
+// Padding (Size, 2026-11-09): a title, a text, a button, a shortcode or an image object; per side and device, px or % (bounded).
+$pd=$lay(array('type'=>'text','use_padding'=>1,'padding_top'=>20,'padding_right'=>9000,'padding_left'=>80,'padding_left_unit'=>'%','padding_bottom_unit'=>'em','padding_top_mobile'=>8));
+check($pd['padding_right']===500 && $pd['padding_left']===50 && $pd['padding_bottom_unit']==='px' && $pd['padding_linked']===true && WPBN_Settings::layer()['padding_top']===0 && WPBN_Settings::layer()['use_padding']===false,'Padding: bounded by its unit (px 500, % 50), unknown unit px, linked, off and 0 by default');
+check($lay(array('type'=>'text','padding_left'=>10))['use_padding']===true && $lay(array('type'=>'text'))['use_padding']===false && WPBN_Settings::paddings($lay(array('type'=>'text','use_padding'=>0,'padding_top'=>20)))==='','Its switch: saved before it, on where a side has space; off: none');
+check(WPBN_Settings::paddings($pd)===array('desktop'=>'20px 500px 0px 50%','tablet'=>'20px 500px 0px 50%','mobile'=>'8px 500px 0px 50%') && WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'overlay','padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'text')))==='','Its sides per device; none for a photo filling the scene, an overlay, or at 0');
+check(WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'fill_scene'=>0,'use_padding'=>1,'padding_top'=>6)))['desktop']==='6px 0px 0px 0px','An image object has one');
+$pdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($pd))));
+check(strpos($pdm,'wpbn-layer--padding')!==false && strpos($pdm,'--wpbn-pad:20px 500px 0px 50%;--wpbn-pad-t:20px 500px 0px 50%;--wpbn-pad-m:8px 500px 0px 50%;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad)}')!==false,'Rendered per device');
 // A title's or a Text layer's Width: Auto (as before), % of its container, px or vw, per device.
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text')))))),'--wpbn-tw')===false,'Width Auto by default: nothing set');
 $tw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'richtext','content'=>'<p>a</p>','container'=>'custom','text_width'=>60,'text_width_unit'=>'%','mobile_text_width_unit'=>'auto'))))));
 check(strpos($tw,'--wpbn-tw:calc(var(--wpbn-cw) * 0.6);--wpbn-tw-t:calc(var(--wpbn-cw-t, var(--wpbn-cw)) * 0.6);--wpbn-tw-m:max-content;')!==false,'Its Width per device ('.$tw.')');
 check($lay(array('type'=>'text','text_width_unit'=>'em'))['text_width_unit']==='auto' && strpos($animCss,'.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content)')!==false,'An unknown unit: Auto');
-// Scroll animation: one switch (use_scroll, 2026-11-09); the travel, zoom and opacity at the end follow it. A layer saved before:
-// on where one was on, those that were off at rest (it moves as it did).
+// Scroll animation: no switch since 2026-11-09 (user's request): always on. A layer saved before the switches: what was off at rest;
+// one saved with it off: all of it at rest (each moves as it did).
 $sc=WPBN_Settings::sanitize(array('layers'=>array(
     array('type'=>'text','move_y'=>-50,'use_move_y'=>1,'zoom'=>40,'use_zoom'=>0,'end_opacity'=>0,'use_end_opacity'=>0),
     array('type'=>'text','use_scroll'=>0,'move_y'=>-50,'use_move_y'=>1),
     array('type'=>'text','use_scroll'=>1,'move_x'=>30,'end_opacity'=>20))));
 check($sc['layers'][0]['use_scroll'] && $sc['layers'][0]['use_zoom'] && $sc['layers'][0]['zoom']==0 && $sc['layers'][0]['move_y']==-50 && $sc['layers'][0]['end_opacity']==100,'Scroll animation: a layer from before on, what was off at rest');
-check(!$sc['layers'][1]['use_move_y'] && $sc['layers'][2]['use_move_x'] && $sc['layers'][2]['use_end_opacity'] && WPBN_Settings::layer()['use_scroll']===false && WPBN_Settings::layer()['end_opacity']===100,'Scroll animation: its fields follow its switch; off and "as it is" for a new layer');
+check($sc['layers'][1]['use_move_y'] && $sc['layers'][1]['move_y']==0 && $sc['layers'][2]['use_move_x'] && $sc['layers'][2]['use_end_opacity'] && WPBN_Settings::layer()['use_scroll']===true && WPBN_Settings::layer()['end_opacity']===100,'Scroll animation: always on; switched off before: at rest; "as it is" for a new layer');
 $scm=WPBN_Render::markup($sc);
-check(motion_of($scm,1)['move_y']==array(0,0,0) && motion_of($scm,2)['move_x']==array(30,30,30) && motion_of($scm,2)['fade']==array(-80,-80,-80) && WPBN_Settings::sanitize($sc)==$sc,'Scroll animation rendered only with its switch on; idempotent');
+check(motion_of($scm,1)['move_y']==array(0,0,0) && motion_of($scm,2)['move_x']==array(30,30,30) && motion_of($scm,2)['fade']==array(-80,-80,-80) && WPBN_Settings::sanitize($sc)==$sc,'Scroll animation rendered as set (at rest where it was switched off); idempotent');
 // Entrance animation (WPBN_Entrance, 2026-11-09): once, around the Loop animation; off by default; not for a Shape layer.
 $en=$lay(array('type'=>'text','use_enter'=>1,'enter_type'=>'slide-up','enter_distance'=>2000,'enter_duration'=>0,'enter_delay'=>1.25,'enter_start'=>'never','enter_easing'=>'bounce','use_anim'=>1,'anim_type'=>'fade'));
 check($en['enter_distance']==1000 && $en['enter_duration']==0.1 && $en['enter_delay']==1.3 && $en['enter_start']==='visible' && $en['enter_easing']==='ease-out' && $lay(array('type'=>'text'))['use_enter']===false && $lay(array('enter_type'=>'spin'))['enter_type']==='fade','Entrance: bounded, allow-listed, off by default');
@@ -441,6 +465,13 @@ $enm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($en))));
 check(preg_match('/<div class="wpbn-enter wpbn-enter--slide wpbn-enter--visible" style="--wpbn-ed:0.1s;--wpbn-edl:1.3s;--wpbn-ex:0px;--wpbn-ey:1000px;"><div class="wpbn-anim wpbn-anim--fade/',$enm)===1,'Entrance: a slide up, from below, around the Loop animation ('.$enm.')');
 $enz=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_enter'=>1,'enter_type'=>'slide-left','enter_distance'=>80)),$lay(array('type'=>'image','image'=>3,'use_enter'=>1,'enter_type'=>'zoom','enter_scale'=>120,'enter_start'=>'load'))))));
 check(motion_of($enz,0)['slack'][0]==array(100,100,100) && strpos($enz,'class="wpbn-enter wpbn-enter--zoom" style="--wpbn-ed:1s;--wpbn-es:1.2;"')!==false,'Entrance: a photo filling the scene grows by a slide\'s distance; a zoom from its start size');
+// More kinds (2026-11-09, user's request; Woodmart's choices in our own CSS): from an edge (a screen away until frontend.js
+// measures; a photo is not grown for it), flips, Rotate Z.
+$ee=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_enter'=>1,'enter_type'=>'edge-left','enter_start'=>'load')),$lay(array('type'=>'text','use_enter'=>1,'enter_type'=>'flip-y-right','enter_start'=>'load')),$lay(array('type'=>'text','use_enter'=>1,'enter_type'=>'edge-bottom','enter_start'=>'load'))))));
+$eePlain=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3))))));
+check(strpos($ee,'class="wpbn-enter wpbn-enter--edge wpbn-enter--edge-left" style="--wpbn-ed:1s;--wpbn-ex:-100vw;"')!==false && strpos($ee,'class="wpbn-enter wpbn-enter--flip-y-right"')!==false && strpos($ee,'wpbn-enter--edge-bottom" style="--wpbn-ed:1s;--wpbn-ey:100vh;"')!==false,'Entrance: from an edge (a screen away until measured), a flip');
+check(motion_of($ee,0)['slack']==motion_of($eePlain,0)['slack'] && count(WPBN_Entrance::editor()['types'])===15 && !array_diff_key(WPBN_Entrance::TYPES,WPBN_Entrance::editor()['types']),'From an edge: the photo not grown for it; every kind named in the editor');
+check(strpos($animCss,'@keyframes wpbn-enter-edge{from{transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}')!==false && strpos($animCss,'@keyframes wpbn-enter-rotate-z{')!==false && strpos($animCss,'@keyframes wpbn-enter-flip-x-bottom{')!==false,'Their keyframes');
 check(WPBN_Settings::effective($lay(array('type'=>'shape','use_enter'=>1)))['use_enter']===false && strpos($animCss,'@keyframes wpbn-enter-slide{from{opacity:0;transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}')!==false && strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible')!==false,'Entrance: not for a Shape layer; its keyframes; In view waits');
 // Shape layers (WPBN_Shape): an SVG read as objects, only their shapes kept; each object a window onto its fill.
 $sp=WPBN_Shape::parse('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><style>.st0{fill:#878787}.h{fill-rule:evenodd}</style></defs><rect class="st0" x="400" y="275" width="200" height="450"/><rect class="st0" x="700" y="275" width="200" height="450"/><path class="h" data-name="Ring" d="M0 0H100V100H0Z M25 25H75V75H25Z"/></svg>');
@@ -473,7 +504,7 @@ check(strpos($sm,'--wpbn-filter:grayscale(100%);')!==false,'An image layer\'s Fi
 check(strpos($sm,'--wpbn-ms:contain;--wpbn-ms-t:contain;--wpbn-ms-m:100% 100%;')!==false,'Fit per device as the masks\' size');
 check(strpos($sm,'filter:drop-shadow(6px 0px 0 #ffffff) drop-shadow(-6px 0px 0 #ffffff) drop-shadow(0px 6px 0 #ffffff) drop-shadow(0px -6px 0 #ffffff) drop-shadow(0px 10px 25px rgba(0,0,0,0.5));')!==false && strpos($sm,'drop-shadow(5px')===false,'Edge and Shadow along the outline; none on glass');
 check(strpos($sm,'backdrop-filter:blur(60px)')!==false && strpos($sm,'data-move="{&quot;x&quot;:0,&quot;y&quot;:-40}"')!==false,'Glass blurs what is behind it; an object\'s travel for frontend.js');
-check(substr_count($sm,'data-move=')===1,'An object\'s travel only with its Scroll animation on');
+check(substr_count($sm,'data-move=')===1,'An object\'s travel: none where its Scroll animation was switched off');
 check(preg_match('/--wpbn-mask:url\(&quot;data:image\/svg\+xml,%3Csvg[^)]*%3Crect x=&#039;400&#039;/',$sm)===1,'Each object\'s mask: the object alone, as an SVG');
 check(strpos($animCss,'.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mask)')!==false && strpos($animCss,'mask-composite:exclude')!==false,'Masks and Invert in the stylesheet');
 echo "Settings and rendering checks passed.\n";
