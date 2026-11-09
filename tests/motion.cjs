@@ -1014,6 +1014,25 @@ const server=http.createServer((req,res)=>{
         assert.equal(await tp.locator('#wpbn-settings .wpbn-device-note').count(),1,'A title: the note above its blocks');
         await tp.click('[data-preview-device="desktop"]');
         await tp.close();
+        // The eyedropper (2026-11-09): where the browser has one, beside the colour value; the colour picked, the opacity kept.
+        const eye=await browser.newPage({viewport:{width:1600,height:1000}});eye.on('pageerror',e=>errors.push(e.message));
+        await eye.addInitScript(()=>{window.EyeDropper=class{open(){return Promise.resolve({sRGBHex:'#ff8800'});}};});
+        await eye.goto('http://127.0.0.1:'+server.address().port+'/');
+        await eye.click('#wpbn-add-toggle');await eye.click('.wpbn-modal--add [data-add="overlay"]');
+        await eye.click('#wpbn-f-color');
+        await eye.waitForSelector('.wpbn-pcr.visible .wpbn-pcr__dropper');
+        assert.ok(await eye.evaluate(()=>{const r=document.querySelector('.wpbn-pcr.visible .pcr-result').getBoundingClientRect(),d=document.querySelector('.wpbn-pcr.visible .wpbn-pcr__dropper').getBoundingClientRect();return Math.abs(r.top-d.top)<2 && d.left>=r.right;}),'The eyedropper beside the colour value');
+        await eye.click('.wpbn-pcr.visible .wpbn-pcr__dropper');
+        await eye.waitForFunction(()=>{const l=JSON.parse(document.getElementById('wpbn-data').value).layers;return l[l.length-1].color.replace(/s/g,'')==='rgba(255,136,0,0.4)';});
+        await eye.close();
+        // Without one (Firefox, Safari): no button.
+        const noEye=await browser.newPage({viewport:{width:1600,height:1000}});noEye.on('pageerror',e=>errors.push(e.message));
+        await noEye.addInitScript(()=>{delete window.EyeDropper;});
+        await noEye.goto('http://127.0.0.1:'+server.address().port+'/');
+        await noEye.click('#wpbn-add-toggle');await noEye.click('.wpbn-modal--add [data-add="overlay"]');
+        await noEye.click('#wpbn-f-color');await noEye.waitForSelector('.wpbn-pcr.visible');
+        assert.equal(await noEye.locator('.wpbn-pcr__dropper').count(),0,'No eyedropper where the browser has none');
+        await noEye.close();
         // A Shape layer (WPBN_Shape): an SVG uploaded, its objects under the layer, one chosen in the drawing; Fill Photo shows
         // the photo through it, in colour over its black and white self; glass greys Edge and Filters (not hidden).
         const sh=await browser.newPage({viewport:{width:1600,height:1000}});sh.on('pageerror',e=>errors.push(e.message));

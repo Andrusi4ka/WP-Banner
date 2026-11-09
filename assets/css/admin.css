@@ -348,6 +348,13 @@ body.wpbn-modal-open{overflow:hidden}
 .pcr-app.wpbn-pcr{z-index:100060}
 .pcr-app.wpbn-pcr[data-theme="classic"]{width:20em}
 .pcr-app.wpbn-pcr[data-theme="classic"] .pcr-selection .pcr-color-palette{height:11em}
+/* The eyedropper beside the colour's value (where the browser has one), the format buttons on the next line. */
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper{display:flex;flex:0 0 2.6em;align-items:center;justify-content:center;height:2.6em;margin:.75em .2em 0;padding:0;font-size:.85em;border:0;border-radius:.15em;background:#f1f3f4;color:#50575e;cursor:pointer}
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper:hover{background:#e2e4e7;color:#2271b1}
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(255,255,255,.85),0 0 0 3px rgba(66,133,244,.75)}
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper svg{display:block;width:18px;height:18px}
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper+.wpbn-pcr__break{flex-basis:100%;height:0}
+.pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper~.pcr-result,.pcr-app.wpbn-pcr .pcr-interaction .pcr-result:has(+.wpbn-pcr__dropper){flex:1 1 0;min-width:0}
 .pcr-app.wpbn-pcr .pcr-interaction .pcr-result{flex:1 0 100%;height:2.6em;padding:0 .6em;border:0;border-radius:.15em;background:#f1f3f4;color:#75797e;font-size:.85em}
 .pcr-app.wpbn-pcr .pcr-interaction .pcr-result:focus{box-shadow:0 0 0 1px rgba(255,255,255,.85),0 0 0 3px rgba(66,133,244,.75)}
 .pcr-app.wpbn-pcr .pcr-interaction .pcr-type,.pcr-app.wpbn-pcr .pcr-interaction .pcr-cancel,.pcr-app.wpbn-pcr .pcr-interaction .pcr-clear{flex:1 1 auto}

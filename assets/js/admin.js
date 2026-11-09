@@ -213,6 +213,8 @@
         if (colorPicker.wpbnButton) colorPicker.wpbnButton.setAttribute('aria-expanded', 'false');
         colorPicker = null;
     }
+    // The eyedropper's icon: a pipette (stroke in the button's colour).
+    const EYEDROPPER = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5l1.8-1.8a2.4 2.4 0 0 1 3.4 3.4l-1.8 1.8"/><path d="M12 5l7 7"/><path d="M15.5 8.5L7 17l-3 3 .5-3.5L13 8"/></svg>';
     function openPicker(button) {
         if (!window.Pickr) return;
         if (colorPicker && colorPicker.wpbnButton === button) return;
@@ -274,6 +276,23 @@
             reset.type = 'button'; reset.className = 'pcr-clear wpbn-pcr__default'; reset.value = 'Default'; reset.setAttribute('aria-label', 'Back to the default color');
             reset.addEventListener('click', () => { store(box.dataset.default); show(); });
             root.querySelector('.pcr-interaction').append(reset);
+            // The eyedropper (2026-11-09): beside the colour's value, where the browser has one (Chrome, Edge, Opera; not Firefox or
+            // Safari): a colour from anywhere on the screen, e.g. the photo in the preview; the field's opacity kept; Esc: no change.
+            if (window.EyeDropper) {
+                const drop = document.createElement('button'), result = root.querySelector('.pcr-result'), line = document.createElement('span');
+                drop.type = 'button'; drop.className = 'wpbn-pcr__dropper'; drop.title = 'Pick a color from the screen'; drop.setAttribute('aria-label', 'Pick a color from the screen');
+                drop.innerHTML = EYEDROPPER;
+                line.className = 'wpbn-pcr__break';
+                drop.addEventListener('click', () => {
+                    new window.EyeDropper().open().then(picked => {
+                        const v = String(picked && picked.sRGBHex || ''), m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v);
+                        const c = m ? {hex:'#' + [m[1], m[2], m[3]].map(x => ('0' + Math.min(255, Number(x)).toString(16)).slice(-2)).join('')} : parseColor(v);
+                        if (!c) return;
+                        store(colorValue(c.hex, alpha ? now().alpha : 100)); show();
+                    }).catch(() => { /* Esc, or the page left: nothing changes. */ });
+                });
+                result.after(drop, line);
+            }
             instance.show();
         });
         colorPicker.on('show', () => { opened = input.value; show(); button.setAttribute('aria-expanded', 'true'); });
