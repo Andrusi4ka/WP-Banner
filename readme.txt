@@ -37,6 +37,8 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 * Undo and Redo in the editor (Ctrl + Z, Ctrl + Shift + Z); the scene's earlier versions under Revisions (WordPress 6.4 or later).
 * Duplicate a scene, export it to a file and import it on another site (its images downloaded into the media library).
 * Preview beside the settings, as on a desktop, tablet or phone (or a screen size of your own), turned sideways too, with a page under the banner and a scroll simulation.
+* Shape layers: an SVG of several objects (strips, a torn edge…), each a window onto a photo layer (with filters of its own: colour over black and white, sharp over blurred), an image, a colour or gradient, or frosted glass; an edge, a shadow, invert (a window cut out), opacity and its own travel as the page scrolls; the drawing fitted to the scene per device. Only the shapes of the SVG are kept: its scripts, styles and links are removed.
+* Filters for image layers: black and white, blur, brightness, contrast, saturation.
 * Respects the visitor's reduced-motion setting.
 
 Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) 5 (MIT) and [Pickr](https://github.com/simonwep/pickr) 1.9.1 (MIT).

@@ -15,6 +15,8 @@ const server=http.createServer((req,res)=>{
         if (!file.startsWith(root+path.sep) || !fs.existsSync(file)) {res.writeHead(404);res.end();return;}
         res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.svg')?'image/svg+xml':'text/css');res.end(fs.readFileSync(file));return;
     }
+    // An SVG uploaded in a Shape layer's card (multipart, as admin-ajax wpbn_shape_upload gets it): the attachment tests/settings.php keeps.
+    if(req.method==='POST' && /^multipart\//.test(req.headers['content-type']||'')){req.resume();req.on('end',()=>{res.setHeader('Content-Type','application/json');res.end(fixture('--shape'));});return;}
     if(req.method==='POST'){
         let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{res.setHeader('Content-Type','text/html');res.end(fixture('--preview',new URLSearchParams(body).get('scene')));});return;
     }
@@ -853,7 +855,37 @@ const server=http.createServer((req,res)=>{
         const tipsOff=await ed.evaluate(()=>[...document.querySelectorAll('#wpbn-settings .wpbn-tip')].filter(t=>t.offsetParent).map(t=>{const label=(t.closest('.wpbn-field')||t.parentElement).querySelector('label, .wpbn-field__label'),a=t.getBoundingClientRect(),b=label.getBoundingClientRect();return Math.abs((a.top+a.height/2)-(b.top+b.height/2))<2 && a.left>=b.right-1 && a.left-b.right<14 ? null : label.textContent.trim();}).filter(Boolean));
         assert.deepEqual(tipsOff,[],'Every tip beside its label');
         await ed.close();
+        // A Shape layer (WPBN_Shape): an SVG uploaded, its objects under the layer, one chosen in the drawing; Fill Photo shows
+        // the photo through it, in colour over its black and white self; glass greys Edge and Filters (not hidden).
+        const sh=await browser.newPage({viewport:{width:1600,height:1000}});sh.on('pageerror',e=>errors.push(e.message));
+        await sh.goto('http://127.0.0.1:'+server.address().port+'/?image');
+        const shData=async()=>JSON.parse(await sh.locator('#wpbn-data').inputValue());
+        await sh.click('[data-select="0"]');
+        await sh.fill('#wpbn-f-f_grayscale','100');
+        await sh.click('#wpbn-add-toggle');await sh.click('#wpbn-settings [data-add="shape"]');
+        const [chooser]=await Promise.all([sh.waitForEvent('filechooser'),sh.click('[data-action="shape-upload"]')]);
+        await chooser.setFiles({name:'strips.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg/>')});
+        await sh.waitForSelector('.wpbn-object-row');
+        let sd=await shData();
+        assert.deepEqual(sd.layers[1].shape_objects.map(o=>o.name),['Object 2','Object 3','Left strip'],'Objects without a name numbered in reading order, the file\'s names kept');
+        assert.ok(sd.layers[0].uid && sd.layers[1].shape_objects.every(o=>o.fill==='layer' && o.source===sd.layers[0].uid),'New objects show the photo layer');
+        assert.equal(await sh.locator('.wpbn-object-row').count(),3,'Its objects under the layer');
+        await sh.locator('.wpbn-shape-canvas [data-object="0"] rect').click();
+        assert.equal(await sh.locator('#wpbn-settings legend').textContent(),'Object settings','A click in the drawing chooses an object');
+        await sh.click('[data-choice="fill"][data-value="glass"]');
+        assert.ok(await sh.locator('#wpbn-f-stroke').isDisabled() && await sh.locator('#wpbn-f-f_grayscale').isDisabled(),'Glass: Edge and Filters greyed, not hidden');
+        await sh.click('[data-choice="fill"][data-value="layer"]');
+        await sh.fill('#wpbn-f-stroke','6');
+        sd=await shData();
+        assert.ok(sd.layers[1].shape_objects[0].stroke===6 && sd.layers[1].stroke===undefined,'The Edge saved on the object, not the layer');
+        await sh.click('#wpbn-refresh');await sh.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const shFrame=sh.frameLocator('#wpbn-frame');
+        assert.equal(await shFrame.locator('.wpbn-shape-item').count(),3,'In the preview: an item per object');
+        assert.match(await shFrame.locator('.wpbn-shape-clip').first().evaluate(el=>getComputedStyle(el).maskImage||getComputedStyle(el).webkitMaskImage),/^url\("data:image\/svg\+xml/,'Each clipped by its mask');
+        assert.equal(await shFrame.locator('.wpbn-shape-clip .wpbn-layer--image img').first().evaluate(el=>getComputedStyle(el).filter),'none','The photo in colour through the object…');
+        assert.match(await shFrame.locator('.wpbn-layer--image img').first().evaluate(el=>getComputedStyle(el).filter),/^grayscale/,'…over the photo in black and white');
+        await sh.close();
         assert.deepEqual(errors,[]);
-        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, decorative images, tips.');
+        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, decorative images, tips, shape layers.');
     } finally {if(browser)await browser.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});

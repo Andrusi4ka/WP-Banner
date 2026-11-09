@@ -392,3 +392,33 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-history .button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0}
 /* The arrows centred in their buttons: WordPress's button styles would give them the button's line height. */
 #wpbn-app .wpbn-history .dashicons{display:block;width:18px;height:18px;font-size:18px;line-height:18px;margin:0}
+/* Shape layers (admin.js shapeSvg()): the objects grey, the chosen one in the accent colour, hidden ones as dashed outlines. */
+.wpbn-shape-object{fill:#a7aaad}
+.wpbn-shape-object.is-active{fill:var(--wpbn-accent)}
+.wpbn-shape-object.is-hidden{fill:none;stroke:#8c8f94;stroke-width:1px;stroke-dasharray:3 3}
+.wpbn-shape-object.is-hidden *{vector-effect:non-scaling-stroke}
+.wpbn-layer-thumb--shape{background:#fff;color:#50575e}
+.wpbn-layer-thumb--shape svg,.wpbn-picker__thumb svg,.wpbn-object-thumb svg{display:block;width:100%;height:100%}
+.wpbn-layer-thumb--shape svg{padding:3px;box-sizing:border-box}
+.wpbn-picker__thumb svg{padding:4px;box-sizing:border-box}
+/* Its objects under its row, indented, the front one at the top. */
+.wpbn-object-row{display:flex;align-items:center;gap:2px;margin:-2px 0 0 24px;padding-right:6px;border:1px solid #e4e4e4;border-radius:6px;background:#fff}
+.wpbn-object-row:hover{border-color:var(--wpbn-accent)}
+.wpbn-object-row.is-active{border-color:var(--wpbn-accent);background:#f0f6fc;box-shadow:inset 3px 0 0 var(--wpbn-accent)}
+.wpbn-object-select{display:flex;flex:1 1 auto;align-items:center;gap:8px;min-width:0;padding:5px 4px 5px 8px;border:0;border-radius:6px;background:none;color:#1d2327;font:inherit;font-size:12px;text-align:left;line-height:1.35;cursor:pointer}
+.wpbn-object-row:hover .wpbn-object-select,.wpbn-object-row.is-active .wpbn-object-select{color:var(--wpbn-accent)}
+.wpbn-object-row.is-hidden .wpbn-object-thumb,.wpbn-object-row.is-hidden .wpbn-layer-label{opacity:.5}
+.wpbn-object-thumb{display:flex;flex:0 0 26px;width:26px;height:26px;padding:2px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:#fff}
+/* The drawing in the layer's card: as large as fits, a click on an object chooses it. */
+.wpbn-shape-canvas{display:flex;align-items:center;justify-content:center;max-width:100%;max-height:320px;margin:10px auto 0;padding:10px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/16px 16px}
+.wpbn-shape-svg{display:block;width:100%;height:100%;max-height:300px;overflow:visible}
+.wpbn-shape-canvas .wpbn-shape-object{cursor:pointer;transition:fill .12s}
+.wpbn-shape-canvas .wpbn-shape-object:hover{fill:#787c82}
+.wpbn-shape-canvas .wpbn-shape-object.is-active:hover{fill:var(--wpbn-accent-darker)}
+.wpbn-shape-canvas .wpbn-shape-object.is-hidden:hover{fill:rgba(0,0,0,.08)}
+.wpbn-shape-error{margin:8px 0 0;color:#b32d2e;font-weight:500}
+/* A hidden object (no fill) can still be clicked inside its outline. */
+.wpbn-shape-canvas .wpbn-shape-object *{pointer-events:visible}
+/* A Shape object's Fill: five choices, wrapping on a narrow column. */
+.wpbn-fill-choice--wrap{flex-wrap:wrap}
+.wpbn-fill-choice--wrap .wpbn-device-button{flex:1 1 52px;padding:4px 6px}

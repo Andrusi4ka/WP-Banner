@@ -4,6 +4,11 @@
     if (!app) return;
     const boot = JSON.parse(document.getElementById('wpbn-boot').textContent);
     const scene = boot.scene;
+    // A layer's own name for others to point to (a Shape object showing its photo: WPBN_Shape): a letter, then 7 more.
+    const newUid = () => 'l' + (Math.random().toString(36) + '0000000').slice(2, 9);
+    // Layers from before it (or copied from elsewhere): one each, unique.
+    const uids = new Set();
+    scene.layers.forEach(l => { if (!l.uid || uids.has(l.uid)) l.uid = newUid(); uids.add(l.uid); });
     const images = boot.images;
     const icons = boot.icons;
     const imageInfo = boot.imageInfo || {};
@@ -14,10 +19,11 @@
         richtext: ['editor-paragraph', 'Text', 'Paragraphs and headings under or beside the title: bold, italic, underline, colors, alignment, lists and links.'],
         shortcode: ['shortcode', 'Shortcode', 'Another plugin\'s element by its shortcode, e.g. a slider: [wp_swiper id="12"]. It takes its place among the layers.'],
         button: ['button', 'Button', 'A button with a link, e.g. "Learn more" under the title.'],
-        overlay: ['image-filter', 'Overlay', 'A color or gradient over the scene (or a band of it), over the layers under it: e.g. the photo shaded under the title.']
+        overlay: ['image-filter', 'Overlay', 'A color or gradient over the scene (or a band of it), over the layers under it: e.g. the photo shaded under the title.'],
+        shape: ['art', 'Shape', 'An SVG with several objects (strips, a torn edge, a heart…): each object becomes a window onto a photo, a color or frosted glass.']
     };
     // richtext: the Text element (text is the Title's key).
-    const TYPE_NAMES = {image:'Image', text:'Title', overlay:'Overlay', richtext:'Text', button:'Button', shortcode:'Shortcode'};
+    const TYPE_NAMES = {image:'Image', text:'Title', overlay:'Overlay', richtext:'Text', button:'Button', shortcode:'Shortcode', shape:'Shape'};
     // Title, Text and Button (WPBN_Settings::textual()): as wide as their content, at 100% scale and opacity.
     const textual = l => l.type === 'text' || l.type === 'richtext' || l.type === 'button' || l.type === 'shortcode';
     // A button's Size: WoodMart's presets (WPBN_Settings::BUTTON_SIZES): side padding, height, font size (px).
@@ -32,6 +38,10 @@
     const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
     // adding: the settings column shows the elements to add instead of a layer's settings.
     let selected = -1, dark = false, adding = false;
+    // A Shape layer's SVGs by attachment id (WPBN_Shape::editor()); the object chosen in the selected Shape layer
+    // (-1: none); an upload under way and why the last one failed.
+    const shapes = boot.shapes || {};
+    let selectedObject = -1, shapeBusy = false, shapeError = '';
     // Undo and Redo (remember(), below): the scene after each change, the changes undone, the pause before a change is kept.
     const HISTORY_MAX = 100, HISTORY_PAUSE = 400;
     let history = [JSON.stringify(scene)], future = [], historyTimer = 0;
@@ -45,7 +55,13 @@
     const $ = id => document.getElementById('wpbn-' + id);
     const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const device = () => $('device').value;
-    const current = () => selected < 0 ? scene : scene.layers[selected];
+    // What the fields edit: the scene, the selected layer or, in a Shape layer, its chosen object (its fields use the
+    // same helpers: their keys are the object's).
+    const current = () => {
+        if (selected < 0) return scene;
+        const l = scene.layers[selected], o = l && l.type === 'shape' && selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
+        return o || l;
+    };
     function sync() { $('data').value = JSON.stringify(scene); }
     // Per-device layer settings, as in WP Swiper: desktop always has a value;
     // tablet and mobile null = the larger screen's (mobile → tablet → desktop).
@@ -85,7 +101,9 @@
     // default below. Tablet / mobile: its own value cleared, so it follows the larger screen again.
     const DEFAULTS = {width:100, scale:100, opacity:100, move_x:0, move_y:0, zoom:0, end_opacity:0,
         font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size,
-        anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse};
+        anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse,
+        // Filters (an image layer's, a Shape object's) at rest, and a Shape object's Edge and frosted glass.
+        f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, stroke:0, glass_blur:12};
     // Is there something to reset? key: the stored key on this device; base: a per-device setting's name (null for a key of its own).
     function canReset(l, key, base) {
         if (base && key !== base) return l[key] != null;
@@ -621,7 +639,10 @@
     function shadowField(l) {
         const id = 'wpbn-f-use_shadow';
         const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_shadow"' + (l.use_shadow ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>Shadow</span></label>'
-            + tip(l.type === 'image'
+            + tip(l.key !== undefined
+                // A Shape layer's object's: along its outline (WPBN_Shape).
+                ? 'A shadow along the object\'s outline, e.g. a strip of paper lifted off the photo. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
+                : l.type === 'image'
                 // An image's: along its outline (a PNG's transparent parts cast none), as CSS drop-shadow (WPBN_Render).
                 ? 'A shadow along the image\'s outline (a transparent PNG casts it from its shape): for a cutout or an image object; a photo that fills the scene hides it. Its color, how far it falls right (X) and down (Y; negative: left, up) and how soft it is (Blur).'
                 // An overlay's: around its box (box-shadow), or Inside it.
@@ -721,7 +742,11 @@
     }
     // A button: Open in a new window with a link only; Corners not for Underline.
     // An image object: Image fit and its photo's point in view only where its box can crop it (not with Height Auto).
-    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto', autoheight: autoHeight, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline'};
+    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto', autoheight: autoHeight, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
+        // A Shape object's Edge color: with an Edge (not on glass); its Filters: on a photo or an image; Edge and Shadow: not on glass.
+        stroke: () => Number(current().stroke) > 0 && current().fill !== 'glass',
+        pictured: () => current().fill === 'layer' || current().fill === 'image',
+        edged: () => current().fill !== 'glass'};
     // A button's Background or Corners: a sample of each, the chosen one pressed (as WP Top Info Bar's).
     function buttonChoice(l, key, label, list) {
         return '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<div class="wpbn-button-choices" role="group" aria-label="' + label + '">'
@@ -730,6 +755,8 @@
     // A help text behind an "i" icon, shown on a dark tooltip on hover and keyboard focus (as WP Swiper's).
     const tip = text => '<span class="wpbn-tip" tabindex="0" role="img" aria-label="' + escape(text) + '" data-tip="' + escape(text) + '"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span></span>';
     const needs = (html, when) => html.replace('<div class="wpbn-field', '<div data-needs="' + when + '" class="wpbn-field');
+    // Every field in html greyed together (a card's worth: a Shape object's Filters, its Shadow block).
+    const needsAll = (html, when) => html.replace(/<div class="wpbn-field(?=[ "])/g, '<div data-needs="' + when + '" class="wpbn-field');
     function applyStates() {
         $('settings').querySelectorAll('[data-needs]').forEach(el => {
             const on = !!(NEEDS[el.dataset.needs] && NEEDS[el.dataset.needs]());
@@ -790,6 +817,160 @@
 
     // An overlay's fill as CSS: its gradient (with its switch on) or its colour.
     const overlayFill = l => (l.use_gradient && gradientCss(l.gradient)) || l.color || 'transparent';
+
+    /*
+     * Shape layers (WPBN_Shape): an SVG whose objects are listed under the layer's row and drawn in its card,
+     * where a click chooses one. The SVG comes from the server already cleaned (only shapes' geometry).
+     */
+    // Each object's markup by its key, read once from the SVG.
+    function shapeParts(data) {
+        if (!data.parts) {
+            data.parts = {};
+            const doc = new DOMParser().parseFromString(data.svg, 'image/svg+xml');
+            doc.querySelectorAll('g[data-key]').forEach(g => { data.parts[g.getAttribute('data-key')] = new XMLSerializer().serializeToString(g).replace(/^<g[^>]*>|<\/g>$/g, ''); });
+        }
+        return data.parts;
+    }
+    // The layer's SVG, its objects in the layer's order (the back one first), the chosen one lit, hidden ones as outlines.
+    // only: that object alone, framed by its own box (an object's thumbnail in the list).
+    function shapeSvg(l, active, className, only) {
+        const data = shapes[l.shape];
+        if (!data) return '';
+        const parts = shapeParts(data);
+        let vb = data.viewbox.map(Number);
+        const own = only != null && l.shape_objects[only] ? shapeBoxes(data)[l.shape_objects[only].key] : null;
+        if (own && own.width > 0 && own.height > 0) { const pad = Math.max(own.width, own.height) * 0.06; vb = [own.x - pad, own.y - pad, own.width + pad * 2, own.height + pad * 2]; }
+        return '<svg' + (className ? ' class="' + className + '"' : '') + ' viewBox="' + vb.map(n => Math.round(n * 100) / 100).join(' ') + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">'
+            + (l.shape_objects || []).map((o, j) => parts[o.key] == null || (only != null && only !== j) ? '' : '<g data-object="' + j + '" class="wpbn-shape-object' + (j === active ? ' is-active' : '') + (o.hidden ? ' is-hidden' : '') + '">' + parts[o.key] + '</g>').join('')
+            + '</svg>';
+    }
+    // Objects without a name of their own: numbered in reading order (rows from the top, left to right in a row),
+    // not in the file's order (a drawing program writes them as they were drawn).
+    // Each object's box in the drawing's units, by its key (measured once, in an SVG drawn out of sight).
+    function shapeBoxes(data) {
+        if (!data.boxes) {
+            data.boxes = {};
+            const box = document.createElement('div');
+            box.style.cssText = 'position:absolute;left:-10000px;top:0;width:400px;height:400px;visibility:hidden';
+            box.innerHTML = data.svg;
+            document.body.append(box);
+            data.objects.forEach(o => {
+                let b = {x:0, y:0, width:0, height:0};
+                try { const r = box.querySelector('[data-key="' + o.key + '"]').getBBox(); b = {x:r.x, y:r.y, width:r.width, height:r.height}; } catch (error) { /* Not drawn: no box. */ }
+                data.boxes[o.key] = b;
+            });
+            box.remove();
+        }
+        return data.boxes;
+    }
+    function shapeNumbers(data) {
+        const boxes = shapeBoxes(data);
+        const items = data.objects.map((o, i) => { const b = boxes[o.key]; return {i, x:b.x + b.width / 2, y:b.y + b.height / 2, h:b.height}; });
+        const numbers = {};
+        items.slice().sort((a, b) => Math.abs(a.y - b.y) > Math.min(a.h, b.h) / 2 ? a.y - b.y : a.x - b.x).forEach((item, n) => { numbers[item.i] = n + 1; });
+        return numbers;
+    }
+    const SKIPPED_NAMES = {text:'text not turned into outlines', image:'embedded pictures', use:'references to other objects (<use>)', line:'lines', other:'other elements'};
+    function shapeField(l) {
+        const data = shapes[l.shape], vb = data ? data.viewbox : null;
+        const skipped = data ? Object.entries(data.skipped || {}).map(([kind, n]) => n + ' × ' + (SKIPPED_NAMES[kind] || kind)).join(', ') : '';
+        let html = '<div class="wpbn-field"><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (data ? shapeSvg(l, -1) : '<span class="dashicons dashicons-art" aria-hidden="true"></span>') + '</span>'
+            + (data ? '<p class="wpbn-picker__info"><span class="wpbn-picker__name">' + escape(data.name) + '</span><span class="wpbn-picker__size">' + l.shape_objects.length + (l.shape_objects.length === 1 ? ' object' : ' objects') + ' · ' + Math.round(vb[2]) + ' × ' + Math.round(vb[3]) + '</span></p>'
+                : '<p class="wpbn-picker__info">An SVG with several objects, e.g. three strips or a torn edge.</p>')
+            + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="shape-upload"' + (shapeBusy ? ' disabled' : '') + '>' + (shapeBusy ? 'Uploading…' : data ? 'Replace' : 'Upload SVG') + '</button></span></div>'
+            + (shapeError ? '<p class="wpbn-shape-error" role="alert">' + escape(shapeError) + '</p>' : '')
+            + (skipped ? note('Left out: ' + escape(skipped) + '. Only filled shapes become objects.') : '') + '</div>';
+        if (data) {
+            html += '<div class="wpbn-shape-canvas" style="aspect-ratio:' + Number(vb[2]) + '/' + Number(vb[3]) + '">' + shapeSvg(l, selectedObject, 'wpbn-shape-svg') + '</div>'
+                + note('Click an object to choose it (or choose it under the layer in the list). Objects further down the list are behind the others.');
+        }
+        return html;
+    }
+    // Filters (an image layer's, a Shape object's): WPBN_Settings::FILTERS.
+    const FILTER_FIELDS = [['f_grayscale', 'Black and white (%)', 0, 100], ['f_blur', 'Blur (px)', 0, 40], ['f_brightness', 'Brightness (%)', 0, 200], ['f_contrast', 'Contrast (%)', 0, 200], ['f_saturate', 'Saturation (%)', 0, 300]];
+    const filterFields = () => FILTER_FIELDS.map(([key, label, min, max]) => range(key, label, {min, max})).join('');
+    // What fills an object (WPBN_Shape::FILLS).
+    const FILL_NAMES = {layer:'Photo', image:'Image', color:'Color', glass:'Glass', none:'None'};
+    // A Shape layer's settings: its SVG and how it fits the scene; with an object chosen, that object's.
+    function shapeSettings(l) {
+        const o = selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
+        const svg = card('Shape', withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
+        if (!o) {
+            return '<legend>Layer settings</legend>' + svg
+                + (shapes[l.shape] ? card('Fit', withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch'}),
+                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Choose a device to give it its own.')) : '')
+                + '<p class="description wpbn-after-cards">Choose an object (in the drawing or under the layer in the list) to set what fills it, its edge, shadow and motion. The layer itself stays in place.</p>';
+        }
+        let fill = '';
+        if (o.fill === 'layer') {
+            const sources = scene.layers.filter(x => x.type === 'image' && x.uid);
+            const list = {'':'— Choose a layer —'};
+            sources.forEach(x => { list[x.uid] = escape(x.name); });
+            fill = sources.length ? withTip(select('source', 'Photo of the layer', list), 'The object shows this image layer exactly where it is, and as it moves: a window onto it. Give it Filters other than the layer\'s, e.g. the layer in black and white and the object in color. A hidden layer shows only through its objects.')
+                : note('Add an image layer first: the object will show its photo, lined up with it.');
+        } else if (o.fill === 'image') {
+            const url = images[o.image];
+            fill = '<div class="wpbn-field"><div class="wpbn-field__head"><span class="wpbn-field__label">Image</span></div><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (url ? '<img src="' + escape(url) + '" alt="">' : '') + '</span>'
+                + imageDetails(o.image) + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="object-image">' + (o.image ? 'Change' : 'Choose') + '</button></span></div>'
+                + note('A picture of its own, covering the scene: the object shows the part of it under its shape.') + '</div>';
+        } else if (o.fill === 'color') {
+            fill = fillChoice(o) + (o.use_gradient ? gradientField(o) : colorField('color', 'Color', {alpha:true, def:'#ffffff'}));
+        } else if (o.fill === 'glass') {
+            fill = range('glass_blur', 'Blur (px)', {min:0, max:60, note:'How strongly the layers behind it are blurred, as frosted glass.'})
+                + colorField('glass_color', 'Tint', {alpha:true, def:'rgba(255,255,255,0.15)', note:'A see-through color over the blur; fully transparent: none.'});
+        } else {
+            fill = note('Nothing inside it: only its Edge and Shadow show, e.g. a frame.');
+        }
+        const choice = '<div class="wpbn-field">' + head('wpbn-f-fill', 'Fill') + '<div class="wpbn-fill-choice wpbn-fill-choice--wrap" role="group" aria-label="Fill">'
+            + Object.entries(FILL_NAMES).map(([value, name], i) => '<button type="button" class="wpbn-device-button"' + (i ? '' : ' id="wpbn-f-fill"') + ' data-choice="fill" data-value="' + value + '" aria-pressed="' + (o.fill === value) + '">' + name + '</button>').join('') + '</div></div>';
+        return '<legend>Object settings</legend>' + svg
+            + card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
+                + range('opacity', 'Opacity (%)', {min:0, max:100})
+                + withTip(check('invert', 'Invert'), 'The object becomes a hole: its fill covers the whole scene except the object\'s shape, e.g. a panel with a window cut in it.')
+                + '<p><button type="button" class="button" data-object-hide="' + selectedObject + '" data-layer="' + selected + '">' + (o.hidden ? 'Show the object' : 'Hide the object') + '</button> <button type="button" class="button-link" data-action="object-none">Layer settings</button></p>')
+            + card('Fill', choice + fill)
+            // Greyed where they do not apply (the values kept): Filters change a picture (Photo, Image); glass has no Edge or
+            // Shadow (a filter around it would leave it nothing to blur: an object with Fill None and an Edge over it instead).
+            + card('Filters', needsAll(filterFields(), 'pictured'))
+            + card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
+                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged'))
+            + card('Motion', range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
+                + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative: up.'}));
+    }
+    // An SVG chosen on this computer: sent to the server, which cleans it and keeps it in the media library.
+    function uploadShape(l) {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.svg,image/svg+xml';
+        input.onchange = () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const body = new FormData();
+            body.append('action', 'wpbn_shape_upload'); body.append('nonce', boot.shapeNonce || ''); body.append('file', file);
+            shapeBusy = true; shapeError = ''; settings();
+            const failed = message => Object.assign(new Error(message), {shown:true});
+            fetch(boot.endpoint, {method:'POST', body, credentials:'same-origin'})
+                .then(response => response.json())
+                .then(result => {
+                    if (!result || !result.success || !result.data) throw failed(result && result.data && result.data.message || 'The SVG could not be uploaded.');
+                    const data = result.data, numbers = shapeNumbers(data);
+                    shapes[data.id] = data;
+                    // A new object shows the back image layer's photo (a window onto it), or white without one.
+                    // A file replaced: its objects keep their settings by their place in it (o1, o2…), their names are the new file's.
+                    const source = scene.layers.find(x => x.type === 'image' && x.uid), before = {};
+                    (l.shape_objects || []).forEach(o => { before[o.key] = o; });
+                    l.shape = data.id;
+                    l.shape_objects = data.objects.map((o, i) => Object.assign({}, data.defaults || {}, {fill:source ? 'layer' : 'color', source:source ? source.uid : ''}, before[o.key] || {},
+                        {key:o.key, name:o.name || 'Object ' + numbers[i], hidden:before[o.key] ? !!before[o.key].hidden : false}));
+                    if (scene.layers.includes(l)) changed();
+                })
+                .catch(error => { shapeError = error && error.shown ? error.message : 'The SVG could not be uploaded. Reload the page and try again.'; })
+                .finally(() => {
+                    shapeBusy = false;
+                    if (scene.layers[selected] === l) { selectedObject = -1; list(); settings(); } else list();
+                });
+        };
+        input.click();
+    }
     // Layers: the front one at the top, as in Photoshop. Each row selects its
     // layer; its icons hide, copy or remove it; drag (or Alt + arrows) reorders.
     function list() {
@@ -809,6 +990,8 @@
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--richtext" aria-hidden="true"><span class="dashicons dashicons-editor-paragraph"></span></span>'
                 : l.type === 'text'
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--text" aria-hidden="true"><span class="dashicons dashicons-editor-textcolor"></span></span>'
+                : l.type === 'shape'
+                ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--shape" aria-hidden="true">' + (shapes[l.shape] ? shapeSvg(l, -1) : '<span class="dashicons dashicons-art"></span>') + '</span>'
                 : '<span class="wpbn-layer-thumb" aria-hidden="true">' + (images[l.image] ? '<img src="' + escape(images[l.image]) + '" alt="" draggable="false">' : '<span class="dashicons dashicons-format-image"></span>') + '</span>';
             const row = document.createElement('div');
             row.className = 'wpbn-layer-row' + (i === selected && !adding ? ' is-active' : '') + (l.hidden ? ' is-hidden' : '');
@@ -822,6 +1005,18 @@
                 + '<button type="button" class="wpbn-icon-button wpbn-icon-button--danger" data-row-action="delete" data-index="' + i + '" aria-label="Delete ' + name + '" title="Delete"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>'
                 + '</span>';
             box.append(row);
+            // A Shape layer's objects under its row, the front one at the top (as the layers).
+            if (l.type === 'shape' && shapes[l.shape]) {
+                for (let j = l.shape_objects.length - 1; j >= 0; j--) {
+                    const o = l.shape_objects[j], label = escape(o.name || 'Object'), active = i === selected && j === selectedObject && !adding;
+                    const sub = document.createElement('div');
+                    sub.className = 'wpbn-object-row' + (active ? ' is-active' : '') + (o.hidden || l.hidden ? ' is-hidden' : '');
+                    sub.setAttribute('role', 'listitem');
+                    sub.innerHTML = '<button type="button" class="wpbn-object-select" data-object="' + j + '" data-layer="' + i + '" aria-current="' + active + '"><span class="wpbn-object-thumb" aria-hidden="true">' + shapeSvg(l, j, '', j) + '</span><span class="wpbn-layer-label">' + label + '</span></button>'
+                        + '<button type="button" class="wpbn-icon-button" data-object-hide="' + j + '" data-layer="' + i + '" aria-pressed="' + !!o.hidden + '" aria-label="' + (o.hidden ? 'Show ' : 'Hide ') + label + '" title="' + (o.hidden ? 'Show' : 'Hide') + '"><span class="dashicons dashicons-' + (o.hidden ? 'hidden' : 'visibility') + '" aria-hidden="true"></span></button>';
+                    box.append(sub);
+                }
+            }
         }
     }
     function focusRow(index, action) {
@@ -846,8 +1041,9 @@
             list(); changed(); focusRow(index, 'hide');
         } else if (action === 'duplicate') {
             if (scene.layers.length >= 40) return;
-            scene.layers.splice(index + 1, 0, Object.assign({}, l, {name: l.name + ' copy'}));
-            selected = index + 1; adding = false;
+            // A deep copy: a Shape layer's objects are its own, not shared with the original.
+            scene.layers.splice(index + 1, 0, Object.assign(JSON.parse(JSON.stringify(l)), {name: l.name + ' copy', uid: newUid()}));
+            selected = index + 1; adding = false; selectedObject = -1;
             list(); settings(); changed(); focusRow(selected);
         } else if (action === 'delete') {
             scene.layers.splice(index, 1);
@@ -982,6 +1178,8 @@
                 // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name).
                 + card('Attributes', '<div class="wpbn-row">' + withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
                     + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class above, which places the banner in a block.') + '</div>');
+        } else if (scene.layers[selected].type === 'shape') {
+            html = shapeSettings(scene.layers[selected]);
         } else {
             const l = scene.layers[selected];
             const d = device();
@@ -1039,6 +1237,8 @@
             html = '<legend>Layer settings</legend>'
                 + (d === 'desktop' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.</span></p>')
                 + card(l.type === 'overlay' ? 'Fill' : 'Layer', first) + cards
+                // An image's Filters (WPBN_Settings::FILTERS): e.g. the photo in black and white, a Shape object showing it in color.
+                + (l.type === 'image' ? card('Filters', filterFields()) : '')
                 + (l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l)) + card('Motion', optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'})) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
                     + containerField(l)
                     // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
@@ -1092,6 +1292,8 @@
         Object.assign(scene, data);
         adding = false;
         if (selected >= scene.layers.length) selected = scene.layers.length - 1;
+        const shape = scene.layers[selected];
+        if (!shape || shape.type !== 'shape' || selectedObject >= (shape.shape_objects || []).length) selectedObject = -1;
         list(); settings(); sync(); $('refresh').classList.add('is-stale');
         historyButtons();
     }
@@ -1111,6 +1313,12 @@
     });
     app.addEventListener('input', event => {
         const input = event.target;
+        // A Shape layer's object: its name (shown in the list under the layer).
+        if (input.dataset.objectName !== undefined) {
+            const o = selected >= 0 ? (scene.layers[selected].shape_objects || [])[selectedObject] : null;
+            if (o) { o.name = input.value; list(); changed(); }
+            return;
+        }
         if (input.dataset.inline) {
             const kind = input.dataset.inline, d = input.dataset[kind], l = current(), key = INLINE[kind].keys[d];
             if (input.value === '' && d !== 'desktop') { l[key] = null; input.placeholder = inlineFor(l, kind, d); }
@@ -1178,8 +1386,8 @@
         if (key === 'target') { targetWarning(); heightHelp(); }
         // The font sample shows the title's text.
         if (key === 'text' || key === 'content') refreshFontSample();
-        // A button's link: Open in a new window applies with one.
-        if (key === 'button_url') applyStates();
+        // A button's link: Open in a new window applies with one; a Shape object's Edge color, with an Edge.
+        if (key === 'button_url' || key === 'stroke') applyStates();
         // An overlay's thumbnail shows its fill.
         if (key === 'color' && obj.type === 'overlay') list();
         changed();
@@ -1216,7 +1424,22 @@
             return;
         }
         if (button.dataset.fieldDevice) { setDevice(button.dataset.fieldDevice, true); return; }
-        if (button.dataset.select !== undefined) { adding = false; selected = Number(button.dataset.select); list(); settings(); focusRow(selected); return; }
+        if (button.dataset.select !== undefined) { adding = false; selected = Number(button.dataset.select); selectedObject = -1; list(); settings(); focusRow(selected); return; }
+        // A Shape layer's object: chosen from its row under the layer, or hidden / shown.
+        if (button.dataset.object !== undefined && button.dataset.layer !== undefined) {
+            adding = false; selected = Number(button.dataset.layer); selectedObject = Number(button.dataset.object);
+            list(); settings();
+            const again = $('layers').querySelector('[data-object="' + selectedObject + '"][data-layer="' + selected + '"]'); if (again) again.focus();
+            return;
+        }
+        if (button.dataset.objectHide !== undefined) {
+            const l = scene.layers[Number(button.dataset.layer)], j = Number(button.dataset.objectHide), o = l && (l.shape_objects || [])[j];
+            if (!o) return;
+            o.hidden = !o.hidden;
+            list(); settings(); changed();
+            const again = (button.closest('#wpbn-layers') ? $('layers') : $('settings')).querySelector('[data-object-hide="' + j + '"][data-layer="' + button.dataset.layer + '"]'); if (again) again.focus();
+            return;
+        }
         if (button.dataset.rowAction) { rowAction(button.dataset.rowAction, Number(button.dataset.index)); return; }
         if (button.dataset.reset) {
             const obj = current(), key = button.dataset.reset, base = button.dataset.resetBase || null;
@@ -1239,12 +1462,29 @@
             if (type === 'richtext') Object.assign(layer, {content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'});
             // A new layer does not move; turning a motion on starts it from 0.
             layer.move_y = 0;
+            // Its own list of objects (boot.layer's one would be shared by every new layer).
+            layer.shape_objects = []; layer.uid = newUid(); selectedObject = -1; shapeError = '';
             scene.layers.push(layer); selected = scene.layers.length - 1;
             adding = false;
         } else if (button.dataset.action && selected >= 0) {
             const l = scene.layers[selected];
             switch (button.dataset.action) {
             case 'position': openPosition(l, button); return;
+            case 'shape-upload': uploadShape(l); return;
+            // A Shape object's own image (Fill: Image).
+            case 'object-image': {
+                const o = (l.shape_objects || [])[selectedObject];
+                if (!o) return;
+                const media = wp.media({title:'Choose the object\'s image', library:{type:'image'}, multiple:false});
+                media.on('select', () => {
+                    const image = media.state().get('selection').first().toJSON();
+                    o.image = image.id; images[image.id] = (image.sizes && image.sizes.large || image).url;
+                    imageInfo[image.id] = {name:image.filename || '', width:image.width || 0, height:image.height || 0, size:image.filesizeHumanReadable || ''};
+                    if (scene.layers.includes(l)) { list(); settings(); changed(); }
+                }); media.open(); return;
+            }
+            // Back to the Shape layer's own settings (its SVG and Fit).
+            case 'object-none': selectedObject = -1; list(); settings(); return;
             case 'position-inherit': l[dkey('x', device())] = null; l[dkey('y', device())] = null; break;
             case 'image': {
                 const index = selected, key = imageKey(device());
@@ -1262,7 +1502,16 @@
         } else return;
         list(); settings(); changed();
     });
-    $('scene-settings').onclick = () => { adding = false; selected = -1; list(); settings(); };
+    $('scene-settings').onclick = () => { adding = false; selected = -1; selectedObject = -1; list(); settings(); };
+    // A Shape layer's drawing in its card: a click on an object chooses it, beside them none.
+    $('settings').addEventListener('click', event => {
+        const canvas = event.target.closest && event.target.closest('.wpbn-shape-canvas');
+        if (!canvas || selected < 0) return;
+        const g = event.target.closest('[data-object]');
+        const j = g ? Number(g.getAttribute('data-object')) : -1;
+        if (j === selectedObject) return;
+        selectedObject = j; list(); settings();
+    });
     const layersBox = $('layers');
     layersBox.addEventListener('keydown', event => {
         const button = event.target.closest('[data-select]');
@@ -1645,6 +1894,8 @@
             if(!focusMode() && edges.width<100){const guide=document.createElement('span');guide.className='wpbn-position-container';Object.assign(guide.style,{left:edges.left+'%',width:edges.width+'%'});canvas.append(guide);}
             scene.layers.forEach(layer=>{
                 if(layer.hidden && layer!==positionLayer)return;
+                // A Shape layer: not drawn on the site yet, so not here either.
+                if(layer.type==='shape')return;
                 const v=key=>eff(layer,key,device);
                 const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');
                 const box=boxOf(device,layer);

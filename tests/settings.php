@@ -25,7 +25,8 @@ function wp_json_encode($s, $flags=0) { return json_encode($s,$flags); }
 function wp_get_attachment_image_url($id, $size) { return $id ? '/assets/images/preview/desktop.svg' : false; }
 function wp_get_attachment_image_srcset($id, $size) { return false; }
 // WPBN_TEST_IMAGE: the editor opens a scene with one photo layer (tests/motion.cjs, Image position).
-function get_post_meta($id,$key='',$single=false) { if ($key === '_wp_attachment_image_alt') { return ''; } return getenv('WPBN_TEST_IMAGE') ? array('layers'=>array(array('type'=>'image','image'=>3,'name'=>'Mountains'))) : array(); }
+// A Shape layer's SVG: the objects WPBN_Shape keeps for an attachment ($GLOBALS['wpbn_shapes'], set below).
+function get_post_meta($id,$key='',$single=false) { if ($key === '_wpbn_shape') { return $GLOBALS['wpbn_shapes'][(int) $id] ?? ''; } if ($key === '_wp_attachment_image_alt') { return ''; } return getenv('WPBN_TEST_IMAGE') ? array('layers'=>array(array('type'=>'image','image'=>3,'name'=>'Mountains'))) : array(); }
 function get_posts($args) { return array(); }
 function wp_nonce_field($a,$b) { echo '<input name="'.esc_attr($b).'" value="test">'; }
 function wp_create_nonce($a) { return 'test'; }
@@ -67,9 +68,14 @@ require_once __DIR__.'/../includes/class-wpbn-settings.php';
 require_once __DIR__.'/../includes/class-wpbn-gradient.php';
 require_once __DIR__.'/../includes/class-wpbn-animation.php';
 
-function get_post_mime_type($id) { return (int) $id === 2 ? 'image/png' : 'image/jpeg'; }
+function get_post_mime_type($id) { return isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'image/svg+xml' : ((int) $id === 2 ? 'image/png' : 'image/jpeg'); }
 require_once __DIR__.'/../includes/class-wpbn-render.php';
 require_once __DIR__.'/../includes/class-wpbn-container.php';
+class WP_Error { private $message; public function __construct($code, $message) { $this->message = $message; } public function get_error_message() { return $this->message; } }
+function is_wp_error($x) { return $x instanceof WP_Error; }
+require_once __DIR__.'/../includes/class-wpbn-shape.php';
+// A Shape layer's SVG as attachment 900 holds it: three strips, the middle one first (as a drawing program may write them).
+$GLOBALS['wpbn_shapes'][900] = WPBN_Shape::parse('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><rect x="400" y="200" width="200" height="600"/><rect x="700" y="200" width="200" height="600"/><rect data-name="Left strip" x="100" y="200" width="200" height="600"/></svg>');
 // The color palette: a Woodmart site with its colors set (WPBN_Palette).
 function get_template() { return 'woodmart'; }
 function get_option($name, $default=false) { return $name === 'xts-woodmart-options' ? array('primary-color'=>array('idle'=>'#83B735'), 'secondary-color'=>'#FBBC34', 'link-color'=>array('idle'=>'')) : $default; }
@@ -101,6 +107,8 @@ if (($argv[1] ?? '')==='--preview') {
     $s=WPBN_Settings::sanitize(json_decode(stream_get_contents(STDIN),true));
     echo '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/frontend.css"><style>'.WPBN_Admin::PAGE_CSS.WPBN_Admin::theme_css().'</style></head><body>'.WPBN_Admin::preview_markup($s).WPBN_Admin::PAGE.'<script src="/assets/js/frontend.js"></script></body></html>'; exit;
 }
+// The answer to an SVG uploaded in the editor (admin-ajax wpbn_shape_upload): attachment 900 (tests/motion.cjs).
+if (($argv[1] ?? '')==='--shape') { echo wp_json_encode(array('success'=>true, 'data'=>WPBN_Shape::editor(900))); exit; }
 function check($condition,$message) { if (!$condition) { throw new RuntimeException($message); } }
 // The motion data frontend.js reads from a layer's markup.
 function motion_of($markup, $index) { preg_match_all('/data-motion="([^"]+)"/', $markup, $m); return json_decode(html_entity_decode($m[1][$index]), true); }
@@ -408,6 +416,39 @@ check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($
 $tw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'richtext','content'=>'<p>a</p>','container'=>'custom','text_width'=>60,'text_width_unit'=>'%','mobile_text_width_unit'=>'auto'))))));
 check(strpos($tw,'--wpbn-tw:calc(var(--wpbn-cw) * 0.6);--wpbn-tw-t:calc(var(--wpbn-cw-t, var(--wpbn-cw)) * 0.6);--wpbn-tw-m:max-content;')!==false,'Its Width per device ('.$tw.')');
 check($lay(array('type'=>'text','text_width_unit'=>'em'))['text_width_unit']==='auto' && strpos($animCss,'.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content)')!==false,'An unknown unit: Auto');
+// Shape layers (WPBN_Shape): an SVG read as objects, only their shapes kept; each object a window onto its fill.
+$sp=WPBN_Shape::parse('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><style>.st0{fill:#878787}.h{fill-rule:evenodd}</style></defs><rect class="st0" x="400" y="275" width="200" height="450"/><rect class="st0" x="700" y="275" width="200" height="450"/><path class="h" data-name="Ring" d="M0 0H100V100H0Z M25 25H75V75H25Z"/></svg>');
+check(array_column($sp['objects'],'key')===array('o1','o2','o3') && $sp['objects'][2]['name']==='Ring' && $sp['viewbox']===array(0.0,0.0,1000.0,1000.0),'Shape: its objects in the file\'s order, with their names');
+check(strpos($sp['objects'][2]['markup'],'clip-rule="evenodd"')!==false && strpos(WPBN_Shape::svg($sp),'class=')===false && strpos(WPBN_Shape::svg($sp),'878787')===false,'Shape: holes kept, colours and classes left out');
+$se=WPBN_Shape::parse('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="alert(1)"><script>alert(2)</script><g transform="translate(1,1)"><rect width="5" height="5" onclick="alert(3)" style="fill:url(javascript:alert(4))"/><text>Hi</text><use href="#a"/><rect width="2" height="2" transform="rotate(1) url(x)"/></g></svg>');
+check(!preg_match('/script|on\w+=|javascript|href|style|url\(/i',WPBN_Shape::svg($se)) && count($se['objects'])===1 && $se['skipped']===array('text'=>1,'use'=>1,'other'=>1),'Shape: no scripts, events, links or styles; text, <use> and an unreadable transform left out and counted ('.json_encode($se['skipped']).')');
+check(strpos($se['objects'][0]['markup'],'<g transform="translate(1,1)"><rect')===0,'Shape: a group around everything looked into, its transform kept');
+check(is_wp_error(WPBN_Shape::parse('<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="&x;" height="1"/></svg>')) && is_wp_error(WPBN_Shape::parse('<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>')) && is_wp_error(WPBN_Shape::parse('nope')),'Shape: no DOCTYPE; a size and an SVG needed');
+$sr=WPBN_Shape::parse(WPBN_Shape::svg($sp),true);
+check(array_column($sr['objects'],'key')===array_column($sp['objects'],'key') && array_column($sr['objects'],'markup')===array_column($sp['objects'],'markup') && $sr['objects'][2]['name']==='Ring','Shape: an exported SVG read back as it was (scene export / import)');
+// A black and white photo; a Shape layer whose middle strip shows the photo in colour, with an edge and a shadow.
+$ss=WPBN_Settings::sanitize(array('layers'=>array(
+    array('type'=>'image','image'=>3,'uid'=>'lphoto01','f_grayscale'=>100,'use_move_y'=>1,'move_y'=>-80),
+    array('type'=>'shape','shape'=>900,'shape_fit'=>'contain','shape_fit_mobile'=>'stretch','use_move_y'=>1,'move_y'=>-50,'use_anim'=>1,'uid'=>'BAD UID','shape_objects'=>array(
+        array('key'=>'o1','name'=>'Middle','fill'=>'layer','source'=>'lphoto01','f_brightness'=>110,'stroke'=>6,'use_shadow'=>1,'move_y'=>-40,'bogus'=>'<b>'),
+        array('key'=>'o2','fill'=>'glass','glass_blur'=>99,'stroke'=>5,'use_shadow'=>1),
+        array('key'=>'o3','fill'=>'color','color'=>'red;}','invert'=>1,'opacity'=>50,'hidden'=>1),
+        array('key'=>'zz'),array('key'=>'o1','fill'=>'none'))))));
+$so=$ss['layers'][1]['shape_objects'];
+check(array_column($so,'key')===array('o1','o2','o3') && !isset($so[0]['bogus']) && $so[1]['glass_blur']===60.0 && $so[2]['color']==='#ffffff' && $so[2]['name']==='Left strip','Shape objects: only the file\'s, each once, values checked, names from the file');
+check($ss['layers'][0]['uid']==='lphoto01' && $ss['layers'][1]['uid']==='' && $ss['layers'][1]['shape_fit_mobile']==='stretch' && $ss['layers'][1]['shape_fit_tablet']===null,'A layer uid allow-listed; Fit per device');
+check(WPBN_Settings::sanitize($ss)==$ss,'Shape layers: sanitization idempotent');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>5,'shape_objects'=>array(array('key'=>'o1'))))))['layers'][0]['shape']===0,'A Shape layer without this site\'s SVG: none');
+$sm=WPBN_Render::markup($ss);
+check(substr_count($sm,'class="wpbn-shape-item"')===2 && strpos($sm,'wpbn-shape-clip--invert')===false,'Shape: hidden objects not drawn');
+check(motion_of($sm,1)['move_y']===array(0,0,0) && strpos($sm,'wpbn-anim')===false,'The Shape layer stays in place (no travel, no Animation)');
+check(motion_of($sm,2)['move_y']===array(-80,-80,-80) && preg_match('/wpbn-shape-clip"><div class="wpbn-layer wpbn-layer--image wpbn-layer--filter"[^>]*--wpbn-filter:brightness\(110%\);/',$sm)===1,'Fill Photo: a copy of the layer, moving as it does, with the object\'s filters instead of its own');
+check(strpos($sm,'--wpbn-filter:grayscale(100%);')!==false,'An image layer\'s Filters');
+check(strpos($sm,'--wpbn-ms:contain;--wpbn-ms-t:contain;--wpbn-ms-m:100% 100%;')!==false,'Fit per device as the masks\' size');
+check(strpos($sm,'filter:drop-shadow(6px 0px 0 #ffffff) drop-shadow(-6px 0px 0 #ffffff) drop-shadow(0px 6px 0 #ffffff) drop-shadow(0px -6px 0 #ffffff) drop-shadow(0px 10px 25px rgba(0,0,0,0.5));')!==false && strpos($sm,'drop-shadow(5px')===false,'Edge and Shadow along the outline; none on glass');
+check(strpos($sm,'backdrop-filter:blur(60px)')!==false && strpos($sm,'data-move="{&quot;x&quot;:0,&quot;y&quot;:-40}"')!==false,'Glass blurs what is behind it; an object\'s travel for frontend.js');
+check(preg_match('/--wpbn-mask:url\(&quot;data:image\/svg\+xml,%3Csvg[^)]*%3Crect x=&#039;400&#039;/',$sm)===1,'Each object\'s mask: the object alone, as an SVG');
+check(strpos($animCss,'.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mask)')!==false && strpos($animCss,'mask-composite:exclude')!==false,'Masks and Invert in the stylesheet');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.

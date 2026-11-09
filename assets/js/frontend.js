@@ -35,8 +35,10 @@
         document.querySelectorAll('.wpbn-scene:not([data-wpbn-ready])').forEach(function (el) {
             el.setAttribute('data-wpbn-ready', '');
             // mx, my: where the layers following the mouse are now (-1 → 1 across the scene); tx, ty: where the pointer is.
-            const s = {el, fill: el.classList.contains('wpbn-scene--fill'), layers: [], visible: true, mx: 0, my: 0, tx: 0, ty: 0};
+            const s = {el, fill: el.classList.contains('wpbn-scene--fill'), layers: [], items: [], visible: true, mx: 0, my: 0, tx: 0, ty: 0};
             el.querySelectorAll('.wpbn-layer').forEach(layer => s.layers.push({el: layer, m: parse(layer.dataset.motion)}));
+            // A Shape layer's objects with a travel of their own (WPBN_Shape): their windows move, not what they show.
+            el.querySelectorAll('.wpbn-shape-item[data-move]').forEach(item => s.items.push({el: item, m: parse(item.dataset.move)}));
             scenes.push(s);
             size(s);
             watch(s);
@@ -69,6 +71,10 @@
     // Travel (dx, dy), zoom (z) and fade (f) at a progress.
     function draw(s, p) {
         const d = device(), t = reduced.matches ? 0 : p;
+        s.items.forEach(function (item) {
+            item.el.style.setProperty('--wpbn-ox', ((Number(item.m.x) || 0) * t).toFixed(2) + 'px');
+            item.el.style.setProperty('--wpbn-oy', ((Number(item.m.y) || 0) * t).toFixed(2) + 'px');
+        });
         s.layers.forEach(function (layer) {
             const m = layer.m, st = layer.el.style, at = key => Number((m[key] || [])[d]) || 0;
             st.setProperty('--wpbn-dx', (at('move_x') * t).toFixed(2) + 'px');

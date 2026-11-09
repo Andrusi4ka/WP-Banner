@@ -84,7 +84,8 @@ class WPBN_Settings {
     // richtext: "Text" in the editor (text is the title's key): paragraphs and lists from WordPress's editor (rich_text()).
     // button: a button as WP Top Info Bar's (its text, link, Background, Corners, Size per device, colours).
     // shortcode: another plugin's element (a slider…) by its shortcode, as wide as its Width, in its place among the layers.
-    const TYPES = array('image', 'text', 'overlay', 'richtext', 'button', 'shortcode');
+    // shape: an SVG's objects (WPBN_Shape), each a window onto what it is filled with.
+    const TYPES = array('image', 'text', 'overlay', 'richtext', 'button', 'shortcode', 'shape');
     // Title, Text, Button and Shortcode: placed by their Position within their container (their own point there), at 100% scale and opacity.
     public static function textual($l) { return in_array($l['type'], array('text', 'richtext', 'button', 'shortcode'), true); }
     // An image layer with "Fill the scene" on (default; as before 2026-11-08): it fills the scene (Cover / Contain, Scale).
@@ -115,6 +116,25 @@ class WPBN_Settings {
     // A title's Case (CSS text-transform) and its Shadow's colour to start with.
     const CASES = array('none', 'uppercase', 'lowercase', 'capitalize');
     const SHADOW_COLOR = 'rgba(0,0,0,0.5)';
+    // Filters (an image layer's, a Shape layer's object's): key => [min, max, value at rest, CSS function, unit].
+    const FILTERS = array('f_grayscale'=>array(0, 100, 0, 'grayscale', '%'), 'f_blur'=>array(0, 40, 0, 'blur', 'px'), 'f_brightness'=>array(0, 200, 100, 'brightness', '%'),
+        'f_contrast'=>array(0, 200, 100, 'contrast', '%'), 'f_saturate'=>array(0, 300, 100, 'saturate', '%'));
+    public static function filters($raw) {
+        $out = array();
+        foreach (self::FILTERS as $key=>$f) { $out[$key] = round(self::number($raw[$key] ?? null, $f[2], $f[0], $f[1]), 1); }
+        return $out;
+    }
+    // The filters as CSS filter (only those away from their rest); '' for none.
+    public static function filter_css($o) {
+        $parts = array();
+        foreach (self::FILTERS as $key=>$f) {
+            $value = isset($o[$key]) ? (float) $o[$key] : $f[2];
+            if ($value != $f[2]) { $parts[] = $f[3].'('.$value.$f[4].')'; }
+        }
+        return implode(' ', $parts);
+    }
+    // A Shape layer's SVG in the scene, per device: Cover (fills it, cropped), Contain (whole, inside it), Stretch (its size).
+    const SHAPE_FITS = array('cover', 'contain', 'stretch');
     public static function layer() {
         $l = array('name'=>'Layer', 'type'=>'image', 'image'=>0, 'image_tablet'=>0, 'image_mobile'=>0, 'text'=>'YOUR TITLE', 'content'=>'', 'shortcode'=>'', 'color'=>'#ffffff', 'accent_color'=>'', 'font_size'=>120, 'tablet_font_size'=>null, 'mobile_font_size'=>null,
             'tag'=>'h2', 'font_family'=>'', 'font_weight'=>800,
@@ -133,6 +153,10 @@ class WPBN_Settings {
             'text_width'=>600, 'text_width_unit'=>'auto', 'tablet_text_width'=>null, 'tablet_text_width_unit'=>null, 'mobile_text_width'=>null, 'mobile_text_width_unit'=>null,
             // An image layer fills the scene; off: an object (fills(), object()).
             'fill_scene'=>true,
+            // A Shape layer's SVG (an attachment WPBN_Shape wrote) and its objects [{key, name, hidden}], the back one first.
+            'shape'=>0, 'shape_objects'=>array(), 'shape_fit'=>'cover', 'shape_fit_tablet'=>null, 'shape_fit_mobile'=>null,
+            // The layer's own name for others to point to it (a Shape object showing it: WPBN_Shape), given by the editor; '' none yet.
+            'uid'=>'',
             // Decorative: an image screen readers skip (alt=""), e.g. a cutout of the photo behind it; off: its alt text from the media library.
             'decorative'=>false,
             // Follow the mouse (px): how far the layer moves as the pointer crosses the scene (devices with a mouse; WPBN_Render, frontend.js).
@@ -147,7 +171,9 @@ class WPBN_Settings {
             'button_size'=>'default', 'button_size_tablet'=>null, 'button_size_mobile'=>null, 'button_color'=>'#2271b1', 'button_text_color'=>'#ffffff',
             'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false)
             // Animation (WPBN_Animation): motion of its own, running by itself; off by default.
-            + WPBN_Animation::defaults();
+            + WPBN_Animation::defaults()
+            // Filters: at rest (none).
+            + array_map(function ($f) { return $f[2]; }, self::FILTERS);
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         return $l;
     }
@@ -182,6 +208,12 @@ class WPBN_Settings {
         // kept are not used).
         if ($l['type'] === 'overlay') {
             foreach (array('scale'=>100, 'opacity'=>100, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+        }
+        // A Shape layer: the whole scene, in place (its objects move on their own: WPBN_Shape); no Animation or fade
+        // (the copies of the layers in its objects would no longer line up with them, frosted glass would show nothing).
+        if ($l['type'] === 'shape') {
+            foreach (array('x'=>50, 'y'=>50, 'scale'=>100, 'opacity'=>100, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+            $l['container'] = 'full'; $l['use_anim'] = false; $l['use_end_opacity'] = false; $l['use_mouse'] = false;
         }
         foreach (self::OPTIONAL as $key=>$o) {
             list($flag, $off, $image_only) = $o;
@@ -387,6 +419,16 @@ class WPBN_Settings {
                 $l['container_width'.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 1200, 320, 3000));
             }
             $l['decorative'] = !empty($raw['decorative']);
+            // A Shape layer: its SVG and its objects (only the file's own: WPBN_Shape::objects()).
+            if ($l['type'] === 'shape') {
+                $l['shape'] = is_scalar($raw['shape'] ?? null) ? absint($raw['shape']) : 0;
+                $l['shape_objects'] = WPBN_Shape::objects($l['shape'], $raw['shape_objects'] ?? null);
+                if (!$l['shape_objects']) { $l['shape'] = 0; }
+                $l['shape_fit'] = self::choice($raw['shape_fit'] ?? null, self::SHAPE_FITS, 'cover');
+                foreach (array('_tablet', '_mobile') as $suffix) { $l['shape_fit'.$suffix] = self::choice($raw['shape_fit'.$suffix] ?? null, self::SHAPE_FITS, null); }
+            }
+            $l['uid'] = is_string($raw['uid'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $raw['uid']) ? $raw['uid'] : '';
+            $l = array_merge($l, self::filters($raw));
             $l['use_mouse'] = !empty($raw['use_mouse']);
             $l['mouse'] = round(self::number($raw['mouse'] ?? null, 20, -200, 200));
             // Fill the scene (an image layer); off: an object. Layers saved before: on.

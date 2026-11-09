@@ -35,6 +35,7 @@ require_once WPBN_DIR . 'includes/class-wpbn-whats-new.php';
 require_once WPBN_DIR . 'includes/class-wpbn-wpbakery.php';
 require_once WPBN_DIR . 'includes/class-wpbn-tools.php';
 require_once WPBN_DIR . 'includes/class-wpbn-block.php';
+require_once WPBN_DIR . 'includes/class-wpbn-shape.php';
 add_action('init', function () {
     load_plugin_textdomain('wp-banner', false, dirname(plugin_basename(__FILE__)) . '/languages');
     register_post_type('wpbn_scene', array(
@@ -102,3 +103,4 @@ WPBN_Whats_New::init();
 WPBN_WPBakery::init();
 WPBN_Tools::init();
 WPBN_Block::init();
+WPBN_Shape::init();

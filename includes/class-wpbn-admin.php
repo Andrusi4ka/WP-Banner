@@ -50,7 +50,8 @@ class WPBN_Admin {
         $images = array();
         $info = array();
         foreach ($s['layers'] as $l) {
-            foreach (array($l['image'], $l['image_tablet'], $l['image_mobile']) as $image) {
+            // A Shape layer's objects' own images too.
+            foreach (array_merge(array($l['image'], $l['image_tablet'], $l['image_mobile']), array_column($l['shape_objects'], 'image')) as $image) {
                 if ($image && !isset($images[$image])) { $images[$image] = wp_get_attachment_image_url($image,'large'); $info[$image] = self::image_info($image); }
             }
         }
@@ -69,6 +70,12 @@ class WPBN_Admin {
         }
         // The Animation's kinds and choices (WPBN_Animation; admin.js animationCard()).
         $boot['animations'] = WPBN_Animation::editor();
+        // Shape layers' SVGs (WPBN_Shape::editor()) and the nonce to upload one.
+        $boot['shapes'] = array();
+        foreach ($s['layers'] as $l) {
+            if ($l['type'] === 'shape' && $l['shape'] && !isset($boot['shapes'][$l['shape']])) { $boot['shapes'][$l['shape']] = WPBN_Shape::editor($l['shape']); }
+        }
+        $boot['shapeNonce'] = wp_create_nonce(WPBN_Shape::AJAX);
         $boot['maxData'] = self::MAX_DATA;
         $boot['tooLarge'] = __('The scene settings are too large to be saved. Remove some layers or shorten their texts, then update the scene again.', 'wp-banner');
         $boot['icons'] = array('position'=>self::icon('position.svg'), 'clone'=>self::icon('clone.svg'), 'reset'=>self::icon('reset.svg'));

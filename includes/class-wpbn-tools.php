@@ -68,8 +68,42 @@ class WPBN_Tools {
         $ids = array();
         foreach ($settings['layers'] as $l) {
             foreach (array('image', 'image_tablet', 'image_mobile') as $key) { if ($l[$key]) { $ids[(int) $l[$key]] = true; } }
+            // A Shape layer's objects' own images.
+            foreach ($l['shape_objects'] as $o) { if (!empty($o['image'])) { $ids[(int) $o['image']] = true; } }
         }
         return array_keys($ids);
+    }
+
+    // The scene's Shape layers' SVGs, by attachment id: in the export file itself (an SVG cannot be downloaded into
+    // another site's media library; WPBN_Shape writes it again from this, checked as any other).
+    private static function shapes($settings) {
+        $out = array();
+        foreach ($settings['layers'] as $l) {
+            $meta = $l['type'] === 'shape' && $l['shape'] ? WPBN_Shape::meta($l['shape']) : null;
+            if ($meta) { $out[(string) $l['shape']] = WPBN_Shape::svg($meta); }
+        }
+        return $out;
+    }
+
+    // An imported scene's Shape layers: each SVG in the file made again here (once each); its layers point to it.
+    private static function import_shapes($scene, $shapes) {
+        if (!is_array($scene['layers'] ?? null)) { return $scene; }
+        $made = array();
+        foreach ($scene['layers'] as $i=>$l) {
+            if (!is_array($l) || ($l['type'] ?? '') !== 'shape') { continue; }
+            $old = is_scalar($l['shape'] ?? null) ? (string) absint($l['shape']) : '0';
+            if (!isset($made[$old])) {
+                $made[$old] = 0;
+                $svg = $shapes[$old] ?? null;
+                $parsed = is_string($svg) && strlen($svg) <= WPBN_Shape::MAX_FILE ? WPBN_Shape::parse($svg, true) : null;
+                if ($parsed && !is_wp_error($parsed)) {
+                    $id = WPBN_Shape::store('shape', $parsed);
+                    if (!is_wp_error($id)) { $made[$old] = $id; }
+                }
+            }
+            $scene['layers'][$i]['shape'] = $made[$old];
+        }
+        return $scene;
     }
 
     // The scene as a .json file to download.
@@ -81,7 +115,7 @@ class WPBN_Tools {
             $url = wp_get_attachment_url($image);
             if ($url) { $images[(string) $image] = array('url'=>$url, 'alt'=>(string) get_post_meta($image, '_wp_attachment_image_alt', true)); }
         }
-        $data = array('format'=>self::FORMAT, 'version'=>WPBN_VERSION, 'title'=>$post->post_title, 'scene'=>$settings, 'images'=>$images);
+        $data = array('format'=>self::FORMAT, 'version'=>WPBN_VERSION, 'title'=>$post->post_title, 'scene'=>$settings, 'images'=>$images, 'shapes'=>self::shapes($settings));
         $name = sanitize_file_name(($post->post_title !== '' ? sanitize_title($post->post_title) : 'scene-'.$post->ID).'.json');
         nocache_headers();
         header('Content-Type: application/json; charset=utf-8');
@@ -121,7 +155,8 @@ class WPBN_Tools {
         if ($file['size'] > self::MAX_FILE) { self::fail('size'); }
         $data = json_decode((string) file_get_contents($file['tmp_name']), true); // phpcs:ignore WordPress.WP.AlternativeFunctions -- the uploaded file.
         if (!is_array($data) || ($data['format'] ?? '') !== self::FORMAT || !is_array($data['scene'] ?? null)) { self::fail('format'); }
-        $settings = WPBN_Settings::sanitize($data['scene']);
+        // Its Shape layers' SVGs first: their objects are kept only for an SVG this site has.
+        $settings = WPBN_Settings::sanitize(self::import_shapes($data['scene'], is_array($data['shapes'] ?? null) ? $data['shapes'] : array()));
         // Its images: this site's own (by address), downloaded if asked, or none (0).
         $download = !empty($_POST['wpbn_download']);
         $map = array();
@@ -136,6 +171,7 @@ class WPBN_Tools {
         }
         foreach ($settings['layers'] as $i=>$l) {
             foreach (array('image', 'image_tablet', 'image_mobile') as $key) { if ($l[$key]) { $settings['layers'][$i][$key] = $map[(int) $l[$key]] ?? 0; } }
+            foreach ($l['shape_objects'] as $j=>$o) { if ($o['image']) { $settings['layers'][$i]['shape_objects'][$j]['image'] = $map[(int) $o['image']] ?? 0; } }
         }
         $title = is_string($data['title'] ?? null) && $data['title'] !== '' ? $data['title'] : __('Imported scene', 'wp-banner');
         $id = self::create($title, $settings);
