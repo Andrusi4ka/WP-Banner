@@ -100,7 +100,7 @@ require_once __DIR__.'/../includes/class-wpbn-palette.php';
 require_once __DIR__.'/../includes/class-wpbn-fonts.php';
 require_once __DIR__.'/../includes/class-wpbn-admin.php';
 if (($argv[1] ?? '')==='--editor') {
-    echo '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/vendor/pickr/classic.min.css"><link rel="stylesheet" href="/assets/css/admin.css"><style>body{font:13px Arial;margin:20px}.button{padding:6px;cursor:pointer}input,select{padding:5px;box-sizing:border-box}</style></head><body><form id="post"><div id="wpbn-editor"><div class="inside">';
+    echo '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/vendor/pickr/classic.min.css"><link rel="stylesheet" href="/assets/css/admin.css"><style id="wpbn-test-all-tabs">.wpbn-tabpanel[hidden]{display:block!important}</style><style>body{font:13px Arial;margin:20px}.button{padding:6px;cursor:pointer}input,select{padding:5px;box-sizing:border-box}</style></head><body><form id="post"><div id="wpbn-editor"><div class="inside">';
     WPBN_Admin::editor((object)array('ID'=>7));
     echo '</div></div></form><script src="/assets/vendor/pickr/pickr.min.js"></script><script src="/assets/js/admin.js"></script></body></html>'; exit;
 }

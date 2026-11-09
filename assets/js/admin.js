@@ -712,7 +712,7 @@
         if (!ANIM || l.type === 'overlay') return '';
         const kinds = Object.keys(ANIM.types), type = ANIM.types[l.anim_type] || ANIM.types[kinds[0]];
         // Its switch with the help behind an "i" beside it, as Shadow's; named after the kind while there is only one.
-        const id = 'wpbn-f-use_anim', name = kinds.length > 1 ? 'Animation' : type.switch;
+        const id = 'wpbn-f-use_anim', name = kinds.length > 1 ? 'Loop animation' : type.switch;
         const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_anim"' + (l.use_anim ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + escape(name) + '</span></label>'
             + tip('Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.') + '</div></div>';
         if (!l.use_anim) return card('Loop animation', toggle);
@@ -904,6 +904,30 @@
         }
         return html;
     }
+    /*
+     * A layer's settings in tabs (2026-11-09, user's choice: too many cards in one column): Content (what it shows), Position
+     * (where and how large, its turn and shadow), Animation (scroll, mouse, entrance, loop). The tab chosen stays as another
+     * layer is chosen (setting one thing on every layer in turn); a tab a layer has nothing for is left out, and with one
+     * tab only no tab bar. lit: tabs with something switched on (a dot), e.g. an animation. Every panel is in the page, the
+     * others hidden: switching shows another (showTab()), nothing is drawn again.
+     */
+    const TABS = {content:'Content', position:'Position', animation:'Animation'};
+    let tab = 'content';
+    function tabbed(groups, lit) {
+        const keys = Object.keys(TABS).filter(k => groups[k]);
+        if (keys.length < 2) return keys.map(k => groups[k]).join('');
+        const shown = keys.includes(tab) ? tab : keys[0];
+        return '<div class="wpbn-tabs" role="tablist" aria-label="Settings">' + keys.map(k => '<button type="button" class="wpbn-tab" role="tab" id="wpbn-tab-' + k + '" data-tab="' + k + '" aria-selected="' + (k === shown) + '" aria-controls="wpbn-tabpanel-' + k + '"' + (k === shown ? '' : ' tabindex="-1"') + '>' + TABS[k]
+            + (lit && lit[k] ? '<span class="wpbn-tab__dot" aria-hidden="true"></span><span class="screen-reader-text"> (on)</span>' : '') + '</button>').join('') + '</div>'
+            + keys.map(k => '<div class="wpbn-tabpanel" id="wpbn-tabpanel-' + k + '" role="tabpanel" aria-labelledby="wpbn-tab-' + k + '"' + (k === shown ? '' : ' hidden') + '>' + groups[k] + '</div>').join('');
+    }
+    function showTab(k) {
+        tab = k;
+        $('settings').querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === k; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
+        $('settings').querySelectorAll('.wpbn-tabpanel').forEach(p => { p.hidden = p.id !== 'wpbn-tabpanel-' + k; });
+        // The pickers belong to the panel left; the text editor starts once its panel shows.
+        closePicker(); closeFonts(); startEditor(); refreshFontSample(); drawGradient();
+    }
     // A layer's name (the layer list shows it), the top field of its settings.
     const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>';
     // A layer's turn around its middle, per device (degrees, clockwise; WPBN_Settings::RESPONSIVE rotate).
@@ -954,8 +978,7 @@
         }
         const choice = '<div class="wpbn-field">' + head('wpbn-f-fill', 'Fill') + '<div class="wpbn-fill-choice wpbn-fill-choice--wrap" role="group" aria-label="Fill">'
             + Object.entries(FILL_NAMES).map(([value, name], i) => '<button type="button" class="wpbn-device-button"' + (i ? '' : ' id="wpbn-f-fill"') + ' data-choice="fill" data-value="' + value + '" aria-pressed="' + (o.fill === value) + '">' + name + '</button>').join('') + '</div></div>';
-        return '<legend>Object settings</legend>' + svg
-            + card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
+        return '<legend>Object settings</legend>' + svg + tabbed({content:card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
                 + range('opacity', 'Opacity (%)', {min:0, max:100})
                 + withTip(check('invert', 'Invert'), 'The object becomes a hole: its fill covers the whole scene except the object\'s shape, e.g. a panel with a window cut in it.')
                 + '<p><button type="button" class="button" data-object-hide="' + selectedObject + '" data-layer="' + selected + '">' + (o.hidden ? 'Show the object' : 'Hide the object') + '</button> <button type="button" class="button-link" data-action="object-none">Layer settings</button></p>')
@@ -964,9 +987,9 @@
             // Shadow (a filter around it would leave it nothing to blur: an object with Fill None and an Edge over it instead).
             + card('Filters', needsAll(filterFields(), 'pictured'))
             + card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
-                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged'))
-            + scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
-                + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative: up.'}));
+                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged')),
+            animation:scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
+                + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative: up.'}))}, {animation:!!o.use_scroll});
     }
     // An SVG chosen on this computer: sent to the server, which cleans it and keeps it in the media library.
     function uploadShape(l) {
@@ -1173,7 +1196,9 @@
      */
     const EDITOR_ID = 'wpbn-f-content';
     const wpEditor = () => window.wp && window.wp.editor && window.wp.editor.initialize ? window.wp.editor : null;
+    let editorOn = false;
     function stopEditor() {
+        editorOn = false;
         if (!wpEditor() || !document.getElementById(EDITOR_ID)) return;
         try { wpEditor().remove(EDITOR_ID); } catch (e) { /* not started */ }
     }
@@ -1183,7 +1208,9 @@
         l.content = html; refreshFontSample(); changed();
     }
     function startEditor() {
-        if (!wpEditor() || !document.getElementById(EDITOR_ID)) return;
+        const box = document.getElementById(EDITOR_ID);
+        if (!wpEditor() || !box || editorOn || box.closest('[hidden]')) return;
+        editorOn = true;
         const map = Array.isArray(boot.textColors) ? boot.textColors : [];
         wpEditor().initialize(EDITOR_ID, {
             tinymce: window.tinymce ? Object.assign(map.length ? {forecolor_map:map, forecolor_cols:8, forecolor_rows:Math.ceil((map.length / 2 + 1) / 8)} : {}, {
@@ -1263,11 +1290,13 @@
             }
             html = '<legend>Layer settings</legend>'
                 + (d === 'desktop' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.</span></p>')
-                // Its name first (shown in the layer list; given when it is added: "Title 2", a copy adds "copy"); an overlay's Fill its own card.
-                + (l.type === 'overlay' ? card('Layer', nameField()) + card('Fill', first) : card('Layer', nameField() + first)) + cards
-                // An image's Filters (WPBN_Settings::FILTERS): e.g. the photo in black and white, a Shape object showing it in color.
-                + (l.type === 'image' ? card('Filters', filterFields()) : '')
-                + (l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l) + rotateField()) + scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'})) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
+                + tabbed({
+                // Content: its name first (shown in the layer list; given when it is added: "Title 2", a copy adds "copy"; an overlay's
+                // Fill its own card), what it shows, an image's Filters (WPBN_Settings::FILTERS).
+                content:(l.type === 'overlay' ? card('Layer', nameField()) + card('Fill', first) : card('Layer', nameField() + first)) + cards
+                    + (l.type === 'image' ? card('Filters', filterFields()) : ''),
+                // Position: where and how large, its turn, an image's Shadow.
+                position:(l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l) + rotateField()) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
                     + containerField(l)
                     // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
                     + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
@@ -1276,14 +1305,17 @@
                     // Scale and Opacity: image layers only (a title has neither).
                     + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100}))
                     // Its turn (every layer but a Shape), then an image's Shadow.
-                    + rotateField() + (l.type === 'image' ? shadowField(l) : ''))
-                + scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
+                    + rotateField() + (l.type === 'image' ? shadowField(l) : ''))),
+                // Animation: as the page scrolls (an overlay: only its Opacity at the end), with the mouse, coming in, running on.
+                animation:(l.type === 'overlay' ? scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'}))
+                    : scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
                     + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: up.'})
                     + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
                     + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out, 100 leaves it as it is.'}))
-                // Follow the mouse: a card of its own (it is not the scroll's; user's choice, 2026-11-09).
-                + card('Follow the mouse', mouseField(l)))
-                + entranceCard(l) + animationCard(l);
+                    // Follow the mouse: a card of its own (it is not the scroll's; user's choice, 2026-11-09).
+                    + card('Follow the mouse', mouseField(l)))
+                    + entranceCard(l) + animationCard(l)
+                }, {animation:!!(l.use_scroll || l.use_enter || l.use_anim || (l.use_mouse && l.type !== 'overlay'))});
         }
         // The picker and the Font list belong to fields about to be redrawn.
         closePicker(); closeFonts(); stopEditor();
@@ -1444,6 +1476,7 @@
         const button = event.target.closest('button');
         if (!button || !app.contains(button)) return;
         if (button.dataset.previewDevice) { setDevice(button.dataset.previewDevice); return; }
+        if (button.dataset.tab) { showTab(button.dataset.tab); button.focus(); return; }
         // An overlay's fill: Color or Gradient.
         if (button.dataset.fill) {
             const l = current(), gradient = button.dataset.fill === 'gradient';
@@ -1498,7 +1531,7 @@
             // A new layer does not move; turning a motion on starts it from 0.
             layer.move_y = 0;
             // Its own list of objects (boot.layer's one would be shared by every new layer).
-            layer.shape_objects = []; layer.uid = newUid(); selectedObject = -1; shapeError = '';
+            layer.shape_objects = []; layer.uid = newUid(); selectedObject = -1; shapeError = ''; tab = 'content';
             scene.layers.push(layer); selected = scene.layers.length - 1;
             adding = false;
         } else if (button.dataset.action && selected >= 0) {
@@ -1536,6 +1569,13 @@
             }
         } else return;
         list(); settings(); changed();
+    });
+    $('settings').addEventListener('keydown', event => {
+        const current = event.target.closest && event.target.closest('[data-tab]');
+        if (!current || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const all = [...$('settings').querySelectorAll('[data-tab]')], i = all.indexOf(current);
+        const next = event.key === 'Home' ? all[0] : event.key === 'End' ? all[all.length - 1] : all[(i + (event.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+        event.preventDefault(); next.click();
     });
     $('scene-settings').onclick = () => { adding = false; selected = -1; selectedObject = -1; list(); settings(); };
     // A Shape layer's drawing in its card: a click on an object chooses it, beside them none.

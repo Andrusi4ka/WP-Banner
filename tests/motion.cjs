@@ -875,6 +875,28 @@ const server=http.createServer((req,res)=>{
         const tipsOff=await ed.evaluate(()=>[...document.querySelectorAll('#wpbn-settings .wpbn-tip')].filter(t=>t.offsetParent).map(t=>{const label=(t.closest('.wpbn-field')||t.parentElement).querySelector('label, .wpbn-field__label'),a=t.getBoundingClientRect(),b=label.getBoundingClientRect();return Math.abs((a.top+a.height/2)-(b.top+b.height/2))<2 && a.left>=b.right-1 && a.left-b.right<14 ? null : label.textContent.trim();}).filter(Boolean));
         assert.deepEqual(tipsOff,[],'Every tip beside its label');
         await ed.close();
+        // Tabs (2026-11-09): a layer's settings in Content, Position and Animation, one shown (the fixture shows all; not here).
+        const tp=await browser.newPage({viewport:{width:1600,height:1000}});tp.on('pageerror',e=>errors.push(e.message));
+        await tp.goto('http://127.0.0.1:'+server.address().port+'/?image');
+        await tp.evaluate(()=>document.getElementById('wpbn-test-all-tabs').remove());
+        await tp.click('[data-select="0"]');
+        const tabState=()=>tp.evaluate(()=>[...document.querySelectorAll('#wpbn-settings [data-tab]')].map(b=>b.firstChild.textContent+(b.getAttribute('aria-selected')==='true'?'*':'')));
+        assert.deepEqual(await tabState(),['Content*','Position','Animation'],'Three tabs, Content first');
+        assert.ok(await tp.locator('#wpbn-f-name').isVisible() && !(await tp.locator('#wpbn-f-container').isVisible()),'Only the chosen tab\'s cards show');
+        await tp.click('[data-tab="position"]');
+        assert.ok(await tp.locator('#wpbn-f-container').isVisible() && !(await tp.locator('#wpbn-f-name').isVisible()),'Position: its cards');
+        await tp.keyboard.press('ArrowRight');
+        assert.deepEqual(await tabState(),['Content','Position','Animation*'],'Arrow keys along the tabs');
+        // The photo moves as the page scrolls (a scene from before the switches, with a travel): a dot; off, none.
+        assert.ok(await tp.locator('#wpbn-f-use_scroll').isChecked() && await tp.locator('[data-tab="animation"] .wpbn-tab__dot').count()===1,'A dot while it animates');
+        await tp.click('label[for="wpbn-f-use_scroll"]');
+        assert.ok(await tp.locator('#wpbn-settings .wpbn-tab__dot').count()===0 && (await tabState())[2]==='Animation*','No dot once nothing animates; the tab kept');
+        await tp.click('#wpbn-add-toggle');await tp.click('#wpbn-settings [data-add="text"]');
+        assert.deepEqual(await tabState(),['Content*','Position','Animation'],'A new layer opens on Content');
+        await tp.click('[data-tab="animation"]');
+        await tp.click('[data-select="0"]');
+        assert.equal((await tabState())[2],'Animation*','The tab kept from layer to layer');
+        await tp.close();
         // A Shape layer (WPBN_Shape): an SVG uploaded, its objects under the layer, one chosen in the drawing; Fill Photo shows
         // the photo through it, in colour over its black and white self; glass greys Edge and Filters (not hidden).
         const sh=await browser.newPage({viewport:{width:1600,height:1000}});sh.on('pageerror',e=>errors.push(e.message));
@@ -906,6 +928,6 @@ const server=http.createServer((req,res)=>{
         assert.match(await shFrame.locator('.wpbn-layer--image img').first().evaluate(el=>getComputedStyle(el).filter),/^grayscale/,'…over the photo in black and white');
         await sh.close();
         assert.deepEqual(errors,[]);
-        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, shape layers.');
+        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');
     } finally {if(browser)await browser.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
