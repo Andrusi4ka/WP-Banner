@@ -2,6 +2,8 @@
 defined('ABSPATH') || exit;
 class WPBN_Settings {
     const META = '_wpbn_scene';
+    // The most layers a scene keeps (admin.js stops adding them there too).
+    const MAX_LAYERS = 40;
     // Placement: "target", a class; the WP Banner element standing inside a row, column or block with it
     // becomes that block's background, taking its size, behind its content (empty: not used).
     public static function defaults() {
@@ -43,6 +45,11 @@ class WPBN_Settings {
     const LAYER_UNITS = array('%', 'px', 'vh');
     const WIDTH_UNITS = array('%', 'px', 'vw');
     const OVERLAY_WIDTHS = array('desktop'=>array('overlay_width','overlay_width_unit'), 'tablet'=>array('tablet_overlay_width','tablet_overlay_width_unit'), 'mobile'=>array('mobile_overlay_width','mobile_overlay_width_unit'));
+    // A title's or a Text layer's Width per device: Auto (as wide as its text, up to its container: as before it had one),
+    // % of its container, px or vw; its lines wrap there, never wider than its container.
+    const TEXT_WIDTHS = array('desktop'=>array('text_width','text_width_unit'), 'tablet'=>array('tablet_text_width','tablet_text_width_unit'), 'mobile'=>array('mobile_text_width','mobile_text_width_unit'));
+    const TEXT_WIDTH_UNITS = array('auto', '%', 'px', 'vw');
+    public static function text_sized($l) { return in_array($l['type'], array('text', 'richtext'), true); }
     const HEIGHTS = array('desktop'=>array('height','height_unit'), 'tablet'=>array('tablet_height','tablet_height_unit'), 'mobile'=>array('mobile_height','mobile_height_unit'));
     // Before frontend.js sizes an Auto scene, and where it finds no free height.
     const FALLBACK_HEIGHT = 500;
@@ -67,7 +74,9 @@ class WPBN_Settings {
     // The motion ones are reached at the end of the scroll: travel (px),
     // zoom (% of the layer's size added) and end_opacity (the layer's opacity at the end, %; it starts at its Opacity).
     const RESPONSIVE = array('x'=>array(-100,200), 'y'=>array(-100,200), 'width'=>array(1,300), 'scale'=>array(10,300), 'opacity'=>array(0,100),
-        'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100));
+        'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100))
+        // The Animation's per-device values (WPBN_Animation): where it starts and ends, how long a run takes.
+        + WPBN_Animation::RESPONSIVE;
     const MOTION = array('move_x', 'move_y', 'zoom');
     const FITS = array('cover','contain');
     // overlay: a colour or a Gradient over the whole scene, over the layers under it (e.g. a photo shaded under
@@ -118,8 +127,14 @@ class WPBN_Settings {
             'backdrop_blur'=>0, 'tablet_backdrop_blur'=>null, 'mobile_backdrop_blur'=>null,
             // Its Width per device, kept as its Height (widths()): 100% of its container.
             'overlay_width'=>100, 'overlay_width_unit'=>'%', 'tablet_overlay_width'=>null, 'tablet_overlay_width_unit'=>null, 'mobile_overlay_width'=>null, 'mobile_overlay_width_unit'=>null,
+            // A title's or a Text layer's Width per device (TEXT_WIDTHS): Auto, its text's.
+            'text_width'=>600, 'text_width_unit'=>'auto', 'tablet_text_width'=>null, 'tablet_text_width_unit'=>null, 'mobile_text_width'=>null, 'mobile_text_width_unit'=>null,
             // An image layer fills the scene; off: an object (fills(), object()).
             'fill_scene'=>true,
+            // Decorative: an image screen readers skip (alt=""), e.g. a cutout of the photo behind it; off: its alt text from the media library.
+            'decorative'=>false,
+            // Follow the mouse (px): how far the layer moves as the pointer crosses the scene (devices with a mouse; WPBN_Render, frontend.js).
+            'use_mouse'=>false, 'mouse'=>20,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>0,
             'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
             // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
@@ -128,7 +143,9 @@ class WPBN_Settings {
             // (tablet and mobile null: the larger screen's), Fill / border color and Text color.
             'button_text'=>'Learn more', 'button_url'=>'', 'button_new_tab'=>false, 'button_style'=>'filled', 'button_shape'=>'square',
             'button_size'=>'default', 'button_size_tablet'=>null, 'button_size_mobile'=>null, 'button_color'=>'#2271b1', 'button_text_color'=>'#ffffff',
-            'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false);
+            'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false)
+            // Animation (WPBN_Animation): motion of its own, running by itself; off by default.
+            + WPBN_Animation::defaults();
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         return $l;
     }
@@ -284,7 +301,7 @@ class WPBN_Settings {
         $out['css_class'] = self::css_classes($input['css_class'] ?? '');
         // Scenes saved with the former "Insert into blocks by class" switch off: no class.
         if (array_key_exists('by_class', $input) && empty($input['by_class'])) { $out['target'] = ''; }
-        foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, 40) as $raw) {
+        foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, self::MAX_LAYERS) as $raw) {
             if (!is_array($raw)) { continue; }
             $l = self::layer();
             if (is_string($raw['name'] ?? null)) { $l['name'] = sanitize_text_field($raw['name']); }
@@ -366,6 +383,9 @@ class WPBN_Settings {
                 $value = $raw['container_width'.$suffix] ?? null;
                 $l['container_width'.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 1200, 320, 3000));
             }
+            $l['decorative'] = !empty($raw['decorative']);
+            $l['use_mouse'] = !empty($raw['use_mouse']);
+            $l['mouse'] = round(self::number($raw['mouse'] ?? null, 20, -200, 200));
             // Fill the scene (an image layer); off: an object. Layers saved before: on.
             $l['fill_scene'] = array_key_exists('fill_scene', $raw) ? !empty($raw['fill_scene']) : true;
             // An overlay's Height: px, vh or % of the scene (no Auto); tablet and mobile without a unit follow the larger screen.
@@ -392,6 +412,14 @@ class WPBN_Settings {
                 $range = array('%'=>array(100, 100), 'vw'=>array(100, 100), 'px'=>array(600, 3000));
                 $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
             }
+            // A title's or a Text layer's Width: Auto (layers saved before it: Auto), %, px or vw; tablet and mobile without a unit follow the larger screen.
+            foreach (self::TEXT_WIDTHS as $device=>$keys) {
+                list($key, $unit) = $keys;
+                $l[$unit] = in_array($raw[$unit] ?? null, self::TEXT_WIDTH_UNITS, true) ? $raw[$unit] : ($device === 'desktop' ? 'auto' : null);
+                if ($l[$unit] === null) { $l[$key] = null; continue; }
+                $range = array('auto'=>array(600, 3000), '%'=>array(100, 100), 'vw'=>array(100, 100), 'px'=>array(600, 3000));
+                $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
+            }
             // A button's text, link and look.
             if (is_string($raw['button_text'] ?? null)) { $l['button_text'] = substr(sanitize_text_field($raw['button_text']), 0, 200); }
             $l['button_url'] = is_string($raw['button_url'] ?? null) ? esc_url_raw(trim($raw['button_url']), self::BUTTON_PROTOCOLS) : '';
@@ -402,6 +430,8 @@ class WPBN_Settings {
             foreach (array('_tablet', '_mobile') as $suffix) { $l['button_size'.$suffix] = self::choice($raw['button_size'.$suffix] ?? null, array_keys(self::BUTTON_SIZES), null); }
             $l['button_color'] = self::color($raw['button_color'] ?? null, '#2271b1');
             $l['button_text_color'] = self::color($raw['button_text_color'] ?? null, '#ffffff');
+            // Animation: its switch, type, delay, repeat and easing (its per-device values: RESPONSIVE, above).
+            $l = WPBN_Animation::sanitize($raw, $l);
             $l['use_gradient'] = !empty($raw['use_gradient']);
             $l['gradient'] = WPBN_Gradient::sanitize($raw['gradient'] ?? null);
             // An image's point kept in view where its box crops it (object-position): one for every device.
@@ -419,5 +449,19 @@ class WPBN_Settings {
         }
         return $out;
     }
-    public static function get($id) { return self::sanitize(get_post_meta($id, self::META, true)); }
+    // Sanitized (and old formats migrated) once a request per scene: a page may draw a scene more than once.
+    private static $cache = array();
+    public static function get($id) {
+        $id = (int) $id;
+        if (!isset(self::$cache[$id])) { self::$cache[$id] = self::sanitize(get_post_meta($id, self::META, true)); }
+        return self::$cache[$id];
+    }
+    public static function forget($id) { unset(self::$cache[(int) $id]); }
+    // The class a scene is placed by ('' none), without sanitizing its layers (the editor lists the other scenes').
+    public static function placed_class($id) {
+        $raw = get_post_meta($id, self::META, true);
+        if (!is_array($raw) || (array_key_exists('by_class', $raw) && empty($raw['by_class']))) { return ''; }
+        $unit = in_array($raw['height_unit'] ?? null, self::UNITS, true) ? $raw['height_unit'] : 'auto';
+        return $unit === 'auto' ? self::css_class($raw['target'] ?? '') : '';
+    }
 }

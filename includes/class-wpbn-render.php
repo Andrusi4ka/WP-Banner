@@ -17,6 +17,20 @@ class WPBN_Render {
         // The shortcodes of the plugin's old names (WP Layer Motion, WP Banner Motion), for pages that still have them.
         add_shortcode('wp_layer_motion', array(__CLASS__, 'shortcode'));
         add_shortcode('wp_banner_motion', array(__CLASS__, 'shortcode'));
+        add_action('wp_enqueue_scripts', array(__CLASS__, 'early_assets'));
+    }
+    // A page whose content has a banner: its styles in <head>, so it never shows unstyled first. Banners from
+    // elsewhere (widgets, templates) still get them from shortcode(), late (printed in the footer).
+    public static function early_assets() {
+        // WPBakery's frontend editor: a banner added there comes by AJAX, too late to load them itself.
+        if (function_exists('vc_is_page_editable') && vc_is_page_editable()) { self::assets(); return; }
+        $post = get_post();
+        if (!is_singular() || !$post) { return; }
+        // The WP Banner block (WPBN_Block).
+        if (function_exists('has_block') && has_block('wp-banner/scene', $post)) { self::assets(); return; }
+        foreach (array(self::SHORTCODE, 'wp_layer_motion', 'wp_banner_motion') as $tag) {
+            if (has_shortcode($post->post_content, $tag)) { self::assets(); return; }
+        }
     }
     public static function assets() {
         wp_enqueue_style('wpbn-frontend', WPBN_URL.'assets/css/frontend.css', array(), wpbn_asset('assets/css/frontend.css'));
@@ -43,7 +57,7 @@ class WPBN_Render {
         list($screen_w, $screen_h) = self::SCREENS[$device];
         // An image object: its Width (% of its container, px or vw), grown by its Scale and Zoom.
         if (WPBN_Settings::object($l)) {
-            $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * 1.15;
+            $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * WPBN_Animation::grow($l, $device) * 1.15;
             list($value, $unit) = WPBN_Settings::heights($l, WPBN_Settings::OVERLAY_WIDTHS)[$device];
             if ($unit === 'px') { return round($value * $grow).'px'; }
             $c = $unit === '%' ? WPBN_Container::of($l, $device) : null;
@@ -51,7 +65,7 @@ class WPBN_Render {
             return round(max(1, min($screen_w - $c['side'], $c['width']) - $c['inner']) * $value / 100 * $grow).'px';
         }
         list($h_number, $unit) = WPBN_Settings::heights($s)[$device];
-        $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * 1.15;
+        $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * WPBN_Animation::grow($l, $device) * 1.15;
         $width_vw = WPBN_Settings::resolved($l, 'width')[$device] * $grow;
         $meta = wp_get_attachment_metadata($id);
         $ratio = !empty($meta['width']) && !empty($meta['height']) ? $meta['width'] / $meta['height'] : 0;
@@ -74,7 +88,8 @@ class WPBN_Render {
         if (!$url) { return ''; }
         $one = $ids['desktop'] === $ids['tablet'] && $ids['tablet'] === $ids['mobile'];
         $sizes = function ($device, $id) use ($s, $l) { return self::size_for($s, $l, $device, $id); };
-        $alt = trim((string) get_post_meta($ids['desktop'], '_wp_attachment_image_alt', true));
+        // Decorative (a cutout of the photo behind it…): screen readers skip it; otherwise the media library's alt text.
+        $alt = empty($l['decorative']) ? trim((string) get_post_meta($ids['desktop'], '_wp_attachment_image_alt', true)) : '';
         $img = '<img src="'.esc_url($url).'" alt="'.esc_attr($alt).'"'.$attrs;
         $srcset = self::srcset($ids['desktop']);
         if ($srcset) {
@@ -149,12 +164,27 @@ class WPBN_Render {
             // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain, a title or text,
             // an overlay (it does not move) or a layer in a container does not.
             $motion['fill'] = !WPBN_Settings::fills($l) || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
+            // Follow the mouse (px; frontend.js, devices with a mouse): an overlay stays put, as with the scroll.
+            $motion['mouse'] = !empty($l['use_mouse']) && $l['type'] !== 'overlay' ? (float) $l['mouse'] : 0;
+            // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
+            $motion['slack'] = WPBN_Animation::slack($l);
             $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
             // An overlay's or a shortcode's Width per device: % of its container (as the other layers' widths), px or vw.
             if (WPBN_Settings::sized($l)) {
                 foreach (WPBN_Settings::heights($l, WPBN_Settings::OVERLAY_WIDTHS) as $device=>$w) {
                     $value = $w[1] !== '%' ? $w[0].$w[1] : ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], $w[0] / 100) : $w[0].'%');
                     $css .= '--wpbn-width'.self::SUFFIX[$device].':'.$value.';';
+                }
+            }
+            // A title's or a Text layer's own Width per device (frontend.css --wpbn-tw; Auto: max-content, its text's), as an overlay's:
+            // % of its container, px or vw. All Auto: nothing (as before it had one).
+            if (WPBN_Settings::text_sized($l)) {
+                $widths = WPBN_Settings::heights($l, WPBN_Settings::TEXT_WIDTHS);
+                if (array_filter($widths, function ($w) { return $w[1] !== 'auto'; })) {
+                    foreach ($widths as $device=>$w) {
+                        $value = $w[1] === 'auto' ? 'max-content' : ($w[1] !== '%' ? $w[0].$w[1] : ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], $w[0] / 100) : $w[0].'%'));
+                        $css .= '--wpbn-tw'.self::SUFFIX[$device].':'.$value.';';
+                    }
                 }
             }
             $inner = '';
@@ -222,6 +252,11 @@ class WPBN_Render {
                 $attrs = $first ? ' decoding="async" loading="eager"'.(!$loaded ? ' fetchpriority="high"' : '') : ' decoding="async" loading="lazy"';
                 $inner = self::image($s, $l, $attrs);
                 if ($inner) { $loaded = true; }
+            }
+            // Animation (WPBN_Animation): the content in a box of its own that it moves, so it adds up with the scroll motion on the layer.
+            if ($inner !== '' && WPBN_Animation::active($l)) {
+                list($anim_class, $anim_css) = WPBN_Animation::wrapper($l);
+                $inner = '<div class="'.esc_attr($anim_class).'" style="'.esc_attr($anim_css).'">'.$inner.'</div>';
             }
             $html .= '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'">'.$inner.'</div>';
         }

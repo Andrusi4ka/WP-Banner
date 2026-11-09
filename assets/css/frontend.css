@@ -8,16 +8,16 @@
    k, kx, ky: what keeps the edges of the image layers that fill the scene out of view.
    ax, ay: the point of the layer at its Position, as shares of it: its centre (.5) for an image; for a
    title its Position itself (anx, any), so 0% puts its left (top) edge at the container's, 100% its right (bottom). */
-.wpbn-scene .wpbn-layer{position:absolute;box-sizing:border-box;height:100%;left:var(--wpbn-left);top:var(--wpbn-top);width:var(--wpbn-width);opacity:calc(var(--wpbn-opacity) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale,1);--wpbn-ax:var(--wpbn-anx,.5);--wpbn-ay:var(--wpbn-any,.5);transform:translate(calc(var(--wpbn-ax) * -100%),calc(var(--wpbn-ay) * -100%)) translate3d(calc(var(--wpbn-dx,0px) + var(--wpbn-kx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px)),0) scale(calc(var(--wpbn-s) * var(--wpbn-z,1) * var(--wpbn-k,1)));pointer-events:none}
+.wpbn-scene .wpbn-layer{position:absolute;box-sizing:border-box;height:100%;left:var(--wpbn-left);top:var(--wpbn-top);width:var(--wpbn-width);opacity:calc(var(--wpbn-opacity) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale,1);--wpbn-ax:var(--wpbn-anx,.5);--wpbn-ay:var(--wpbn-any,.5);transform:translate(calc(var(--wpbn-ax) * -100%),calc(var(--wpbn-ay) * -100%)) translate3d(calc(var(--wpbn-dx,0px) + var(--wpbn-kx,0px) + var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px)),0) scale(calc(var(--wpbn-s) * var(--wpbn-z,1) * var(--wpbn-k,1)));pointer-events:none}
 .wpbn-scene .wpbn-layer picture{display:contents}
 .wpbn-scene .wpbn-layer img{display:block;width:100%;height:100%;max-width:none;border:0;border-radius:0;object-fit:var(--wpbn-fit,cover);object-position:var(--wpbn-focus,50% 50%)}
 /* A title: as wide as its text, at most its container's width (--wpbn-width), wrapping there. */
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width);height:auto;text-align:center;font-size:var(--wpbn-font);letter-spacing:var(--wpbn-ls,normal);line-height:1.05;overflow-wrap:anywhere}
+.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content);max-width:var(--wpbn-width);height:auto;text-align:center;font-size:var(--wpbn-font);letter-spacing:var(--wpbn-ls,normal);line-height:1.05;overflow-wrap:anywhere}
 /* The title's tag (h1–h5) without the theme's margins and sizes, with the title's spacing, case, style and shadow; a heading keeps the theme's heading font unless the layer sets one. */
-.wpbn-scene .wpbn-layer--text>*{margin:0;padding:0;color:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;text-align:inherit;text-transform:inherit;font-style:inherit;text-shadow:inherit}
+.wpbn-scene .wpbn-layer--text>*,.wpbn-scene .wpbn-layer--text>.wpbn-anim>*{margin:0;padding:0;color:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;text-align:inherit;text-transform:inherit;font-style:inherit;text-shadow:inherit}
 /* A Text layer: its paragraphs and lists, as wide as its text, at most its container's width, wrapping there; without the
    theme's margins and sizes. Aligned as its editor set (left by default). */
-.wpbn-scene .wpbn-layer--richtext{width:max-content;max-width:var(--wpbn-width);height:auto;text-align:left;font-size:var(--wpbn-font);line-height:1.5;overflow-wrap:anywhere}
+.wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw,max-content);max-width:var(--wpbn-width);height:auto;text-align:left;font-size:var(--wpbn-font);line-height:1.5;overflow-wrap:anywhere}
 .wpbn-scene .wpbn-layer--richtext p,.wpbn-scene .wpbn-layer--richtext ul,.wpbn-scene .wpbn-layer--richtext ol,.wpbn-scene .wpbn-layer--richtext li{margin:0;padding:0;color:inherit;font-family:inherit;font-size:inherit;line-height:inherit}
 .wpbn-scene .wpbn-layer--richtext :is(p,h1,h2,h3,h4,h5,h6,ul,ol)+:is(p,h1,h2,h3,h4,h5,h6,ul,ol){margin-top:.75em}
 /* Headings: the theme's font, size and weight, without its margins, in the layer's colour (themes give headings one). */
@@ -49,9 +49,27 @@
 .wpbn-scene a.wpbn-button{pointer-events:auto;cursor:pointer}
 .wpbn-scene a.wpbn-button:hover,.wpbn-scene a.wpbn-button:focus{filter:brightness(.9);color:var(--wpbn-bt);text-decoration:none}
 .wpbn-scene a.wpbn-button:focus-visible{outline:2px solid currentColor;outline-offset:3px}
-.wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,currentColor));text-decoration:none}
+/* A layer's Animation (WPBN_Animation): its content in a box the animation moves, from the first frame, endlessly
+   (back and forth, or from the start again) or once. The type's keyframes (wpbn-<type>) go from --wpbn-a0 to --wpbn-a1;
+   the values and the duration per device (-d, -t, -m) are picked by breakpoint. */
+.wpbn-scene .wpbn-anim{display:block;height:100%;--wpbn-a0:var(--wpbn-a0-d);--wpbn-a1:var(--wpbn-a1-d);animation-duration:var(--wpbn-ad-d,8s);animation-timing-function:ease-in-out;animation-iteration-count:infinite;animation-direction:alternate;animation-fill-mode:both}
+.wpbn-scene .wpbn-anim--loop{animation-direction:normal}
+.wpbn-scene .wpbn-anim--once{animation-iteration-count:1;animation-direction:normal}
+.wpbn-scene .wpbn-anim--zoom{animation-name:wpbn-zoom}
+@keyframes wpbn-zoom{from{transform:scale(var(--wpbn-a0,1))}to{transform:scale(var(--wpbn-a1,1))}}
+.wpbn-scene .wpbn-anim--fade{animation-name:wpbn-fade}
+@keyframes wpbn-fade{from{opacity:var(--wpbn-a0,1)}to{opacity:var(--wpbn-a1,1)}}
+.wpbn-scene .wpbn-anim--slide-x{animation-name:wpbn-slide-x}
+@keyframes wpbn-slide-x{from{transform:translateX(var(--wpbn-a0,0px))}to{transform:translateX(var(--wpbn-a1,0px))}}
+.wpbn-scene .wpbn-anim--slide-y{animation-name:wpbn-slide-y}
+@keyframes wpbn-slide-y{from{transform:translateY(var(--wpbn-a0,0px))}to{transform:translateY(var(--wpbn-a1,0px))}}
+/* Waiting at its start until the banner is in view (Starts: When the banner comes into view; frontend.js adds .wpbn-scene--seen),
+   and paused while the banner is off the screen (frontend.js: .wpbn-scene--away), so nothing runs where nobody sees it. */
+.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}
+.wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,var(--wp--preset--color--primary,currentColor)));text-decoration:none}
 @media(max-width:1024px){
 .wpbn-scene{height:var(--wpbn-tablet-height)}
+.wpbn-scene .wpbn-anim{--wpbn-a0:var(--wpbn-a0-t,var(--wpbn-a0-d));--wpbn-a1:var(--wpbn-a1-t,var(--wpbn-a1-d));animation-duration:var(--wpbn-ad-t,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-t,var(--wpbn-width))}
@@ -59,11 +77,12 @@
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)))}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-t,var(--wpbn-left));top:var(--wpbn-top-t,var(--wpbn-top));width:var(--wpbn-width-t,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-t,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-t,var(--wpbn-scale,1));--wpbn-ax:var(--wpbn-anx-t,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-t,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-t,var(--wpbn-fit,cover))}
-.wpbn-scene .wpbn-layer--richtext{max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font));letter-spacing:var(--wpbn-tablet-ls,var(--wpbn-ls,normal))}
+.wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
+.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font));letter-spacing:var(--wpbn-tablet-ls,var(--wpbn-ls,normal))}
 }
 @media(max-width:767px){
 .wpbn-scene{height:var(--wpbn-mobile-height)}
+.wpbn-scene .wpbn-anim{--wpbn-a0:var(--wpbn-a0-m,var(--wpbn-a0-d));--wpbn-a1:var(--wpbn-a1-m,var(--wpbn-a1-d));animation-duration:var(--wpbn-ad-m,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-m,var(--wpbn-width))}
@@ -71,7 +90,7 @@
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)))}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-m,var(--wpbn-left));top:var(--wpbn-top-m,var(--wpbn-top));width:var(--wpbn-width-m,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-m,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-m,var(--wpbn-scale,1));--wpbn-ax:var(--wpbn-anx-m,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-m,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-m,var(--wpbn-fit,cover))}
-.wpbn-scene .wpbn-layer--richtext{max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
-.wpbn-scene .wpbn-layer--text{width:max-content;max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
+.wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
+.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
 }
-@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-button{transition:none}}
+@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-button{transition:none}}

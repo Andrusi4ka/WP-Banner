@@ -30,7 +30,8 @@ class WPBN_Palette {
             $palette = wp_get_global_settings(array('color', 'palette', 'theme'));
             foreach (is_array($palette) ? $palette : array() as $entry) {
                 if (is_array($entry) && isset($entry['color']) && is_scalar($entry['color'])) {
-                    $colors[] = array('color'=>self::hex($entry['color']), 'name'=>isset($entry['name']) && is_scalar($entry['name']) ? sanitize_text_field((string) $entry['name']) : '');
+                    $colors[] = array('color'=>self::hex($entry['color']), 'name'=>isset($entry['name']) && is_scalar($entry['name']) ? sanitize_text_field((string) $entry['name']) : '',
+                        'slug'=>isset($entry['slug']) && is_scalar($entry['slug']) ? sanitize_key((string) $entry['slug']) : '');
                 }
             }
         }
@@ -38,8 +39,13 @@ class WPBN_Palette {
     }
     // The theme's primary color ("#rrggbb"; '' without one): the title's accent words take it until they get
     // a color of their own (frontend.css: --wd-primary-color on the site, set by the preview page here).
+    // Woodmart's Primary color; any other theme: its palette's "primary" (or "accent") color (theme.json).
     public static function primary() {
-        foreach (self::theme_colors() as $entry) { if ($entry['name'] === 'Primary color') { return $entry['color']; } }
+        $colors = self::theme_colors();
+        foreach ($colors as $entry) { if ($entry['name'] === 'Primary color' && empty($entry['slug'])) { return $entry['color']; } }
+        foreach (array('primary', 'accent') as $slug) {
+            foreach ($colors as $entry) { if (($entry['slug'] ?? '') === $slug) { return $entry['color']; } }
+        }
         return '';
     }
     // Black, white and greys, always there.

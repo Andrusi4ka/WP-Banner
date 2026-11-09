@@ -8,6 +8,11 @@ function sanitize_textarea_field($s) { return trim(strip_tags($s)); }
 function sanitize_hex_color($s) { return preg_match('/^#(?:[a-f0-9]{3}|[a-f0-9]{6})$/i', $s) ? $s : null; }
 function sanitize_html_class($s) { return preg_replace('/[^A-Za-z0-9_-]/', '', preg_replace('|%[a-fA-F0-9][a-fA-F0-9]|', '', $s)); }
 function absint($n) { return abs((int)$n); }
+// Translations: the text as written (the plugin's strings are English).
+function __($s, $d = '') { return $s; }
+function esc_html__($s, $d = '') { return esc_html($s); }
+function esc_attr__($s, $d = '') { return esc_attr($s); }
+function _n($one, $many, $n, $d = '') { return $n == 1 ? $one : $many; }
 function esc_attr($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function esc_html($s) { return esc_attr($s); }
 function esc_url($s) { return esc_attr($s); }
@@ -60,6 +65,7 @@ function wp_kses($html, $tags) {
 }
 require_once __DIR__.'/../includes/class-wpbn-settings.php';
 require_once __DIR__.'/../includes/class-wpbn-gradient.php';
+require_once __DIR__.'/../includes/class-wpbn-animation.php';
 
 function get_post_mime_type($id) { return (int) $id === 2 ? 'image/png' : 'image/jpeg'; }
 require_once __DIR__.'/../includes/class-wpbn-render.php';
@@ -364,6 +370,35 @@ check(WPBN_Settings::heights($lay(array('type'=>'overlay','overlay_width_unit'=>
 $owHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ow,array('container'=>'custom','container_width'=>900))))));
 check(strpos($owHtml,'--wpbn-width:calc(var(--wpbn-cw) * 0.5);--wpbn-width-t:3000px;--wpbn-width-m:100vw;')!==false && substr_count($owHtml,'--wpbn-width:')===1,'Rendered: a share of its container, px, vw');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'overlay','overlay_width'=>30))))),'--wpbn-width:30%;')!==false,'Full width: a share of the scene');
+// Animation (WPBN_Animation): off by default; its kind, start / end and duration per device, Starts, Repeat, Easing, Delay, Direction.
+$plainLayer=$lay(array('type'=>'image','image'=>3));
+check($plainLayer['use_anim']===false && $plainLayer['anim_type']==='zoom' && $plainLayer['anim_start']==='load' && strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($plainLayer)))),'wpbn-anim')===false,'No Animation by default: no wrapper');
+$an=$lay(array('type'=>'text','use_anim'=>1,'anim_type'=>'zoom','anim_from'=>80,'anim_to'=>100,'anim_to_mobile'=>95,'anim_duration'=>3,'anim_start'=>'visible','anim_repeat'=>'once','anim_easing'=>'ease-out','anim_delay'=>0.55,'anim_origin'=>'bottom'));
+check($an['anim_to_mobile']==95 && $an['anim_delay']==0.6 && $an['anim_origin']==='bottom','Its values kept (Delay to 0.1 s)');
+$anHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($an))));
+check(strpos($anHtml,'<div class="wpbn-anim wpbn-anim--zoom wpbn-anim--once wpbn-anim--visible" style="--wpbn-a0-d:0.8;--wpbn-a1-d:1;--wpbn-ad-d:3s;--wpbn-a0-t:0.8;--wpbn-a1-t:1;--wpbn-ad-t:3s;--wpbn-a0-m:0.8;--wpbn-a1-m:0.95;--wpbn-ad-m:3s;animation-delay:0.6s;transform-origin:center bottom;animation-timing-function:ease-out;"><h2>')!==false,'Rendered: the content wrapped, its values per device, Direction, Delay, Easing ('.$anHtml.')');
+$bad=$lay(array('type'=>'image','image'=>3,'use_anim'=>1,'anim_type'=>'spin','anim_start'=>'x','anim_repeat'=>'x','anim_easing'=>'x','anim_origin'=>'x','anim_from'=>50,'anim_to'=>120));
+check($bad['anim_type']==='zoom' && $bad['anim_start']==='load' && $bad['anim_repeat']==='alternate' && $bad['anim_easing']==='ease-in-out' && $bad['anim_origin']==='center','Unknown choices: the defaults');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($bad)))),'--wpbn-a0-d:1;--wpbn-a1-d:1.2;')!==false,'An image filling the scene zooms from 100% at least (its edges never show)');
+$fade=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_anim'=>1,'anim_type'=>'fade','anim_from'=>-20,'anim_to'=>150))))));
+check(strpos($fade,'wpbn-anim--fade')!==false && strpos($fade,'--wpbn-a0-d:0;--wpbn-a1-d:1;')!==false,'Fade: an opacity, 0–100%');
+$slide=WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_anim'=>1,'anim_type'=>'slide-x','anim_from'=>-60,'anim_to'=>0)))));
+$slideHtml=WPBN_Render::markup($slide);
+check(strpos($slideHtml,'--wpbn-a0-d:-60px;--wpbn-a1-d:0px;')!==false && motion_of($slideHtml,0)['slack']===array(array(75,75,75),array(0,0,0)),'Slide: px, and room for it so a photo\'s edges stay hidden');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_anim'=>1)))))),'wpbn-anim')===false,'An overlay is never animated');
+$animCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
+foreach (array('zoom','fade','slide-x','slide-y') as $kind) { check(strpos($animCss,'.wpbn-scene .wpbn-anim--'.$kind.'{animation-name:wpbn-'.$kind.'}')!==false && strpos($animCss,'@keyframes wpbn-'.$kind.'{')!==false,'Keyframes for '.$kind); }
+check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}')!==false && strpos($animCss,'.wpbn-scene .wpbn-anim{animation:none}')!==false,'Waits until in view, paused off the screen, none with reduced motion');
+// Follow the mouse: per layer, an overlay never; Decorative: no alt text.
+$m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
+check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0,'Follow the mouse: bounded, not for an overlay, only with its switch');
+check(strpos($animCss,'+ var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px))')!==false,'The pointer\'s offset in the layer\'s place');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'decorative'=>1)))))),'alt=""')!==false && $lay(array('type'=>'image'))['decorative']===false,'Decorative: an empty alt; off by default');
+// A title's or a Text layer's Width: Auto (as before), % of its container, px or vw, per device.
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text')))))),'--wpbn-tw')===false,'Width Auto by default: nothing set');
+$tw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'richtext','content'=>'<p>a</p>','container'=>'custom','text_width'=>60,'text_width_unit'=>'%','mobile_text_width_unit'=>'auto'))))));
+check(strpos($tw,'--wpbn-tw:calc(var(--wpbn-cw) * 0.6);--wpbn-tw-t:calc(var(--wpbn-cw-t, var(--wpbn-cw)) * 0.6);--wpbn-tw-m:max-content;')!==false,'Its Width per device ('.$tw.')');
+check($lay(array('type'=>'text','text_width_unit'=>'em'))['text_width_unit']==='auto' && strpos($animCss,'.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content)')!==false,'An unknown unit: Auto');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.

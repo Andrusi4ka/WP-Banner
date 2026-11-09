@@ -3,7 +3,7 @@
  * Plugin Name:       WP Banner
  * Plugin URI:        https://github.com/Andrusi4ka/WP-Banner
  * Description:       Layered scenes that move as the page scrolls: a photo, a title and a cutout in front, for a sense of depth. A visual layer editor with desktop, tablet and phone previews; insert a scene with a shortcode or the WPBakery element.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Relevant AS
@@ -16,7 +16,7 @@
  */
 // "Update URI": updates come from this plugin's GitHub releases (wpbn_updates()), never from wordpress.org.
 defined('ABSPATH') || exit;
-define('WPBN_VERSION', '0.1.0');
+define('WPBN_VERSION', '0.2.0');
 define('WPBN_REPOSITORY', 'https://github.com/Andrusi4ka/WP-Banner/');
 define('WPBN_FILE', __FILE__);
 define('WPBN_DIR', plugin_dir_path(__FILE__));
@@ -25,6 +25,7 @@ define('WPBN_URL', plugin_dir_url(__FILE__));
 function wpbn_asset($file) { $time = @filemtime(WPBN_DIR . $file); return $time ? WPBN_VERSION . '.' . $time : WPBN_VERSION; }
 require_once WPBN_DIR . 'includes/class-wpbn-settings.php';
 require_once WPBN_DIR . 'includes/class-wpbn-gradient.php';
+require_once WPBN_DIR . 'includes/class-wpbn-animation.php';
 require_once WPBN_DIR . 'includes/class-wpbn-render.php';
 require_once WPBN_DIR . 'includes/class-wpbn-palette.php';
 require_once WPBN_DIR . 'includes/class-wpbn-fonts.php';
@@ -32,15 +33,25 @@ require_once WPBN_DIR . 'includes/class-wpbn-container.php';
 require_once WPBN_DIR . 'includes/class-wpbn-admin.php';
 require_once WPBN_DIR . 'includes/class-wpbn-whats-new.php';
 require_once WPBN_DIR . 'includes/class-wpbn-wpbakery.php';
+require_once WPBN_DIR . 'includes/class-wpbn-tools.php';
+require_once WPBN_DIR . 'includes/class-wpbn-block.php';
 add_action('init', function () {
     load_plugin_textdomain('wp-banner', false, dirname(plugin_basename(__FILE__)) . '/languages');
     register_post_type('wpbn_scene', array(
         'labels' => array('name'=>'WP Banner', 'singular_name'=>__('Scene','wp-banner'), 'add_new_item'=>__('Add scene','wp-banner'), 'edit_item'=>__('Edit scene','wp-banner')),
-        'public'=>false, 'show_ui'=>true, 'show_in_rest'=>false, 'supports'=>array('title'),
+        'public'=>false, 'show_ui'=>true, 'show_in_rest'=>false, 'supports'=>array('title', 'revisions'),
         'menu_icon'=>'dashicons-images-alt2', 'map_meta_cap'=>true,
         'capabilities'=>array_fill_keys(array('edit_posts','edit_others_posts','edit_private_posts','edit_published_posts','publish_posts','read_private_posts','delete_posts','delete_others_posts','delete_private_posts','delete_published_posts','create_posts'), 'manage_options'),
     ));
+    // The scene's settings kept with each revision (WordPress 6.4+ revisions post meta), so an earlier version can be
+    // restored under Revisions in the Publish box; a revision is made when only the settings changed too.
+    if (function_exists('wp_post_revision_meta_keys')) {
+        register_post_meta('wpbn_scene', WPBN_Settings::META, array('type'=>'object', 'single'=>true, 'revisions_enabled'=>true, 'show_in_rest'=>false,
+            'auth_callback'=>function () { return current_user_can('manage_options'); }));
+    }
 });
+// The last 30 versions of a scene.
+add_filter('wp_wpbn_scene_revisions_to_keep', function () { return 30; });
 /**
  * Updates from GitHub, as WP Swiper's: a release (tag "vX.Y.Z" with the wp-banner.zip built by
  * .github/workflows/release.yml) shows up under Plugins like any other update. The same library adds
@@ -89,3 +100,5 @@ WPBN_Render::init();
 WPBN_Admin::init();
 WPBN_Whats_New::init();
 WPBN_WPBakery::init();
+WPBN_Tools::init();
+WPBN_Block::init();

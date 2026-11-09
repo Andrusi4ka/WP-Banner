@@ -350,7 +350,9 @@ body.wpbn-modal-open{overflow:hidden}
 /* A layer's Gradient (admin.js gradientField(), as WP Swiper's, its editor as WoodMart's): its selects in a
    row, the gradient as a bar (over a checkerboard: see-through colours show as such), its colours' points
    under it (the chosen one in the accent colour), the chosen one's colour and Delete (red). */
-.wpbn-gradient__selects{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.wpbn-gradient__selects{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px}
+/* The gradient as the overlay shows it (admin.js drawGradient()): a small screen, over a checkerboard so a see-through colour shows as such. */
+.wpbn-gradient__preview{position:relative;flex:0 0 64px;height:40px;border:1px solid #8c8f94;border-radius:4px;background:repeating-conic-gradient(#dcdcde 0% 25%,#fff 0% 50%) 0 0/10px 10px}
 .wpbn-gradient__selects select{flex:1 1 120px;min-width:0}
 .wpbn-gradient__selects select[hidden]{display:none}
 .wpbn-gradient__bar{position:relative;height:28px;border:1px solid #8c8f94;border-radius:4px;background:repeating-conic-gradient(#dcdcde 0% 25%,#fff 0% 50%) 0 0/10px 10px;cursor:copy}
@@ -385,3 +387,7 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-position-item__label{position:absolute;left:4px;right:4px;transform:translateY(-50%);font:11px/1.3 monospace;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Its height not measured on that device yet (the preview shows another one, or no Update since): a lighter box. */
 .wpbn-position-item.is-shortcode.is-guess{border-style:dotted;opacity:.75}
+/* Undo and Redo, beside Update (admin.js remember()). */
+.wpbn-history{display:inline-flex;gap:4px}
+.wpbn-history .button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0}
+.wpbn-history .dashicons{width:16px;height:16px;font-size:16px;line-height:1}

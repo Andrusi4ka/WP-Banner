@@ -1,1 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0080FF"/><stop offset="1" stop-color="#00B7FF"/></linearGradient></defs><rect width="128" height="128" rx="24" fill="url(#sky)"/><circle cx="92" cy="36" r="12" fill="#fff" opacity=".9"/><path d="M0 104 34 56l22 26 24-36 48 58v8c0 6.6-5.4 12-12 12H12c-6.6 0-12-5.4-12-12z" fill="#fff" opacity=".55"/><path d="M0 116 28 84l20 18 26-30 54 46v0c0 6.6-5.4 10-12 10H12C5.4 128 0 122.6 0 116z" fill="#fff"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_Шар_1" data-name="Шар_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 128 128">
+  <!-- Generator: Adobe Illustrator 29.8.11, SVG Export Plug-In . SVG Version: 2.1.1 Build 11)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #0081ff;
+      }
+
+      .st1 {
+        opacity: .9;
+      }
+
+      .st1, .st2 {
+        isolation: isolate;
+      }
+
+      .st1, .st2, .st3 {
+        fill: #fff;
+      }
+
+      .st2 {
+        opacity: .55;
+      }
+    </style>
+  </defs>
+  <rect class="st0" width="128" height="128" rx="24" ry="24"/>
+  <circle class="st1" cx="98" cy="28.67" r="12"/>
+  <path class="st2" d="M0,104l34-48,22,26,24-36,48,58v8c0,6.6-5.4,12-12,12H12c-6.6,0-12-5.4-12-12v-8Z"/>
+  <path class="st3" d="M0,116l28-32,20,18,26-30,54,46h0c0,6.6-5.4,10-12,10H12c-6.6,0-12-5.4-12-12Z"/>
+  <path class="st0" d="M104,2c12.13,0,22,9.87,22,22v80c0,12.13-9.87,22-22,22H24c-12.13,0-22-9.87-22-22V24C2,11.87,11.87,2,24,2h80M104,0H24C10.75,0,0,10.75,0,24v80c0,13.25,10.75,24,24,24h80c13.25,0,24-10.75,24-24V24c0-13.25-10.75-24-24-24h0Z"/>
+</svg>

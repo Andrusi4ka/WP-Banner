@@ -32,6 +32,9 @@
     const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
     // adding: the settings column shows the elements to add instead of a layer's settings.
     let selected = -1, dark = false, adding = false;
+    // Undo and Redo (remember(), below): the scene after each change, the changes undone, the pause before a change is kept.
+    const HISTORY_MAX = 100, HISTORY_PAUSE = 400;
+    let history = [JSON.stringify(scene)], future = [], historyTimer = 0;
     const turned = {};
     const drawings = {
         desktop: {file:'desktop.svg',width:1000.2,height:793.1,screen:[22.89,23.39,954.91,537.91],radius:0},
@@ -81,7 +84,8 @@
     // Reset, beside each slider, for the device being edited only. Desktop: back to the
     // default below. Tablet / mobile: its own value cleared, so it follows the larger screen again.
     const DEFAULTS = {width:100, scale:100, opacity:100, move_x:0, move_y:0, zoom:0, end_opacity:0,
-        font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size};
+        font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size,
+        anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse};
     // Is there something to reset? key: the stored key on this device; base: a per-device setting's name (null for a key of its own).
     function canReset(l, key, base) {
         if (base && key !== base) return l[key] != null;
@@ -100,8 +104,8 @@
     function respRange(base, label, o) {
         const l = current(), d = device(), key = dkey(base, d), own = l[key], value = escape(eff(l, base, d)), id = 'wpbn-f-' + key;
         return '<div class="wpbn-field" data-base="' + base + '">' + head(id, label, devices(ownValues(l, base))) + '<div class="wpbn-field__row">'
-            + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="1" value="' + value + '" aria-label="' + label + '">'
-            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="1" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + value + '" aria-label="' + label + '"' + (d === 'desktop' ? '' : ' data-inherit="' + base + '"') + '>'
+            + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="' + (o.step || 1) + '" value="' + value + '" aria-label="' + label + '">'
+            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + value + '" aria-label="' + label + '"' + (d === 'desktop' ? '' : ' data-inherit="' + base + '"') + '>'
             + resetButton(l, key, base, label) + '</div>' + note(o.note) + '</div>';
     }
     // A per-device select. extra: more of the field after the select (as its own children).
@@ -126,8 +130,8 @@
         const perDevice = typeof keys !== 'string';
         const key = perDevice ? keys[device()] : keys, id = 'wpbn-f-' + key, value = escape(current()[key]);
         return '<div class="wpbn-field">' + head(id, label, perDevice ? devices() : '') + '<div class="wpbn-field__row">'
-            + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="1" value="' + value + '" aria-label="' + label + '">'
-            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="1" value="' + value + '">'
+            + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="' + (o.step || 1) + '" value="' + value + '" aria-label="' + label + '">'
+            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + value + '">'
             + (key in DEFAULTS ? resetButton(current(), key, null, label) : '') + '</div>' + note(o.note) + '</div>';
     }
     function select(key, label, options, help) {
@@ -309,6 +313,8 @@
         gradientChosen = Math.min(gradientChosen, g.stops.length - 1);
         const chosen = parseColor(g.stops[gradientChosen].color);
         return '<div class="wpbn-field wpbn-gradient">' + head('wpbn-f-gradient', 'Gradient colors', tip('Click the bar to add a color, drag a color along it, pick one to change or delete it.')) + '<div class="wpbn-gradient__selects">'
+            // The gradient as the overlay shows it (its direction, or its middle): the bar below always runs left to right, as its points' positions do.
+            + '<span class="wpbn-gradient__preview" role="img" aria-label="Gradient preview" title="As the overlay shows it"><span class="wpbn-gradient__fill"></span></span>'
             + '<select class="wpbn-gradient__type" id="wpbn-f-gradient" aria-label="Gradient type">' + options({linear:'Linear', circle:'Radial - Circle', ellipse:'Radial - Ellipse'}, g.type) + '</select>'
             + '<select class="wpbn-gradient__direction" aria-label="Starts at"' + (linear ? '' : ' hidden') + '>' + options(SIDES, linear ? g.where : 'left') + '</select>'
             + '<select class="wpbn-gradient__x" aria-label="Middle across"' + (linear ? ' hidden' : '') + '>' + options({center:'Center', left:'Left', right:'Right'}, at[0]) + '</select>'
@@ -325,7 +331,8 @@
         if (!box) return;
         const g = parseGradient(current().gradient) || parseGradient(GRADIENT_DEFAULT);
         gradientChosen = Math.min(gradientChosen, g.stops.length - 1);
-        box.querySelector('.wpbn-gradient__fill').style.backgroundImage = gradientBar(g);
+        box.querySelector('.wpbn-gradient__bar .wpbn-gradient__fill').style.backgroundImage = gradientBar(g);
+        box.querySelector('.wpbn-gradient__preview .wpbn-gradient__fill').style.backgroundImage = gradientCss(gradientValue(g));
         if (full !== false) {
             box.querySelector('.wpbn-gradient__stops').innerHTML = g.stops.map((stop, i) => '<button type="button" class="wpbn-gradient__handle' + (i === gradientChosen ? ' is-chosen' : '') + '" role="option" aria-selected="' + (i === gradientChosen) + '" data-stop="' + i + '" aria-label="' + escape(stop.color + ', ' + gradientPosition(stop.at) + '%') + '" style="left:' + stop.at + '%"><span class="wpbn-gradient__chip" style="background-color:' + escape(stop.color) + '"></span></button>').join('');
             const input = box.querySelector('[data-gradient-stop]'), color = g.stops[gradientChosen].color;
@@ -593,19 +600,19 @@
     // A switch (as WP Swiper's checkboxes). checked: for a switch that is not a stored key of its own.
     function check(key, label, help, checked) {
         const id = 'wpbn-f-' + key, on = checked === undefined ? !!current()[key] : checked;
-        return '<div class="wpbn-field wpbn-field--check"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + key + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label>' + note(help) + '</div>';
+        // The switch in the field's head row, so a tip (withTip()) sits right after its label, on its line.
+        return '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + key + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label></div>' + note(help) + '</div>';
     }
     // A field that only applies in some settings: greyed (not hidden) otherwise, its value kept.
     // A title's Font size, a value per device: tablet and mobile empty follow the larger screen
     // (as WPBN_Settings::fonts()). kind => its keys, its field.
     const INLINE = {
-        font: {keys:{desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'}, label:'Font size', unit:'px', min:8, max:{desktop:500, tablet:500, mobile:250}, step:1,
-            tip:'The icons choose the device. Tablet and mobile: empty takes the larger screen\'s size (shown in grey).'},
+        font: {keys:{desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'}, label:'Font size', unit:'px', min:8, max:{desktop:500, tablet:500, mobile:250}, step:1},
         spacing: {keys:{desktop:'letter_spacing', tablet:'tablet_letter_spacing', mobile:'mobile_letter_spacing'}, label:'Letter spacing', unit:'px', min:-20, max:{desktop:100, tablet:100, mobile:100}, step:0.1,
-            tip:'Space added between the letters; negative brings them closer. The icons choose the device. Tablet and mobile: empty takes the larger screen\'s (shown in grey).'},
+            tip:'Space added between the letters; negative brings them closer.'},
         // An overlay's Blur: the layers under it blurred (backdrop-filter), per device.
         blur: {keys:{desktop:'backdrop_blur', tablet:'tablet_backdrop_blur', mobile:'mobile_backdrop_blur'}, label:'Blur', unit:'px', min:0, max:{desktop:100, tablet:100, mobile:100}, step:1,
-            tip:'Blurs the layers under this one, where it covers them (frosted glass); 0: none. With a see-through color or gradient they show blurred through it. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'},
+            tip:'Blurs the layers under this one where it covers them, like frosted glass; 0: none. Works with a see-through color or gradient.'},
         // Container width (Custom, or Theme container in a theme without one), per device.
         cwidth: {keys:{desktop:'container_width', tablet:'container_width_tablet', mobile:'container_width_mobile'}, label:'Container width', unit:'px', min:320, max:{desktop:3000, tablet:3000, mobile:3000}, step:1,
             tip:'On a narrower screen it keeps 15px clear on each side. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'}
@@ -626,7 +633,7 @@
     // right of its label, as the other per-device fields have them (a green dot where tablet or mobile has its own).
     function deviceNumberField(l, kind) {
         const o = INLINE[kind], d = device(), key = o.keys[d], id = 'wpbn-f-' + key;
-        return '<div class="wpbn-field wpbn-field--device-number"><div class="wpbn-field__head"><label for="' + id + '">' + o.label + '</label>' + tip(o.tip)
+        return '<div class="wpbn-field wpbn-field--device-number"><div class="wpbn-field__head"><label for="' + id + '">' + o.label + '</label>' + (o.tip ? tip(o.tip) : '')
             + devices({tablet:l[o.keys.tablet] != null, mobile:l[o.keys.mobile] != null}) + '</div>'
             + '<span class="wpbn-number-unit"><input id="' + id + '" data-inline="' + kind + '" data-' + kind + '="' + d + '" type="number" min="' + o.min + '" max="' + o.max[d] + '" step="' + o.step + '"'
             + ' value="' + (l[key] != null ? escape(l[key]) : '') + '" placeholder="' + escape(inlineFor(l, kind, d)) + '" aria-label="' + o.label + ' — ' + DEVICES[d][1] + '">'
@@ -640,6 +647,41 @@
         const toggle = '<label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + flag + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label>';
         if (!on) return '<div class="wpbn-field wpbn-field--check">' + toggle + '</div>';
         return respRange(base, label, o).replace(/<div class="wpbn-field__head"><label for="[^"]*">[^<]*<\/label>/, '<div class="wpbn-field__head">' + toggle);
+    }
+    /*
+     * Animation (WPBN_Animation): motion of the layer's own, running by itself from the moment the page loads,
+     * on top of its scroll motion. Its switch; on: its kind, where it starts and ends and how long a run takes
+     * (per device), then its delay, repeat and easing. The kinds and their fields come from boot.animations.
+     * An overlay has none (it stays put, as with the scroll).
+     */
+    const ANIM = boot.animations || null;
+    // Follow the mouse (Motion): its switch; on, how far the layer moves with the pointer at the scene's edge. One value for every
+    // device: only devices with a mouse have it. Layers in front moving further than those behind gives depth.
+    function mouseField(l) {
+        const toggle = withTip(check('use_mouse', 'Follow the mouse'), 'On computers: the layer moves a little as the pointer moves over the banner. Give front layers more than back ones for depth; negative moves against the pointer.');
+        return l.use_mouse ? toggle + range('mouse', 'Distance (px)', {min:-200, max:200, from:-80, to:80, note:'How far it moves with the pointer at the banner\'s edge.'}) : toggle;
+    }
+    function animationCard(l) {
+        if (!ANIM || l.type === 'overlay') return '';
+        const kinds = Object.keys(ANIM.types), type = ANIM.types[l.anim_type] || ANIM.types[kinds[0]];
+        // Its switch with the help behind an "i" beside it, as Shadow's; named after the kind while there is only one.
+        const id = 'wpbn-f-use_anim', name = kinds.length > 1 ? 'Animation' : type.switch;
+        const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_anim"' + (l.use_anim ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + escape(name) + '</span></label>'
+            + tip('Runs by itself, on top of the scroll motion: e.g. a photo slowly zooming in and out, or a title fading in.') + '</div></div>';
+        if (!l.use_anim) return card('Animation', toggle);
+        // Reset takes the kind's own start and end.
+        [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
+        const min = l.type === 'image' && l.fill_scene && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
+        const span = {min, max:type.max, from:Math.max(min, type.span[0]), to:type.span[1]};
+        // What and when; then the kind's own fields; then how it runs.
+        return card('Animation', toggle
+            + '<div class="wpbn-row">' + (kinds.length > 1 ? select('anim_type', 'Type', Object.fromEntries(Object.entries(ANIM.types).map(([k, t]) => [k, t.label]))) : '') + withTip(select('anim_start', 'Starts', ANIM.starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.') + '</div>'
+            + (type.origin ? select('anim_origin', 'Direction', ANIM.origins) : '')
+            + respRange('anim_from', type.from, span)
+            + respRange('anim_to', type.to, Object.assign({note:type.note}, span))
+            + respRange('anim_duration', 'Duration (s)', {min:ANIM.duration[0], max:ANIM.duration[1], from:1, to:30, step:0.1, note:'One run, from start to end.'})
+            + '<div class="wpbn-row">' + withTip(select('anim_repeat', 'Repeat', ANIM.repeats), 'Back & forth: to the end and back again, endlessly. Loop: from the start again each time. Once: it plays and stays at its end.') + select('anim_easing', 'Easing', ANIM.easings) + '</div>'
+            + range('anim_delay', 'Delay (s)', {min:ANIM.delay[0], max:ANIM.delay[1], to:10, step:0.1, note:'Before the first run, on every device: e.g. the title a moment after the photo.'}));
     }
     // Placed by class: the scene fills its block.
     // Placement by class only with the desktop Height on Auto (as WPBN_Settings::placed_by_class()).
@@ -657,10 +699,10 @@
     const customWidth = () => current().container === 'custom' || (current().container === 'theme' && !boot.themeContainer);
     function containerSelect(l) {
         const t = boot.themeContainer;
-        const help = 'The box this layer stands in, as wide as it, centred in the scene: its Position (X) is a share of it. Theme container: the page\'s content width'
-            + (t ? ' (' + t.name + ', ' + t.width + 'px' + (t.inner ? ', less its ' + t.inner / 2 + 'px padding on each side' : '') + ')' : ' (none found in this theme: the width below)')
-            + ', so the layer lines up with the content under the banner and follows the theme\'s setting. Full width: the whole scene'
-            + (l.type === 'image' ? ' (a photo and its cutout fill it: keep them both on Full width).' : '.');
+        const help = 'The area the layer is placed and sized in, centred in the scene. Theme container: the page\'s content width'
+            + (t ? ' (' + t.name + ', ' + t.width + 'px' + (t.inner ? ' less ' + t.inner / 2 + 'px padding on each side' : '') + ')' : ' (this theme has none: the width below is used)')
+            + ', so the layer lines up with the content below the banner. Full width: the whole scene. Custom: a width of your own'
+            + (l.type === 'image' ? '. Keep a photo and its cutout both on Full width.' : '.');
         return withTip(select('container', 'Container', {theme:'Theme container', full:'Full width', custom:'Custom'}), help);
     }
     // Container (and Position beside it, for a title or an overlay), then its width for Custom.
@@ -817,7 +859,9 @@
     // A device's height as [number, unit]: tablet and mobile without a unit of their own take the larger screen's (as WPBN_Settings::heights()).
     // An overlay's Width per device, kept as its Height is (WPBN_Settings::OVERLAY_WIDTHS): % of its container, px or vw.
     const WIDTH = {desktop:['overlay_width','overlay_width_unit',100], tablet:['tablet_overlay_width','tablet_overlay_width_unit',100], mobile:['mobile_overlay_width','mobile_overlay_width_unit',100]};
-    const SIZE = {height:HEIGHT, width:WIDTH};
+    // A title's or a Text layer's Width per device (WPBN_Settings::TEXT_WIDTHS): Auto (its text's), % of its container, px or vw.
+    const TEXT_WIDTH = {desktop:['text_width','text_width_unit',600], tablet:['tablet_text_width','tablet_text_width_unit',600], mobile:['mobile_text_width','mobile_text_width_unit',600]};
+    const SIZE = {height:HEIGHT, width:WIDTH, textwidth:TEXT_WIDTH};
     // A device's size as [number, unit]: tablet and mobile without a unit of their own take the larger screen's (as WPBN_Settings::heights()).
     function effSize(kind, d, obj) {
         const [key, unitKey] = SIZE[kind][d];
@@ -826,19 +870,22 @@
     const effHeight = (d, obj) => effSize('height', d, obj || scene);
     const UNIT_NAMES = {auto:'Auto', px:'px', vh:'vh', vw:'vw', '%':'%'};
     // An overlay's Height and Width (WPBN_Settings::LAYER_UNITS, WIDTH_UNITS): no Auto; in %, at most all of the scene / its container.
-    const LAYER_UNITS = {height:['%', 'px', 'vh'], width:['%', 'px', 'vw']};
+    const LAYER_UNITS = {height:['%', 'px', 'vh'], width:['%', 'px', 'vw'], textwidth:['auto', '%', 'px', 'vw']};
     const LAYER_UNIT_HELP = {
         height:{'%':'A share of the scene\'s height: 100 is all of it.', px:'A fixed height.', vh:'A share of the screen height: 100 is the whole screen.'},
         width:{'%':'A share of its container: 100 is all of it.', px:'A fixed width.', vw:'A share of the screen width: 100 is the whole screen.'},
+        // A title's or a Text layer's: its lines wrap at it, and it is never wider than its container.
+        textwidth:{auto:'As wide as its text: lines break only at the edge of its container.', '%':'A share of its container: the lines wrap there; 100 is all of it.',
+            px:'A fixed width: the lines wrap there (never wider than its container).', vw:'A share of the screen width: the lines wrap there (never wider than its container).'},
         // An image object's Height: Auto, the image's own proportions at its Width.
         image:{auto:'As tall as the image at its width (its own proportions): nothing is cropped.', '%':'A share of the scene\'s height: 100 is all of it.', px:'A fixed height.', vh:'A share of the screen height: 100 is the whole screen.'}
     };
     // The scene's Height, or (obj: an overlay) the layer's Height or Width (kind), as the scene's Height: the number,
     // its unit, Inherit on tablet / mobile.
     function heightField(obj, kind) {
-        const layer = !!obj, o = obj || scene, k = kind || 'height', label = k === 'width' ? 'Width' : 'Height';
+        const layer = !!obj, o = obj || scene, k = kind || 'height', wide = k !== 'height', label = wide ? 'Width' : 'Height';
         const d = device(), [key, unitKey] = SIZE[k][d], own = o[unitKey] != null, [number, unit] = effSize(k, d, o), id = 'wpbn-f-' + key, off = unit === 'auto';
-        const [min, max] = unit === 'px' ? [layer ? 1 : 160, k === 'width' ? 3000 : 2400] : unit === 'auto' ? [1, 2400] : [1, layer && (unit === '%' || k === 'width') ? 100 : 200];
+        const [min, max] = unit === 'px' ? [layer ? 1 : 160, wide ? 3000 : 2400] : unit === 'auto' ? [1, wide ? 3000 : 2400] : [1, layer && (unit === '%' || wide) ? 100 : 200];
         const inherit = d === 'desktop' ? '' : '<option value=""' + (own ? '' : ' selected') + '>Inherit</option>';
         const dots = {tablet:o[SIZE[k].tablet[1]] != null, mobile:o[SIZE[k].mobile[1]] != null};
         return '<div class="wpbn-field wpbn-field--height">' + head(id, label, (layer ? '' : heightTip()) + devices(dots)) + '<div class="wpbn-field__row">'
@@ -932,15 +979,17 @@
             const d = device();
             // No name field: a layer's name is given when it is added ("Title 2", "Image 3"; a copy adds "copy") and shows in the layer list.
             let first = '', cards = '';
-            if (l.type === 'image') first += picker(l);
+            if (l.type === 'image') first += picker(l)
+                // Decorative: no alt text read out (a cutout of the photo behind it would be described twice).
+                + withTip(check('decorative', 'Decorative image'), 'Screen readers skip it. Turn on for a cutout or a second copy of a photo, so it is not described twice. Off: the alt text from the media library.');
             else if (l.type === 'overlay') {
                 // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
                 first += fillChoice(l) + (l.use_gradient ? gradientField(l)
-                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'The layers under this one in the list are shaded, those above it are not. A see-through color lets them show through. Its size: Position and size.'))
+                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size and place: Position and size.'))
                     // Blur, for Color and Gradient alike.
                     + deviceNumberField(l, 'blur');
             } else if (l.type === 'shortcode') {
-                first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It is shown in this layer\'s place: layers above it in the list cover it. It can be clicked and swiped. Its Width: Position and size; its height is its own. Update shows it in the preview.');
+                first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It shows in this layer\'s place (layers above it cover it) and can be clicked and swiped. Its height is its own. Press Update to see it in the preview.');
             } else if (l.type === 'button') {
                 // As WP Top Info Bar's: its text and link, then its look.
                 first += field('button_text', 'Text', 'text')
@@ -950,14 +999,14 @@
                 Object.entries(BUTTON_SIZES).forEach(([value, [name]]) => { sizes[value] = name; });
                 cards += card('Button style', buttonChoice(l, 'button_style', 'Background', {filled:'Filled', bordered:'Border', underline:'Underline'})
                     + needs(buttonChoice(l, 'button_shape', 'Corners', {square:'Square', rounded:'Rounded', round:'Round'}), 'corners')
-                    + withTip(respSelect('button_size', 'Size', sizes), 'WoodMart\'s button sizes: its padding, height and font size. The icons choose the device; tablet and mobile can follow the larger screen.')
+                    + withTip(respSelect('button_size', 'Size', sizes), 'Preset sizes: padding, height and font size together.')
                     + '<div class="wpbn-colors">' + withTip(colorField('button_color', 'Fill / border color', {alpha:true, def:'#2271b1'}), 'Filled: the button\'s color; Border and Underline: their line\'s.')
                     + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>');
             } else if (l.type === 'richtext') {
                 // WordPress's editor, as WP Swiper's slide texts (startEditor() after the fields are drawn); a plain box without it.
                 first += withTip('<div class="wpbn-field wpbn-richtext">' + head(EDITOR_ID, 'Text') + '<textarea id="' + EDITOR_ID + '" data-key="content" rows="6">' + escape(l.content || '') + '</textarea></div>',
-                    'Paragraph or heading (the first list), bold, italic, underline, a color, alignment, lists and links. Enter starts a paragraph, Shift + Enter a new line. Headings keep the theme\'s font and size; links can be clicked on the banner.');
-                cards += card('Text style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: the theme\'s (they follow Theme Settings), custom, Adobe, system and Google fonts. A Google font is loaded with the banner. Default: the theme\'s text font.')
+                    'Choose Paragraph or a heading in the first menu of the toolbar. Enter starts a new paragraph, Shift + Enter a new line. Headings keep the theme\'s font and size; links can be clicked on the banner.');
+                cards += card('Text style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s text font.')
                         : withTip(field('font_family', 'Font', 'text'), 'Empty: the page\'s text font. As CSS takes it, e.g. "Open Sans", sans-serif; the font must be loaded on the site.'))
                     + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
                     + deviceNumberField(l, 'font')
@@ -965,16 +1014,16 @@
                     + shadowField(l));
             } else {
                 first += withTip(textarea('text', 'Title'), 'Enter starts a new line. Wrap words in <u></u> to show them in the Accent color, e.g. Discover <u>Norway</u>.')
-                    + withTip(select('tag', 'Heading', {h1:'h1', h2:'h2', h3:'h3', h4:'h4', h5:'h5'}), 'h1 if the banner\'s title is the page\'s title (one h1 per page); otherwise h2, or a lower one (h3–h5) under other headings. The title takes the theme\'s heading font unless a font is set below.');
+                    + withTip(select('tag', 'Heading', {h1:'h1', h2:'h2', h3:'h3', h4:'h4', h5:'h5'}), 'h1 only if this title is the page\'s main title (one h1 per page); otherwise h2, or h3–h5 under other headings. It matters for SEO and screen readers; the size and weight come from the settings below.');
                 // Font and Weight on one row with the font sample under them, then Font size, then Color and Accent color.
-                cards += card('Title style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: the theme\'s (they follow Theme Settings), custom, Adobe, system and Google fonts. A Google font is loaded with the banner. Default: the theme\'s title font.')
+                cards += card('Title style', '<div class="wpbn-row">' + (FONTS ? withTip(fontField(l), 'Woodmart\'s fonts: theme fonts (they follow Theme Settings), custom, Adobe, system and Google fonts; a Google font loads with the banner. Empty: the theme\'s heading font.')
                         : withTip(field('font_family', 'Font', 'text'), 'Empty: the theme\'s heading font. As CSS takes it, e.g. "Playfair Display", serif; the font must be loaded on the site.'))
                     + weightField(l) + '</div>' + (FONTS ? '<p class="wpbn-font-sample" id="wpbn-font-sample" aria-hidden="true"></p>' : '')
                     // Font size and Letter spacing (per device; each a row of its own: the device icons beside the label), Case and Style, the colours, then Shadow.
                     + deviceNumberField(l, 'font') + deviceNumberField(l, 'spacing')
                     + '<div class="wpbn-row">' + select('text_transform', 'Case', {none:'Normal', uppercase:'UPPERCASE', lowercase:'lowercase', capitalize:'Capitalize'}) + select('font_style', 'Style', {normal:'Normal', italic:'Italic'}) + '</div>'
                     + '<div class="wpbn-colors">' + colorField('color', 'Color', {alpha:true, def:boot.layer.color})
-                    + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title, as in Woodmart\'s titles. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>'
+                    + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>'
                     + shadowField(l));
             }
             html = '<legend>Layer settings</legend>'
@@ -984,12 +1033,16 @@
                     + containerField(l)
                     // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
                     + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
+                    // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
+                    + (l.type === 'text' || l.type === 'richtext' ? heightField(l, 'textwidth') : '')
                     // Scale and Opacity: image layers only (a title has neither).
-                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : 'Zoom: the image fills the scene and grows by this much (the edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100})))
-                + card('Motion', optionalRange(l, 'move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400})
-                    + optionalRange(l, 'move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative values move the layer up.'})
+                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100})))
+                + card('Motion', optionalRange(l, 'move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
+                    + optionalRange(l, 'move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: up.'})
                     + optionalRange(l, 'zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
-                    + optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out.'})));
+                    + optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out.'})
+                    + mouseField(l)))
+                + animationCard(l);
         }
         // The picker and the Font list belong to fields about to be redrawn.
         closePicker(); closeFonts(); stopEditor();
@@ -1009,7 +1062,43 @@
         if (focusField) { const button = $('settings').querySelector('[data-field-device="' + value + '"]'); if (button) button.focus(); }
     }
     // The preview is redrawn only by Update; until then the button is lit (as WP Swiper's).
-    function changed() { sync(); $('refresh').classList.add('is-stale'); }
+    function changed() { sync(); $('refresh').classList.add('is-stale'); clearTimeout(historyTimer); historyTimer = setTimeout(remember, HISTORY_PAUSE); }
+    /*
+     * Undo and Redo: the scene as it was after each change since the page opened (the last HISTORY_MAX). Changes close
+     * together (a slider dragged, a number typed) are one step: the scene is kept once nothing has changed for HISTORY_PAUSE ms.
+     */
+    function remember() {
+        clearTimeout(historyTimer); historyTimer = 0;
+        const now = JSON.stringify(scene);
+        if (now !== history[history.length - 1]) { history.push(now); if (history.length > HISTORY_MAX) history.shift(); future = []; }
+        historyButtons();
+    }
+    function historyButtons() { $('undo').disabled = history.length < 2; $('redo').disabled = !future.length; }
+    // The scene as it was: its fields drawn again, the same layer chosen where there still is one.
+    function restore(json) {
+        closePicker(); closeFonts();
+        const data = JSON.parse(json);
+        Object.keys(scene).forEach(key => { delete scene[key]; });
+        Object.assign(scene, data);
+        adding = false;
+        if (selected >= scene.layers.length) selected = scene.layers.length - 1;
+        list(); settings(); sync(); $('refresh').classList.add('is-stale');
+        historyButtons();
+    }
+    function undo() { remember(); if (history.length < 2) return; future.push(history.pop()); restore(history[history.length - 1]); }
+    function redo() { remember(); if (!future.length) return; const next = future.pop(); history.push(next); restore(next); }
+    $('undo').onclick = undo;
+    $('redo').onclick = redo;
+    // Ctrl (⌘) + Z, Ctrl + Shift + Z or Ctrl + Y: not while typing in a text box (its own undo), nor with the Position window open.
+    document.addEventListener('keydown', event => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey || positionLayer) return;
+        const key = event.key.toLowerCase();
+        if (key !== 'z' && key !== 'y') return;
+        const t = event.target;
+        if (t && t.closest && (t.closest('textarea, [contenteditable="true"], .wp-editor-wrap') || (t.matches('input') && !t.matches('[type=range], [type=checkbox], [type=number], [type=button]')))) return;
+        event.preventDefault();
+        if (key === 'y' || event.shiftKey) redo(); else undo();
+    });
     app.addEventListener('input', event => {
         const input = event.target;
         if (input.dataset.inline) {
@@ -1067,6 +1156,14 @@
             const row = input.closest('.wpbn-field__row');
             if (row) row.querySelectorAll('input').forEach(other => { if (other !== input) other.value = value; });
         } else obj[key] = input.value;
+        // Another kind of animation: its own start and end (their units differ), the same on every device.
+        if (key === 'anim_type' && ANIM && ANIM.types[obj.anim_type]) {
+            [obj.anim_from, obj.anim_to] = ANIM.types[obj.anim_type].def;
+            // And its usual Repeat: a fade or a slide plays once (it comes in), a zoom goes back and forth.
+            obj.anim_repeat = ANIM.types[obj.anim_type].repeat || obj.anim_repeat;
+            ['tablet', 'mobile'].forEach(dv => { obj[dkey('anim_from', dv)] = null; obj[dkey('anim_to', dv)] = null; });
+            settings(); changed(); return;
+        }
         refreshDots(input.closest('.wpbn-field')); refreshReset(input.closest('.wpbn-field'));
         if (key === 'target') { targetWarning(); heightHelp(); }
         // The font sample shows the title's text.
@@ -1087,7 +1184,7 @@
         refreshDots(event.target.closest('.wpbn-field'));
         // Image fit: Scale's help follows it.
         if (selected >= 0 && /^fit/.test(key)) { settings(); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
-        if (/(height|overlay_width)_unit$/.test(key)) { unitChanged(device(), /width/.test(key) ? 'width' : 'height'); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
+        if (/(height|overlay_width|text_width)_unit$/.test(key)) { unitChanged(device(), /text_width/.test(key) ? 'textwidth' : /width/.test(key) ? 'width' : 'height'); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
         changed();
     });
     app.addEventListener('click', event => {
@@ -1393,7 +1490,14 @@
     $('frame').onload=()=>{resize();frameState();measureShortcodes();$('frame').dataset.state='done';};
     new ResizeObserver(resize).observe($('preview-stage'));
     addEventListener('resize',resize);
-    document.getElementById('post').addEventListener('submit',sync);
+    // Settings too large to be saved (WPBN_Admin::MAX_DATA): the form is not sent, so nothing is lost.
+    document.getElementById('post').addEventListener('submit',function(e){
+        sync();
+        if(boot.maxData&&new Blob([$('data').value]).size>boot.maxData){
+            e.preventDefault();
+            alert(boot.tooLarge);
+        }
+    });
     // Position. An image layer: the point of the photo kept in view where its box crops it
     // (object-position), the whole photo shown, as WP Swiper's Image position; one for every
     // device, the frames show each device's crop. A text layer: where it stands on the device
@@ -1409,6 +1513,14 @@
     // An overlay's Height on a device as a share of the scene's (its px and vh in the window's screen).
     // Its Width as a share of the scene's (% of its container; px and vw in the window's screen).
     function overlayWidth(layer, d) { const [v, u] = effSize('width', d, layer); return u === '%' ? v * boxOf(d, layer).width / 100 : u === 'vw' ? v : v / sceneWidth(d) * 100; }
+    // A title's or a Text layer's own Width as a share of the scene, at most its container's (frontend.css max-width); Auto: null (its text's).
+    function textWidth(layer, d) {
+        if (layer.type !== 'text' && layer.type !== 'richtext') return null;
+        const [v, u] = effSize('textwidth', d, layer);
+        if (u === 'auto' || u == null) return null;
+        const box = boxOf(d, layer).width;
+        return Math.min(box, u === '%' ? v * box / 100 : u === 'vw' ? v : v / sceneWidth(d) * 100);
+    }
     function overlayHeight(layer, d) { const [v, u] = effHeight(d, layer), h = sceneHeight(d); return Math.min(100, u === '%' ? v : (u === 'vh' ? screenOf(d)[1] * v / 100 : v) / h * 100); }
     // An image object's Height as a share of the scene's; Auto: the image's proportions at its Width.
     function imageObjectHeight(layer, d) {
@@ -1529,6 +1641,9 @@
                 Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100)});
                 // A title: as wide as its text, at most its container (frontend.css).
                 if(textual(layer))Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
+                // Its own Width: as wide as set, its lines wrapping there; aligned within it as on the site (a title centred).
+                const own=textWidth(layer,device);
+                if(own!==null)Object.assign(item.style,{width:own+'%',textAlign:layer.type==='text'?'center':'left'});
                 // A text: its words (paragraphs on lines of their own), at its size, as wide as on the site.
                 if(layer.type==='richtext'){const doc=new DOMParser().parseFromString(String(layer.content||''),'text/html');doc.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,br').forEach(el=>el.after('\n'));Object.assign(item.style,{whiteSpace:'pre-line',color:layer.color,fontSize:fontFor(layer,device)*width/baseWidth+'px',lineHeight:'1.5'});item.textContent=doc.body.textContent.trim();canvas.append(item);return;}
                 // A shortcode: a dashed box as wide as its Width, its shortcode in it (its element is not drawn here).

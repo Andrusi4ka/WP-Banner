@@ -97,7 +97,7 @@ class WPBN_WPBakery {
             esc_html__('Edit scene', 'wp-banner'),
             esc_attr($name),
             esc_attr(self::EDIT_PARAM),
-            esc_html__('Opens in a new tab. Back here, a scene published there is in the list, chosen.', 'wp-banner'),
+            esc_html__('Opens in a new tab. When you come back, a scene you published there is chosen in the list.', 'wp-banner'),
             esc_url($list),
             $add // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped where it is built.
         );

@@ -600,7 +600,7 @@ const server=http.createServer((req,res)=>{
         const textIndex=(await data()).layers.length-1, textOf=async()=>(await data()).layers[textIndex];
         assert.ok((await textOf()).type==='richtext' && (await textOf()).content==='<p>Your text here.</p>' && (await textOf()).font_size===18 && (await textOf()).container==='theme' && /^Text \d+$/.test((await textOf()).name),'A new text: a paragraph, 18px, in the theme container');
         assert.ok(await page.locator('[data-select="'+textIndex+'"] .wpbn-layer-thumb--richtext').count()===1 && /^Text/.test(await page.locator('[data-select="'+textIndex+'"] small').textContent()),'In the layer list: Text');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Text style','Position and size','Motion'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Text style','Position and size','Motion','Animation'],'Its cards');
         assert.ok(await page.locator('#wpbn-f-content').count()===1 && await page.locator('#wpbn-f-font_size').inputValue()==='18' && await page.locator('[data-action="position"]').count()===1 && await page.locator('#wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-f-text_transform, #wpbn-f-accent_color, #wpbn-f-use_scale').count()===0,'Its text box, Font size, Shadow and Position; no Case, Accent color or Scale');
         assert.match(await page.locator('.wpbn-font__name').textContent(),/^Default/,'Default font: the theme\'s text font');
         await page.fill('#wpbn-f-content','<p style="text-align: center">Hello <strong>world</strong> <a href="#x">link</a></p><ul><li>One</li></ul><script>alert(1)</script>');
@@ -617,7 +617,7 @@ const server=http.createServer((req,res)=>{
         await addElement('shortcode');
         const scIndex=(await data()).layers.length-1, scOf=async()=>(await data()).layers[scIndex];
         assert.ok((await scOf()).type==='shortcode' && (await scOf()).container==='theme' && /^Shortcode \d+$/.test((await scOf()).name) && await page.locator('[data-select="'+scIndex+'"] .wpbn-layer-thumb--shortcode').count()===1,'A new shortcode layer, in the theme container, its icon in the list');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Position and size','Motion'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Position and size','Motion','Animation'],'Its cards');
         assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-height').count()===0,'Its Width; no Scale, no Height');
         await page.fill('#wpbn-f-shortcode','[wp_swiper id="12"]');
         await page.fill('#wpbn-f-overlay_width','60');
@@ -666,7 +666,7 @@ const server=http.createServer((req,res)=>{
         const buttonIndex=(await data()).layers.length-1, buttonOf=async()=>(await data()).layers[buttonIndex];
         assert.ok((await buttonOf()).type==='button' && (await buttonOf()).button_text==='Learn more' && (await buttonOf()).container==='theme' && /^Button \d+$/.test((await buttonOf()).name),'A new button: Learn more, in the theme container');
         assert.ok(await page.locator('[data-select="'+buttonIndex+'"] .wpbn-layer-thumb--button').count()===1,'In the layer list: its icon');
-        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Button style','Position and size','Motion'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-settings .wpbn-subheading').allTextContents(),['Layer','Button style','Position and size','Motion','Animation'],'Its cards');
         assert.ok(await page.locator('#wpbn-f-button_new_tab').isDisabled() && await page.locator('#wpbn-f-use_scale, #wpbn-f-font_size').count()===0,'Open in a new window greyed without a link; no Scale, no Font size');
         await page.fill('#wpbn-f-button_url','https://example.com/book');
         assert.ok(!(await page.locator('#wpbn-f-button_new_tab').isDisabled()),'With a link: Open in a new window');
@@ -796,8 +796,49 @@ const server=http.createServer((req,res)=>{
         assert.equal(Math.round(await objFrame.locator('.wpbn-layer--object').evaluate(el=>el.getBoundingClientRect().height)),200,'Its height: 200px');
         await photo.click('label[for="wpbn-f-fill_scene"]');
         assert.ok((await photoData()).fill_scene===true && await photo.locator('#wpbn-f-overlay_width').count()===0,'Back on: it fills the scene again (its object size kept)');
+        // Decorative: off by default; on, screen readers skip the image (WPBN_Render: alt="").
+        assert.equal(await photo.locator('#wpbn-f-decorative').isChecked(),false,'Decorative off by default');
+        await photo.click('label[for="wpbn-f-decorative"]');
+        assert.equal((await photoData()).decorative,true,'Decorative on');
         await photo.close();
+        // A new scene: Animation, Undo / Redo, Follow the mouse, a title's Width, the tips' places.
+        const ed=await browser.newPage({viewport:{width:1600,height:1000}});ed.on('pageerror',e=>errors.push(e.message));
+        await ed.goto('http://127.0.0.1:'+server.address().port);
+        const edTitle=async()=>JSON.parse(await ed.locator('#wpbn-data').inputValue()).layers[0];
+        await ed.click('#wpbn-add-toggle');await ed.click('#wpbn-settings [data-add="text"]');
+        // Animation: off, its fields hidden; on: Zoom with its Direction, On load. Another kind: its own start, end and Repeat.
+        assert.equal(await ed.locator('#wpbn-f-anim_type').count(),0,'Animation off: its fields hidden');
+        await ed.click('label[for="wpbn-f-use_anim"]');
+        assert.ok(await ed.locator('#wpbn-f-anim_type').inputValue()==='zoom' && await ed.locator('#wpbn-f-anim_origin').count()===1 && await ed.locator('#wpbn-f-anim_start').inputValue()==='load','On: Zoom, its Direction, On load');
+        // Undo keeps a step once nothing has changed for a moment.
+        await ed.waitForTimeout(600);
+        await ed.selectOption('#wpbn-f-anim_type','fade');
+        let edT=await edTitle();
+        assert.ok(edT.anim_type==='fade' && edT.anim_from===0 && edT.anim_to===100 && edT.anim_repeat==='once' && await ed.locator('#wpbn-f-anim_origin').count()===0,'Fade: 0 → 100, once, no Direction');
+        assert.equal(await ed.locator('#wpbn-undo').isDisabled(),false,'Undo available');
+        await ed.click('#wpbn-undo');
+        assert.ok(await ed.locator('#wpbn-f-anim_type').inputValue()==='zoom' && (await edTitle()).anim_type==='zoom','Undo: back to Zoom, the saved data too');
+        await ed.click('#wpbn-redo');
+        assert.equal(await ed.locator('#wpbn-f-anim_type').inputValue(),'fade','Redo: Fade again');
+        await ed.locator('#wpbn-layers').focus();await ed.keyboard.press('Control+z');
+        assert.equal(await ed.locator('#wpbn-f-anim_type').inputValue(),'zoom','Ctrl + Z');
+        // Follow the mouse: its Distance once on.
+        await ed.click('label[for="wpbn-f-use_mouse"]');
+        assert.ok((await edTitle()).use_mouse===true && await ed.locator('#wpbn-f-mouse').inputValue()==='20','Follow the mouse: on, 20px');
+        // A title's Width: Auto; 50% of its container (93.125% of the scene here), drawn so in the Position window.
+        assert.equal(await ed.locator('[data-key="text_width_unit"]').inputValue(),'auto','Width: Auto');
+        await ed.selectOption('[data-key="text_width_unit"]','%');
+        await ed.fill('#wpbn-f-text_width','50');
+        assert.ok((await edTitle()).text_width_unit==='%' && (await edTitle()).text_width===50,'Width: 50%');
+        await ed.click('[data-action="position"]');
+        const edWidth=await ed.locator('.wpbn-focus__stage .wpbn-position-target').evaluate(el=>el.style.width);
+        assert.ok(Math.abs(parseFloat(edWidth)-93.125/2)<0.1,'The Position window draws it at its Width ('+edWidth+')');
+        await ed.click('.wpbn-modal__cancel');
+        // Each "i" right after its label, on its line (switches too).
+        const tipsOff=await ed.evaluate(()=>[...document.querySelectorAll('#wpbn-settings .wpbn-tip')].filter(t=>t.offsetParent).map(t=>{const label=(t.closest('.wpbn-field')||t.parentElement).querySelector('label, .wpbn-field__label'),a=t.getBoundingClientRect(),b=label.getBoundingClientRect();return Math.abs((a.top+a.height/2)-(b.top+b.height/2))<2 && a.left>=b.right-1 && a.left-b.right<14 ? null : label.textContent.trim();}).filter(Boolean));
+        assert.deepEqual(tipsOff,[],'Every tip beside its label');
+        await ed.close();
         assert.deepEqual(errors,[]);
-        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll.');
+        console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, decorative images, tips.');
     } finally {if(browser)await browser.close();server.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;server.close();});
