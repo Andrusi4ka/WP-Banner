@@ -70,7 +70,7 @@
     // Settings with a switch (as WPBN_Settings::OPTIONAL): they apply only with it on; off, they have their value at rest.
     // base: [switch, value when off, image layers only].
     // An image layer's Width is always the scene's (100%), as WPBN_Settings::effective().
-    const OPTIONAL = {scale:['use_scale', 100, true], opacity:['use_opacity', 100, true],
+    const OPTIONAL = {scale:['use_scale', 100, true], opacity:['use_opacity', 100, true], rotate:['use_rotate', 0, false],
         move_x:['use_move_x', 0, false], move_y:['use_move_y', 0, false], zoom:['use_zoom', 0, false],
         // Off: the layer keeps its Opacity to the end.
         end_opacity:['use_end_opacity', null, false]};
@@ -99,11 +99,11 @@
     }
     // Reset, beside each slider, for the device being edited only. Desktop: back to the
     // default below. Tablet / mobile: its own value cleared, so it follows the larger screen again.
-    const DEFAULTS = {width:100, scale:100, opacity:100, move_x:0, move_y:0, zoom:0, end_opacity:0,
+    const DEFAULTS = {width:100, scale:100, opacity:100, move_x:0, move_y:0, zoom:0, end_opacity:100,
         font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size,
         anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse,
         // Filters (an image layer's, a Shape object's) at rest, and a Shape object's Edge and frosted glass.
-        f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, stroke:0, glass_blur:12};
+        rotate:0, enter_distance:60, enter_scale:80, enter_duration:1, enter_delay:0, f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, stroke:0, glass_blur:12};
     // Is there something to reset? key: the stored key on this device; base: a per-device setting's name (null for a key of its own).
     function canReset(l, key, base) {
         if (base && key !== base) return l[key] != null;
@@ -690,20 +690,38 @@
         const toggle = withTip(check('use_mouse', 'Follow the mouse'), 'On computers: the layer moves a little as the pointer moves over the banner. Give front layers more than back ones for depth; negative moves against the pointer.');
         return l.use_mouse ? toggle + range('mouse', 'Distance (px)', {min:-200, max:200, from:-80, to:80, note:'How far it moves with the pointer at the banner\'s edge.'}) : toggle;
     }
+    /*
+     * Entrance animation (WPBN_Entrance): how the layer comes in, once: its switch; on: its kind, when it starts, a slide's
+     * distance or a zoom's start size, its duration, delay and easing. Not for a Shape layer.
+     */
+    const ENTER = boot.entrance || null;
+    function entranceCard(l) {
+        if (!ENTER || l.type === 'shape') return '';
+        const toggle = withTip(check('use_enter', 'Entrance animation'), 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
+        if (!l.use_enter) return card('Entrance animation', toggle);
+        const starts = ANIM ? ANIM.starts : {load:'On load', visible:'In view'};
+        return card('Entrance animation', toggle
+            + '<div class="wpbn-row">' + select('enter_type', 'Type', ENTER.types) + withTip(select('enter_start', 'Starts', starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.') + '</div>'
+            + (/^slide/.test(l.enter_type) ? range('enter_distance', 'Distance (px)', {min:0, max:1000, to:300, note:'How far away it starts.'}) : '')
+            + (l.enter_type === 'zoom' ? range('enter_scale', 'Start size (%)', {min:10, max:300, from:50, to:150, note:'Under 100: it grows into place; over 100: it shrinks into place.'}) : '')
+            + range('enter_duration', 'Duration (s)', {min:ENTER.duration[0], max:ENTER.duration[1], step:0.1, to:3})
+            + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, note:'E.g. the title a moment after the photo.'})
+            + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : ''));
+    }
     function animationCard(l) {
         if (!ANIM || l.type === 'overlay') return '';
         const kinds = Object.keys(ANIM.types), type = ANIM.types[l.anim_type] || ANIM.types[kinds[0]];
         // Its switch with the help behind an "i" beside it, as Shadow's; named after the kind while there is only one.
         const id = 'wpbn-f-use_anim', name = kinds.length > 1 ? 'Animation' : type.switch;
         const toggle = '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="use_anim"' + (l.use_anim ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + escape(name) + '</span></label>'
-            + tip('Runs by itself, on top of the scroll motion: e.g. a photo slowly zooming in and out, or a title fading in.') + '</div></div>';
-        if (!l.use_anim) return card('Animation', toggle);
+            + tip('Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.') + '</div></div>';
+        if (!l.use_anim) return card('Loop animation', toggle);
         // Reset takes the kind's own start and end.
         [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
         const min = l.type === 'image' && l.fill_scene && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
         const span = {min, max:type.max, from:Math.max(min, type.span[0]), to:type.span[1]};
         // What and when; then the kind's own fields; then how it runs.
-        return card('Animation', toggle
+        return card('Loop animation', toggle
             + '<div class="wpbn-row">' + (kinds.length > 1 ? select('anim_type', 'Type', Object.fromEntries(Object.entries(ANIM.types).map(([k, t]) => [k, t.label]))) : '') + withTip(select('anim_start', 'Starts', ANIM.starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.') + '</div>'
             + (type.origin ? select('anim_origin', 'Direction', ANIM.origins) : '')
             + respRange('anim_from', type.from, span)
@@ -886,6 +904,19 @@
         }
         return html;
     }
+    // A layer's name (the layer list shows it), the top field of its settings.
+    const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>';
+    // A layer's turn around its middle, per device (degrees, clockwise; WPBN_Settings::RESPONSIVE rotate).
+    /*
+     * Scroll animation: one switch for the whole card (use_scroll; a layer's own motion switches follow it, WPBN_Settings::sanitize());
+     * on, its fields with no switches of their own.
+     */
+    function scrollCard(o, fields) {
+        const toggle = withTip(check('use_scroll', 'Scroll animation'), 'Moves the layer as the page scrolls: from where it is at the top of the page to these values once the banner has scrolled out of view.');
+        return card('Scroll animation', o.use_scroll ? toggle + fields : toggle);
+    }
+    // Behind its switch (as Scale): off, the switch alone (in a head row, so its tip stays beside it); on, the slider per device.
+    const rotateField = () => withTip(current().use_rotate ? optionalRange(current(), 'rotate', 'Rotation (°)', {min:-180, max:180}) : check('use_rotate', 'Rotation (°)'), 'Turns the layer around its middle; negative: anticlockwise. A photo that fills the scene grows so its corners never show.');
     // Filters (an image layer's, a Shape object's): WPBN_Settings::FILTERS.
     const FILTER_FIELDS = [['f_grayscale', 'Black and white (%)', 0, 100], ['f_blur', 'Blur (px)', 0, 40], ['f_brightness', 'Brightness (%)', 0, 200], ['f_contrast', 'Contrast (%)', 0, 200], ['f_saturate', 'Saturation (%)', 0, 300]];
     const filterFields = () => FILTER_FIELDS.map(([key, label, min, max]) => range(key, label, {min, max})).join('');
@@ -894,7 +925,7 @@
     // A Shape layer's settings: its SVG and how it fits the scene; with an object chosen, that object's.
     function shapeSettings(l) {
         const o = selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
-        const svg = card('Shape', withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
+        const svg = card('Shape', (o ? '' : nameField()) + withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
         if (!o) {
             return '<legend>Layer settings</legend>' + svg
                 + (shapes[l.shape] ? card('Fit', withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch'}),
@@ -934,7 +965,7 @@
             + card('Filters', needsAll(filterFields(), 'pictured'))
             + card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
                 + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged'))
-            + card('Motion', range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
+            + scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
                 + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'Negative: up.'}));
     }
     // An SVG chosen on this computer: sent to the server, which cleans it and keeps it in the media library.
@@ -978,7 +1009,7 @@
         box.replaceChildren();
         if (!scene.layers.length) { box.innerHTML = '<p class="wpbn-empty">Add a background image, a title and a transparent front image.</p>'; return; }
         for (let i = scene.layers.length - 1; i >= 0; i--) {
-            const l = scene.layers[i], name = escape(l.name);
+            const l = scene.layers[i], name = escape(l.name || TYPE_NAMES[l.type] || 'Layer');
             // Not draggable: the browser's own image drag would stop the row's.
             const thumb = l.type === 'overlay'
                 ? '<span class="wpbn-layer-thumb wpbn-layer-thumb--overlay" aria-hidden="true"><span style="background:' + escape(overlayFill(l)) + '"></span></span>'
@@ -1183,13 +1214,9 @@
         } else {
             const l = scene.layers[selected];
             const d = device();
-            // No name field: a layer's name is given when it is added ("Title 2", "Image 3"; a copy adds "copy") and shows in the layer list.
             let first = '', cards = '';
-            if (l.type === 'image') first += picker(l)
-                // Decorative: no alt text read out (a cutout of the photo behind it would be described twice).
-                + withTip(check('decorative', 'Decorative image'), 'Screen readers skip it. Turn on for a cutout or a second copy of a photo, so it is not described twice. Off: the alt text from the media library.')
-                // Shadow along its outline (the title's Shadow block, its keys).
-                + shadowField(l);
+            // An image: its picture here; its Shadow (along its outline: the title's block, its keys) in Position and size.
+            if (l.type === 'image') first += picker(l);
             else if (l.type === 'overlay') {
                 // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
                 first += fillChoice(l) + (l.use_gradient ? gradientField(l)
@@ -1236,23 +1263,27 @@
             }
             html = '<legend>Layer settings</legend>'
                 + (d === 'desktop' ? '' : '<p class="wpbn-device-note"><span class="dashicons dashicons-' + DEVICES[d][0] + '" aria-hidden="true"></span><span>' + DEVICES[d][1] + ' values. Settings without a green dot follow ' + DEVICES[UP[d]][1] + '; clear a number to follow it again.</span></p>')
-                + card(l.type === 'overlay' ? 'Fill' : 'Layer', first) + cards
+                // Its name first (shown in the layer list; given when it is added: "Title 2", a copy adds "copy"); an overlay's Fill its own card.
+                + (l.type === 'overlay' ? card('Layer', nameField()) + card('Fill', first) : card('Layer', nameField() + first)) + cards
                 // An image's Filters (WPBN_Settings::FILTERS): e.g. the photo in black and white, a Shape object showing it in color.
                 + (l.type === 'image' ? card('Filters', filterFields()) : '')
-                + (l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l)) + card('Motion', optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'})) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
+                + (l.type === 'overlay' ? card('Position and size', containerField(l) + heightField(l, 'width') + heightField(l) + rotateField()) + scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'})) : card('Position and size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
                     + containerField(l)
                     // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
                     + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
                     // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
                     + (l.type === 'text' || l.type === 'richtext' ? heightField(l, 'textwidth') : '')
                     // Scale and Opacity: image layers only (a title has neither).
-                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100})))
-                + card('Motion', optionalRange(l, 'move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
-                    + optionalRange(l, 'move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: up.'})
-                    + optionalRange(l, 'zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
-                    + optionalRange(l, 'end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out.'})
-                    + mouseField(l)))
-                + animationCard(l);
+                    + (l.type !== 'image' ? '' : optionalRange(l, 'scale', 'Scale (%)', {min:10, max:300, to:200, note:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + optionalRange(l, 'opacity', 'Opacity (%)', {min:0, max:100}))
+                    // Its turn (every layer but a Shape), then an image's Shadow.
+                    + rotateField() + (l.type === 'image' ? shadowField(l) : ''))
+                + scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: to the left.'})
+                    + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, note:'How far it moves by the end of the scroll; negative: up.'})
+                    + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, note:'Size added by the end of the scroll; negative shrinks the layer.'})
+                    + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, note:'The layer goes from its Opacity to this one as the page scrolls: 0 fades it out, 100 leaves it as it is.'}))
+                // Follow the mouse: a card of its own (it is not the scroll's; user's choice, 2026-11-09).
+                + card('Follow the mouse', mouseField(l)))
+                + entranceCard(l) + animationCard(l);
         }
         // The picker and the Font list belong to fields about to be redrawn.
         closePicker(); closeFonts(); stopEditor();
@@ -1347,6 +1378,8 @@
         const obj = current();
         if (input.type === 'checkbox') {
             obj[key] = input.checked;
+            // Scroll animation: a layer's travel, zoom and opacity at the end on or off together (WPBN_Settings::sanitize()).
+            if (key === 'use_scroll' && obj.type) ['use_move_x', 'use_move_y', 'use_zoom', 'use_end_opacity'].forEach(flag => { obj[flag] = input.checked; });
             // Placement: a class ready to copy; the height note follows it.
             // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
             if (key === 'fill_scene' && !input.checked && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
@@ -1388,8 +1421,8 @@
         if (key === 'text' || key === 'content') refreshFontSample();
         // A button's link: Open in a new window applies with one; a Shape object's Edge color, with an Edge.
         if (key === 'button_url' || key === 'stroke') applyStates();
-        // An overlay's thumbnail shows its fill.
-        if (key === 'color' && obj.type === 'overlay') list();
+        // An overlay's thumbnail shows its fill; a layer's name shows in the list.
+        if ((key === 'color' && obj.type === 'overlay') || key === 'name') list();
         changed();
     });
     app.addEventListener('change', event => {
@@ -1399,6 +1432,8 @@
         if (key === 'font_weight' || key === 'text_transform' || key === 'font_style') refreshFontSample();
         // Container: its width field shows for Custom only.
         if (key === 'container') { settings(); $('settings').querySelector('[data-key="container"]').focus(); }
+        // An Entrance animation's Type: its own fields (a slide's Distance, a zoom's Start size).
+        if (key === 'enter_type') { settings(); $('settings').querySelector('[data-key="enter_type"]').focus(); }
         refreshDots(event.target.closest('.wpbn-field'));
         // Image fit: Scale's help follows it.
         if (selected >= 0 && /^fit/.test(key)) { settings(); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
@@ -1899,7 +1934,7 @@
                 const v=key=>eff(layer,key,device);
                 const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');
                 const box=boxOf(device,layer);
-                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100)});
+                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100)+' rotate('+(Number(v('rotate'))||0)+'deg)'});
                 // A title: as wide as its text, at most its container (frontend.css).
                 if(textual(layer))Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
                 // Its own Width: as wide as set, its lines wrapping there; aligned within it as on the site (a title centred).

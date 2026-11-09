@@ -88,8 +88,9 @@ class WPBN_Render {
         if (!$url) { return ''; }
         $one = $ids['desktop'] === $ids['tablet'] && $ids['tablet'] === $ids['mobile'];
         $sizes = function ($device, $id) use ($s, $l) { return self::size_for($s, $l, $device, $id); };
-        // Decorative (a cutout of the photo behind it…): screen readers skip it; otherwise the media library's alt text.
-        $alt = empty($l['decorative']) ? trim((string) get_post_meta($ids['desktop'], '_wp_attachment_image_alt', true)) : '';
+        // Its alt text from the media library; a copy seen through a Shape layer's object (WPBN_Shape::inner()) none: the layer itself is read out.
+        // (A Decorative switch, alt="" for any image, was removed on 2026-11-09 at the user's request.)
+        $alt = empty($l['copy']) ? trim((string) get_post_meta($ids['desktop'], '_wp_attachment_image_alt', true)) : '';
         $img = '<img src="'.esc_url($url).'" alt="'.esc_attr($alt).'"'.$attrs;
         $srcset = self::srcset($ids['desktop']);
         if ($srcset) {
@@ -157,7 +158,7 @@ class WPBN_Render {
             $css .= '--wpbn-cw:'.$container.';';
             foreach (array_slice(self::SUFFIX, 1) as $device=>$suffix) { $own = WPBN_Container::css($l, $device); if ($own !== $container) { $css .= '--wpbn-cw'.$suffix.':'.$own.';'; } }
         }
-        $vars = array('x'=>array('left','%',1), 'y'=>array('top','%',1), 'width'=>array('width','%',1), 'opacity'=>array('opacity','',100), 'scale'=>array('scale','',100), 'fit'=>array('fit','',0));
+        $vars = array('x'=>array('left','%',1), 'y'=>array('top','%',1), 'width'=>array('width','%',1), 'opacity'=>array('opacity','',100), 'scale'=>array('scale','',100), 'rotate'=>array('rot','deg',1), 'fit'=>array('fit','',0));
         foreach ($vars as $key=>$var) {
             // An overlay's width: its own Width (below).
             if ($key === 'width' && WPBN_Settings::sized($l)) { continue; }
@@ -176,14 +177,14 @@ class WPBN_Render {
         $motion = array();
         foreach (WPBN_Settings::MOTION as $key) { $motion[$key] = array_values(WPBN_Settings::resolved($l, $key)); }
         $motion['fade'] = WPBN_Settings::fade($l);
-        foreach (array('x', 'y', 'width', 'scale') as $key) { $motion['box_'.$key] = array_values(WPBN_Settings::resolved($l, $key)); }
+        foreach (array('x', 'y', 'width', 'scale', 'rotate') as $key) { $motion['box_'.$key] = array_values(WPBN_Settings::resolved($l, $key)); }
         // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain, a title or text,
         // an overlay (it does not move) or a layer in a container does not.
         $motion['fill'] = !WPBN_Settings::fills($l) || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
         // Follow the mouse (px; frontend.js, devices with a mouse): an overlay stays put, as with the scroll.
         $motion['mouse'] = !empty($l['use_mouse']) && !in_array($l['type'], array('overlay', 'shape'), true) ? (float) $l['mouse'] : 0;
         // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
-        $motion['slack'] = WPBN_Animation::slack($l);
+        $motion['slack'] = WPBN_Entrance::slack($l, WPBN_Animation::slack($l));
         $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
         // An overlay's or a shortcode's Width per device: % of its container (as the other layers' widths), px or vw.
         if (WPBN_Settings::sized($l)) {
@@ -275,8 +276,6 @@ class WPBN_Render {
             // Its Filters (black and white, blur…: WPBN_Settings::filter_css()).
             $filter = WPBN_Settings::filter_css($l);
             if ($filter !== '') { $classes .= ' wpbn-layer--filter'; $css .= '--wpbn-filter:'.$filter.';'; }
-            // A copy of it seen through a Shape layer's object (WPBN_Shape::inner()): read out once, by the layer itself.
-            if (!empty($l['copy'])) { $l['decorative'] = true; }
             // The first scene's images load at once, its back one first; later scenes' when they come near.
             $attrs = $first ? ' decoding="async" loading="eager"'.(!$loaded ? ' fetchpriority="high"' : '') : ' decoding="async" loading="lazy"';
             $inner = self::image($s, $l, $attrs);
@@ -286,6 +285,11 @@ class WPBN_Render {
         if ($inner !== '' && WPBN_Animation::active($l)) {
             list($anim_class, $anim_css) = WPBN_Animation::wrapper($l);
             $inner = '<div class="'.esc_attr($anim_class).'" style="'.esc_attr($anim_css).'">'.$inner.'</div>';
+        }
+        // Entrance animation (WPBN_Entrance): around that, so it comes in once, then the Loop animation runs on.
+        if ($inner !== '' && WPBN_Entrance::active($l)) {
+            list($enter_class, $enter_css) = WPBN_Entrance::wrapper($l);
+            $inner = '<div class="'.esc_attr($enter_class).'" style="'.esc_attr($enter_css).'">'.$inner.'</div>';
         }
         return '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'">'.$inner.'</div>';
     }

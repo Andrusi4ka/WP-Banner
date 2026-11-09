@@ -16,15 +16,17 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 
 * Layers of images, titles, texts, buttons, shortcodes and overlays, the front one at the top of the list; drag a layer to change its depth, hide, duplicate or delete it from its row.
 * The classic mountain effect: the photo at the back, a title in the middle, a transparent cutout of the same photo in front.
-* Motion as the page scrolls, each behind a switch: horizontal and vertical travel, zoom, and the opacity a layer ends at. Image edges never show while the layers move.
+* Scroll animation, each behind a switch: horizontal and vertical travel, zoom, and the opacity a layer ends at. Image edges never show while the layers move.
 * Animation, for each layer: motion of its own that runs by itself, as well as the scroll motion, from the moment the page loads or once the banner is in view: zoom (with its direction), fade, or a slide sideways or up and down; start and end and duration per device, a delay, back and forth / from the start / once, and its easing. Paused while the banner is off the screen.
+* Entrance animation, for each layer: how it comes in, once — fading in, sliding in from a side or zooming into place — as the page loads or once the banner is in view; its duration, delay and easing. The Animation above (now Loop animation) is for motion that runs on.
 * Follow the mouse, for each layer: on computers it moves a little with the pointer; front layers moving more than back ones add depth.
 * Per device (desktop, tablet, mobile): position, scale, opacity, motion, image fit, the image itself and the text size; tablet and mobile follow the larger screen until given their own. Each slider resets to its default.
 * Scene attributes: an Element ID and extra CSS classes on the banner's block.
 * Image objects: an image that does not fill the scene (Fill the scene off), with its own Width and Height per device (Auto: its proportions), placed where you put it.
 * Image position: the part of a photo kept in view where its layer crops it, with each device's crop shown.
 * Text layers: paragraphs, headings and lists written in WordPress's editor (bold, italic, underline, colours, alignment, lists, links), with their font, size and width per device, colour and shadow.
-* Decorative images: screen readers skip a cutout or a second copy of a photo.
+* Rotation for each layer, per device; a turned photo that fills the scene grows so its corners never show.
+* A name for each layer, the first field of its settings.
 * Shortcode layers: another plugin's element (a slider…) by its shortcode, in its place among the layers, with its Width per device.
 * Button layers: text, a link (also in a new window), Filled / Border / Underline, Square / Rounded / Round corners, preset sizes per device, colours; clickable on the banner.
 * Overlay layers: a colour or a gradient shading the layers under it (e.g. the photo under the title), over the whole scene or a band of it (its container, a width and a height per device in %, px or vw / vh, its position); a blur of what is under it (frosted glass), per device; it can fade out as the page scrolls.

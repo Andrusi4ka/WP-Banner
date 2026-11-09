@@ -70,6 +70,8 @@ class WPBN_Admin {
         }
         // The Animation's kinds and choices (WPBN_Animation; admin.js animationCard()).
         $boot['animations'] = WPBN_Animation::editor();
+        // The Entrance animation's kinds (WPBN_Entrance; admin.js entranceCard()).
+        $boot['entrance'] = WPBN_Entrance::editor();
         // Shape layers' SVGs (WPBN_Shape::editor()) and the nonce to upload one.
         $boot['shapes'] = array();
         foreach ($s['layers'] as $l) {

@@ -127,7 +127,9 @@
                 return want;
             };
             const follows = mouse.matches ? Math.abs(Number(m.mouse) || 0) : 0, slack = Array.isArray(m.slack) ? m.slack : [[], []];
-            k = Math.max(k, need(cx, hw, W / 2, at('move_x'), follows + (Number(slack[0][d]) || 0)), need(cy, hh, H / 2, at('move_y'), follows + (Number(slack[1][d]) || 0)));
+            // Turned: grown so its corners stay out of the scene too (a W × H box turned by θ covers it at cos θ + sin θ × the longer side / the shorter).
+            const turn = Math.abs(at('box_rotate')) % 180 * Math.PI / 180, turned = Math.abs(Math.cos(turn)) + Math.abs(Math.sin(turn)) * Math.max(W / H, H / W);
+            k = Math.max(k, Math.max(need(cx, hw, W / 2, at('move_x'), follows + (Number(slack[0][d]) || 0)), need(cy, hh, H / 2, at('move_y'), follows + (Number(slack[1][d]) || 0))) * turned);
             fills.push([st, cx - W / 2, cy - H / 2]);
         });
         k = Math.min(MAX_BLEED, k);

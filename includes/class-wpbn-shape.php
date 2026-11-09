@@ -97,7 +97,7 @@ class WPBN_Shape {
     public static function object_defaults() {
         return array('key'=>'', 'name'=>'', 'hidden'=>false, 'fill'=>'layer', 'source'=>'', 'image'=>0, 'color'=>'#ffffff', 'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
             'glass_blur'=>12, 'glass_color'=>'rgba(255,255,255,0.15)', 'opacity'=>100, 'invert'=>false, 'stroke'=>0, 'stroke_color'=>'#ffffff',
-            'use_shadow'=>false, 'shadow_color'=>'rgba(0,0,0,0.5)', 'shadow_x'=>0, 'shadow_y'=>10, 'shadow_blur'=>25, 'move_x'=>0, 'move_y'=>0)
+            'use_shadow'=>false, 'shadow_color'=>'rgba(0,0,0,0.5)', 'shadow_x'=>0, 'shadow_y'=>10, 'shadow_blur'=>25, 'use_scroll'=>false, 'move_x'=>0, 'move_y'=>0)
             + array_map(function ($f) { return $f[2]; }, WPBN_Settings::FILTERS);
     }
     private static function num($value, $fallback, $min, $max) {
@@ -144,6 +144,8 @@ class WPBN_Shape {
         foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200), 'move_x'=>array(-1000, 1000), 'move_y'=>array(-1000, 1000)) as $key=>$range) {
             $out[$key] = self::num($o[$key] ?? null, $d[$key], $range[0], $range[1]);
         }
+        // Its Scroll animation's switch; saved before it: on where it had a travel.
+        $out['use_scroll'] = array_key_exists('use_scroll', $o) ? !empty($o['use_scroll']) : ($out['move_x'] || $out['move_y']);
         return $out + WPBN_Settings::filters($o);
     }
 
@@ -213,7 +215,7 @@ class WPBN_Shape {
                 if ($o['use_shadow']) { $effects[] = 'drop-shadow('.$o['shadow_x'].'px '.$o['shadow_y'].'px '.$o['shadow_blur'].'px '.$o['shadow_color'].')'; }
             }
             if ($effects) { $item .= 'filter:'.implode(' ', $effects).';'; }
-            $move = $o['move_x'] || $o['move_y'] ? ' data-move="'.esc_attr(wp_json_encode(array('x'=>$o['move_x'], 'y'=>$o['move_y']))).'"' : '';
+            $move = $o['use_scroll'] && ($o['move_x'] || $o['move_y']) ? ' data-move="'.esc_attr(wp_json_encode(array('x'=>$o['move_x'], 'y'=>$o['move_y']))).'"' : '';
             $html .= '<div class="wpbn-shape-item" style="'.esc_attr($item).'"'.$move.'><div class="wpbn-shape-clip'.($o['invert'] ? ' wpbn-shape-clip--invert' : '').'"'
                 .($clip !== '' ? ' style="'.esc_attr($clip).'"' : '').'>'.$content.'</div></div>';
         }

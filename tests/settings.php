@@ -67,6 +67,7 @@ function wp_kses($html, $tags) {
 require_once __DIR__.'/../includes/class-wpbn-settings.php';
 require_once __DIR__.'/../includes/class-wpbn-gradient.php';
 require_once __DIR__.'/../includes/class-wpbn-animation.php';
+require_once __DIR__.'/../includes/class-wpbn-entrance.php';
 
 function get_post_mime_type($id) { return isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'image/svg+xml' : ((int) $id === 2 ? 'image/png' : 'image/jpeg'); }
 require_once __DIR__.'/../includes/class-wpbn-render.php';
@@ -399,11 +400,18 @@ foreach (array('zoom','fade','slide-x','slide-y') as $kind) { check(strpos($anim
 check(strpos($animCss,"@supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}")!==false && strpos($animCss,'will-change:')===false && strpos($animCss,'rotate(.01deg)')===false,'Smooth slow zooms in Firefox: drawn in perspective (no snapping to whole pixels), no layer hints');
 check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}')!==false && strpos($animCss,'.wpbn-scene .wpbn-anim{animation:none}')!==false,'Waits until in view, paused off the screen, none with reduced motion');
-// Follow the mouse: per layer, an overlay never; Decorative: no alt text.
+// Follow the mouse: per layer, an overlay never. No Decorative switch (removed at the user's request, 2026-11-09).
 $m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
 check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0,'Follow the mouse: bounded, not for an overlay, only with its switch');
 check(strpos($animCss,'+ var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px))')!==false,'The pointer\'s offset in the layer\'s place');
-check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'decorative'=>1)))))),'alt=""')!==false && $lay(array('type'=>'image'))['decorative']===false,'Decorative: an empty alt; off by default');
+check(!array_key_exists('decorative',$lay(array('type'=>'image','decorative'=>1))),'No Decorative switch: an image\'s alt text is the media library\'s');
+// Rotation (per device, degrees; 2026-11-09): bounded, its CSS per device, in the layer's transform; a Shape layer is not turned.
+$rot=WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','rotate'=>-400,'rotate_mobile'=>15)),$lay(array('type'=>'shape','rotate'=>30)))));
+check($rot['layers'][0]['rotate']==-180 && $rot['layers'][0]['rotate_tablet']===null && $rot['layers'][0]['rotate_mobile']==15,'Rotation bounded, per device');
+$rotm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'rotate'=>10,'rotate_mobile'=>-5))))));
+check(strpos($rotm,'--wpbn-rot:10deg;--wpbn-rot-t:10deg;--wpbn-rot-m:-5deg;')!==false && motion_of($rotm,0)['box_rotate']==array(10,10,-5),'Rotation rendered per device, and for frontend.js (a turned photo grows to hide its corners)');
+check(WPBN_Settings::effective($lay(array('type'=>'text','rotate'=>30,'use_rotate'=>0)))['rotate']===0 && $lay(array('type'=>'text','rotate'=>30))['use_rotate']===true && $lay(array('type'=>'text'))['use_rotate']===false,'Rotation behind its switch: off, none (its value kept); a turn saved before the switch: on');
+check(WPBN_Settings::effective($rot['layers'][1])['rotate']===0 && strpos($animCss,',0) rotate(var(--wpbn-r)) scale(')!==false && strpos($animCss,'--wpbn-r:var(--wpbn-rot-m,var(--wpbn-rot,0deg))')!==false,'A Shape layer not turned; the turn in the layer\'s transform, per device');
 // An image's Shadow (the title's keys): drop-shadow along its outline, only with its switch on.
 $sh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_shadow'=>1,'shadow_x'=>4,'shadow_y'=>12,'shadow_blur'=>24,'shadow_color'=>'rgba(0,0,0,0.4)')),$lay(array('type'=>'image','image'=>3,'shadow_y'=>12))))));
 check(substr_count($sh,'wpbn-layer--shadow')===1 && strpos($sh,'--wpbn-ds:4px 12px 24px rgba(0,0,0,0.4);')!==false,'Image Shadow: its values, only with its switch on');
@@ -416,6 +424,24 @@ check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($
 $tw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'richtext','content'=>'<p>a</p>','container'=>'custom','text_width'=>60,'text_width_unit'=>'%','mobile_text_width_unit'=>'auto'))))));
 check(strpos($tw,'--wpbn-tw:calc(var(--wpbn-cw) * 0.6);--wpbn-tw-t:calc(var(--wpbn-cw-t, var(--wpbn-cw)) * 0.6);--wpbn-tw-m:max-content;')!==false,'Its Width per device ('.$tw.')');
 check($lay(array('type'=>'text','text_width_unit'=>'em'))['text_width_unit']==='auto' && strpos($animCss,'.wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw,max-content)')!==false,'An unknown unit: Auto');
+// Scroll animation: one switch (use_scroll, 2026-11-09); the travel, zoom and opacity at the end follow it. A layer saved before:
+// on where one was on, those that were off at rest (it moves as it did).
+$sc=WPBN_Settings::sanitize(array('layers'=>array(
+    array('type'=>'text','move_y'=>-50,'use_move_y'=>1,'zoom'=>40,'use_zoom'=>0,'end_opacity'=>0,'use_end_opacity'=>0),
+    array('type'=>'text','use_scroll'=>0,'move_y'=>-50,'use_move_y'=>1),
+    array('type'=>'text','use_scroll'=>1,'move_x'=>30,'end_opacity'=>20))));
+check($sc['layers'][0]['use_scroll'] && $sc['layers'][0]['use_zoom'] && $sc['layers'][0]['zoom']==0 && $sc['layers'][0]['move_y']==-50 && $sc['layers'][0]['end_opacity']==100,'Scroll animation: a layer from before on, what was off at rest');
+check(!$sc['layers'][1]['use_move_y'] && $sc['layers'][2]['use_move_x'] && $sc['layers'][2]['use_end_opacity'] && WPBN_Settings::layer()['use_scroll']===false && WPBN_Settings::layer()['end_opacity']===100,'Scroll animation: its fields follow its switch; off and "as it is" for a new layer');
+$scm=WPBN_Render::markup($sc);
+check(motion_of($scm,1)['move_y']==array(0,0,0) && motion_of($scm,2)['move_x']==array(30,30,30) && motion_of($scm,2)['fade']==array(-80,-80,-80) && WPBN_Settings::sanitize($sc)==$sc,'Scroll animation rendered only with its switch on; idempotent');
+// Entrance animation (WPBN_Entrance, 2026-11-09): once, around the Loop animation; off by default; not for a Shape layer.
+$en=$lay(array('type'=>'text','use_enter'=>1,'enter_type'=>'slide-up','enter_distance'=>2000,'enter_duration'=>0,'enter_delay'=>1.25,'enter_start'=>'never','enter_easing'=>'bounce','use_anim'=>1,'anim_type'=>'fade'));
+check($en['enter_distance']==1000 && $en['enter_duration']==0.1 && $en['enter_delay']==1.3 && $en['enter_start']==='visible' && $en['enter_easing']==='ease-out' && $lay(array('type'=>'text'))['use_enter']===false && $lay(array('enter_type'=>'spin'))['enter_type']==='fade','Entrance: bounded, allow-listed, off by default');
+$enm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($en))));
+check(preg_match('/<div class="wpbn-enter wpbn-enter--slide wpbn-enter--visible" style="--wpbn-ed:0.1s;--wpbn-edl:1.3s;--wpbn-ex:0px;--wpbn-ey:1000px;"><div class="wpbn-anim wpbn-anim--fade/',$enm)===1,'Entrance: a slide up, from below, around the Loop animation ('.$enm.')');
+$enz=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_enter'=>1,'enter_type'=>'slide-left','enter_distance'=>80)),$lay(array('type'=>'image','image'=>3,'use_enter'=>1,'enter_type'=>'zoom','enter_scale'=>120,'enter_start'=>'load'))))));
+check(motion_of($enz,0)['slack'][0]==array(100,100,100) && strpos($enz,'class="wpbn-enter wpbn-enter--zoom" style="--wpbn-ed:1s;--wpbn-es:1.2;"')!==false,'Entrance: a photo filling the scene grows by a slide\'s distance; a zoom from its start size');
+check(WPBN_Settings::effective($lay(array('type'=>'shape','use_enter'=>1)))['use_enter']===false && strpos($animCss,'@keyframes wpbn-enter-slide{from{opacity:0;transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}')!==false && strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible')!==false,'Entrance: not for a Shape layer; its keyframes; In view waits');
 // Shape layers (WPBN_Shape): an SVG read as objects, only their shapes kept; each object a window onto its fill.
 $sp=WPBN_Shape::parse('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><style>.st0{fill:#878787}.h{fill-rule:evenodd}</style></defs><rect class="st0" x="400" y="275" width="200" height="450"/><rect class="st0" x="700" y="275" width="200" height="450"/><path class="h" data-name="Ring" d="M0 0H100V100H0Z M25 25H75V75H25Z"/></svg>');
 check(array_column($sp['objects'],'key')===array('o1','o2','o3') && $sp['objects'][2]['name']==='Ring' && $sp['viewbox']===array(0.0,0.0,1000.0,1000.0),'Shape: its objects in the file\'s order, with their names');
@@ -430,8 +456,8 @@ check(array_column($sr['objects'],'key')===array_column($sp['objects'],'key') &&
 $ss=WPBN_Settings::sanitize(array('layers'=>array(
     array('type'=>'image','image'=>3,'uid'=>'lphoto01','f_grayscale'=>100,'use_move_y'=>1,'move_y'=>-80),
     array('type'=>'shape','shape'=>900,'shape_fit'=>'contain','shape_fit_mobile'=>'stretch','use_move_y'=>1,'move_y'=>-50,'use_anim'=>1,'uid'=>'BAD UID','shape_objects'=>array(
-        array('key'=>'o1','name'=>'Middle','fill'=>'layer','source'=>'lphoto01','f_brightness'=>110,'stroke'=>6,'use_shadow'=>1,'move_y'=>-40,'bogus'=>'<b>'),
-        array('key'=>'o2','fill'=>'glass','glass_blur'=>99,'stroke'=>5,'use_shadow'=>1),
+        array('key'=>'o1','name'=>'Middle','fill'=>'layer','source'=>'lphoto01','f_brightness'=>110,'stroke'=>6,'use_shadow'=>1,'use_scroll'=>1,'move_y'=>-40,'bogus'=>'<b>'),
+        array('key'=>'o2','fill'=>'glass','glass_blur'=>99,'stroke'=>5,'use_shadow'=>1,'use_scroll'=>0,'move_x'=>70),
         array('key'=>'o3','fill'=>'color','color'=>'red;}','invert'=>1,'opacity'=>50,'hidden'=>1),
         array('key'=>'zz'),array('key'=>'o1','fill'=>'none'))))));
 $so=$ss['layers'][1]['shape_objects'];
@@ -447,6 +473,7 @@ check(strpos($sm,'--wpbn-filter:grayscale(100%);')!==false,'An image layer\'s Fi
 check(strpos($sm,'--wpbn-ms:contain;--wpbn-ms-t:contain;--wpbn-ms-m:100% 100%;')!==false,'Fit per device as the masks\' size');
 check(strpos($sm,'filter:drop-shadow(6px 0px 0 #ffffff) drop-shadow(-6px 0px 0 #ffffff) drop-shadow(0px 6px 0 #ffffff) drop-shadow(0px -6px 0 #ffffff) drop-shadow(0px 10px 25px rgba(0,0,0,0.5));')!==false && strpos($sm,'drop-shadow(5px')===false,'Edge and Shadow along the outline; none on glass');
 check(strpos($sm,'backdrop-filter:blur(60px)')!==false && strpos($sm,'data-move="{&quot;x&quot;:0,&quot;y&quot;:-40}"')!==false,'Glass blurs what is behind it; an object\'s travel for frontend.js');
+check(substr_count($sm,'data-move=')===1,'An object\'s travel only with its Scroll animation on');
 check(preg_match('/--wpbn-mask:url\(&quot;data:image\/svg\+xml,%3Csvg[^)]*%3Crect x=&#039;400&#039;/',$sm)===1,'Each object\'s mask: the object alone, as an SVG');
 check(strpos($animCss,'.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mask)')!==false && strpos($animCss,'mask-composite:exclude')!==false,'Masks and Invert in the stylesheet');
 echo "Settings and rendering checks passed.\n";

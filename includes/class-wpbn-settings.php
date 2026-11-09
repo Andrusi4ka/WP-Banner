@@ -73,7 +73,8 @@ class WPBN_Settings {
     // and mobile may be null: the larger screen's (mobile → tablet → desktop).
     // The motion ones are reached at the end of the scroll: travel (px),
     // zoom (% of the layer's size added) and end_opacity (the layer's opacity at the end, %; it starts at its Opacity).
-    const RESPONSIVE = array('x'=>array(-100,200), 'y'=>array(-100,200), 'width'=>array(1,300), 'scale'=>array(10,300), 'opacity'=>array(0,100),
+    // rotate: the layer turned around its middle (degrees, clockwise; 2026-11-09 at the user's request, after its removal on 2026-11-07).
+    const RESPONSIVE = array('x'=>array(-100,200), 'y'=>array(-100,200), 'width'=>array(1,300), 'scale'=>array(10,300), 'opacity'=>array(0,100), 'rotate'=>array(-180,180),
         'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100))
         // The Animation's per-device values (WPBN_Animation): where it starts and ends, how long a run takes.
         + WPBN_Animation::RESPONSIVE;
@@ -157,11 +158,9 @@ class WPBN_Settings {
             'shape'=>0, 'shape_objects'=>array(), 'shape_fit'=>'cover', 'shape_fit_tablet'=>null, 'shape_fit_mobile'=>null,
             // The layer's own name for others to point to it (a Shape object showing it: WPBN_Shape), given by the editor; '' none yet.
             'uid'=>'',
-            // Decorative: an image screen readers skip (alt=""), e.g. a cutout of the photo behind it; off: its alt text from the media library.
-            'decorative'=>false,
             // Follow the mouse (px): how far the layer moves as the pointer crosses the scene (devices with a mouse; WPBN_Render, frontend.js).
             'use_mouse'=>false, 'mouse'=>20,
-            'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>0,
+            'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'rotate'=>0, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>100,
             'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
             // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
             'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
@@ -169,9 +168,13 @@ class WPBN_Settings {
             // (tablet and mobile null: the larger screen's), Fill / border color and Text color.
             'button_text'=>'Learn more', 'button_url'=>'', 'button_new_tab'=>false, 'button_style'=>'filled', 'button_shape'=>'square',
             'button_size'=>'default', 'button_size_tablet'=>null, 'button_size_mobile'=>null, 'button_color'=>'#2271b1', 'button_text_color'=>'#ffffff',
-            'use_scale'=>false, 'use_opacity'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false)
+            'use_scale'=>false, 'use_opacity'=>false, 'use_rotate'=>false,
+            // Scroll animation: one switch (use_scroll) for the travel, zoom and opacity at the end; their own switches follow it (sanitize()).
+            'use_scroll'=>false, 'use_move_x'=>false, 'use_move_y'=>false, 'use_zoom'=>false, 'use_end_opacity'=>false)
             // Animation (WPBN_Animation): motion of its own, running by itself; off by default.
             + WPBN_Animation::defaults()
+            // Entrance animation (WPBN_Entrance): how it comes in, once; off by default.
+            + WPBN_Entrance::defaults()
             // Filters: at rest (none).
             + array_map(function ($f) { return $f[2]; }, self::FILTERS);
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
@@ -187,7 +190,8 @@ class WPBN_Settings {
     // Settings with a switch: they apply only with it on; off, they have their value at rest (their values kept).
     // key => [switch, value when off, image layers only]: Scale and Opacity of an image layer; every layer's motion.
     // A layer's Width is always its container's (100%: effective()).
-    const OPTIONAL = array('scale'=>array('use_scale', 100, true), 'opacity'=>array('use_opacity', 100, true),
+    // Rotation: every layer's, behind its switch (2026-11-09, user's request), as Scale and Opacity are an image's.
+    const OPTIONAL = array('scale'=>array('use_scale', 100, true), 'opacity'=>array('use_opacity', 100, true), 'rotate'=>array('use_rotate', 0, false),
         'move_x'=>array('use_move_x', 0, false), 'move_y'=>array('use_move_y', 0, false), 'zoom'=>array('use_zoom', 0, false),
         // Off: the layer keeps its Opacity to the end (no value of its own: see fade()).
         'end_opacity'=>array('use_end_opacity', null, false));
@@ -212,8 +216,8 @@ class WPBN_Settings {
         // A Shape layer: the whole scene, in place (its objects move on their own: WPBN_Shape); no Animation or fade
         // (the copies of the layers in its objects would no longer line up with them, frosted glass would show nothing).
         if ($l['type'] === 'shape') {
-            foreach (array('x'=>50, 'y'=>50, 'scale'=>100, 'opacity'=>100, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
-            $l['container'] = 'full'; $l['use_anim'] = false; $l['use_end_opacity'] = false; $l['use_mouse'] = false;
+            foreach (array('x'=>50, 'y'=>50, 'scale'=>100, 'opacity'=>100, 'rotate'=>0, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+            $l['container'] = 'full'; $l['use_anim'] = false; $l['use_enter'] = false; $l['use_end_opacity'] = false; $l['use_mouse'] = false;
         }
         foreach (self::OPTIONAL as $key=>$o) {
             list($flag, $off, $image_only) = $o;
@@ -409,6 +413,27 @@ class WPBN_Settings {
                 $l['end_opacity_mobile'] = $end['mobile'] != $end['tablet'] ? $end['mobile'] : null;
                 $l['use_end_opacity'] = array_key_exists('use_fade', $raw) ? !empty($raw['use_fade']) : (bool) array_filter($fade);
             }
+            // Scroll animation: one switch for the travel, the zoom and the opacity at the end (2026-11-09, user's request); each
+            // keeps its own switch key, always the same as it (OPTIONAL, effective() and fade() read them). A layer saved before:
+            // on where one of them was on; the ones that were off at rest, so it moves as it did.
+            $scroll = array('move_x'=>'use_move_x', 'move_y'=>'use_move_y', 'zoom'=>'use_zoom', 'end_opacity'=>'use_end_opacity');
+            if (array_key_exists('use_scroll', $raw)) {
+                $l['use_scroll'] = !empty($raw['use_scroll']);
+            } else {
+                $l['use_scroll'] = (bool) array_filter(array_intersect_key($l, array_flip($scroll)));
+                $start = self::resolved(self::effective($l), 'opacity');
+                foreach ($scroll as $key=>$flag) {
+                    if ($l[$flag]) { continue; }
+                    if ($key === 'end_opacity') {
+                        $l['end_opacity'] = (float) $start['desktop'];
+                        $l['end_opacity_tablet'] = $start['tablet'] != $start['desktop'] ? (float) $start['tablet'] : null;
+                        $l['end_opacity_mobile'] = $start['mobile'] != $start['tablet'] ? (float) $start['mobile'] : null;
+                    } else {
+                        $l[$key] = 0.0; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null;
+                    }
+                }
+            }
+            foreach ($scroll as $flag) { $l[$flag] = $l['use_scroll']; }
             // Container. Titles saved while it was the scene's (before it was each layer's): the scene's.
             $from_scene = $l['type'] === 'text' && !array_key_exists('container', $raw) && isset($input['container']);
             $l['container'] = self::choice($from_scene ? $input['container'] : ($raw['container'] ?? null), self::CONTAINERS, 'full');
@@ -418,7 +443,6 @@ class WPBN_Settings {
                 $value = $raw['container_width'.$suffix] ?? null;
                 $l['container_width'.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 1200, 320, 3000));
             }
-            $l['decorative'] = !empty($raw['decorative']);
             // A Shape layer: its SVG and its objects (only the file's own: WPBN_Shape::objects()).
             if ($l['type'] === 'shape') {
                 $l['shape'] = is_scalar($raw['shape'] ?? null) ? absint($raw['shape']) : 0;
@@ -477,6 +501,7 @@ class WPBN_Settings {
             $l['button_text_color'] = self::color($raw['button_text_color'] ?? null, '#ffffff');
             // Animation: its switch, type, delay, repeat and easing (its per-device values: RESPONSIVE, above).
             $l = WPBN_Animation::sanitize($raw, $l);
+            $l = WPBN_Entrance::sanitize($raw, $l);
             $l['use_gradient'] = !empty($raw['use_gradient']);
             $l['gradient'] = WPBN_Gradient::sanitize($raw['gradient'] ?? null);
             // An image's point kept in view where its box crops it (object-position): one for every device.
