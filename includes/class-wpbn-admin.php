@@ -185,6 +185,8 @@ class WPBN_Admin {
         $json = isset($_POST['scene']) && is_string($_POST['scene']) ? wp_unslash($_POST['scene']) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, sanitized below.
         if (!is_string($json) || strlen($json) > self::MAX_DATA) { wp_die('Invalid scene', '', array('response'=>400)); }
         $s = WPBN_Settings::sanitize(json_decode($json, true));
+        // The Position window's backdrop (admin.js): the scene alone, at rest, without the page under it.
+        $still = isset($_POST['still']) && $_POST['still'] === '1';
         // A Shortcode layer: the plugins' styles and scripts it loads, as on a page. Their assets are registered as on a
         // page (wp_enqueue_scripts); what that queues for every page (the theme's) is dropped: only the shortcodes' own.
         $shortcodes = (bool) array_filter($s['layers'], function ($l) { return $l['type'] === 'shortcode' && !$l['hidden'] && $l['shortcode'] !== ''; });
@@ -201,8 +203,13 @@ class WPBN_Admin {
         }
         nocache_headers();
         header('Content-Type: text/html; charset='.get_option('blog_charset'));
-        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/preview-dev.css?ver='.wpbn_asset('assets/css/preview-dev.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style>'.$head.'</head><body>'.$markup.self::PAGE.$foot.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script><script src="'.esc_url(WPBN_URL.'assets/js/preview-dev.js?ver='.wpbn_asset('assets/js/preview-dev.js')).'"></script></body></html>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/frontend.css?ver='.wpbn_asset('assets/css/frontend.css')).'"><link rel="stylesheet" href="'.esc_url(WPBN_URL.'assets/css/preview-dev.css?ver='.wpbn_asset('assets/css/preview-dev.css')).'"><style>'.self::PAGE_CSS.self::theme_css().'</style>'.$head.'</head>'.self::preview_body($markup, $still).$foot.'<script src="'.esc_url(WPBN_URL.'assets/js/frontend.js?ver='.wpbn_asset('assets/js/frontend.js')).'"></script><script src="'.esc_url(WPBN_URL.'assets/js/preview-dev.js?ver='.wpbn_asset('assets/js/preview-dev.js')).'"></script></body></html>';
         exit;
+    }
+    // The preview's body: the scene and the page under it; still (the Position window's backdrop): the scene alone, every
+    // animation at rest (preview-dev.css .wpbn-still), on a transparent page.
+    public static function preview_body($markup, $still = false) {
+        return $still ? '<body class="wpbn-still">'.$markup : '<body>'.$markup.self::PAGE;
     }
     // Under the scene in the preview: the rest of a page, drawn as grey blocks (a heading, text,
     // a picture, cards), so the page can scroll the scene out of view as on the site. At least a

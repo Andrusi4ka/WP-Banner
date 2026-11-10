@@ -1172,10 +1172,17 @@
         room += 1;
         return [x0 - room, y0 - room, x1 - x0 + room * 2, y1 - y0 + room * 2];
     }
-    // A Custom size on a device: the drawing's box in % of the scene [width, height]; null on a device fitted otherwise.
+    // The drawing's box on a device in % of the scene [width, height] (WPBN_Shape::fit_css()): a Custom size's own, Cover's and
+    // Contain's as large as the scene's larger / smaller side needs, Stretch's the scene; null without an SVG.
     function shapeRect(l, d) {
-        if (!shapes[l.shape] || eff(l, 'shape_fit', d) !== 'custom') return null;
-        const a = shapeArea(l), ratio = a[2] / a[3], W = sceneWidth(d), H = sceneHeight(d), size = Number(eff(l, 'shape_size', d)) || 0, by = l.shape_size_by === 'width';
+        if (!shapes[l.shape]) return null;
+        const a = shapeArea(l), ratio = a[2] / a[3], W = sceneWidth(d), H = sceneHeight(d), fit = eff(l, 'shape_fit', d);
+        if (fit !== 'custom') {
+            if (fit === 'stretch') return [100, 100];
+            const k = Math[fit === 'contain' ? 'min' : 'max'](W / a[2], H / a[3]);
+            return [a[2] * k / W * 100, a[3] * k / H * 100];
+        }
+        const size = Number(eff(l, 'shape_size', d)) || 0, by = l.shape_size_by === 'width';
         const px = l.shape_size_unit === '%' ? size / 100 * (by ? W : H) : size, w = by ? px : px * ratio, h = by ? px / ratio : px;
         return [w / W * 100, h / H * 100];
     }
@@ -1352,7 +1359,7 @@
                 // Fit (2026-11-10, user's request): Trim empty space; a Custom size, by its height or width, at its Position.
                 ['fit', 'Fit', 'editor-contract', shapes[l.shape] ? card('Fit', withTip(check('shape_trim', 'Trim empty space'), 'The drawing cut to its objects: the empty space around them in the SVG left out (room kept for a Border outside them).')
                     + withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch', custom:'Custom size'}),
-                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Custom size: as large as you set, where you put it with the Position icon on its tile in the preview. Choose a device to give it its own.')
+                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Custom size: as large as you set. The Position icon on its tile places it: for Cover, which part shows (0% its left / top edge, 100% its right / bottom); for Contain, where it stands; for a Custom size, where its middle is. Choose a device to give it its own.')
                     + (shapeCustom(l) ? segmented(l, 'shape_size_by', 'Size by', {height:'Height', width:'Width'})
                         + respRange('shape_size', l.shape_size_by === 'width' ? 'Width' : 'Height', {min:1, max:l.shape_size_unit === '%' ? 300 : 5000, to:l.shape_size_unit === '%' ? 100 : 1500, unit:['shape_size_unit', ['px', '%']],
                             tip:'The other side follows the drawing\'s proportions. % is of the scene\'s ' + (l.shape_size_by === 'width' ? 'width' : 'height') + '. Used on the devices set to Custom size.'}) : '')) : ''],
@@ -1493,7 +1500,7 @@
                 + '<button type="button" class="wpbn-icon-button" data-row-action="hide" data-index="' + i + '" aria-pressed="' + l.hidden + '" aria-label="' + (l.hidden ? 'Show ' : 'Hide ') + name + '" title="' + (l.hidden ? 'Show' : 'Hide') + '"><span class="dashicons dashicons-' + (l.hidden ? 'hidden' : 'visibility') + '" aria-hidden="true"></span></button>'
                 // Position (not a Shape layer's): where it stands, or a photo filling the scene its point in view; its value in its title
                 // (the browser's tooltip on hover, as Hide's and Duplicate's).
-                + (l.type === 'shape' && !shapeCustom(l) ? '' : '<button type="button" class="wpbn-icon-button wpbn-tile-position" data-row-action="position" data-index="' + i + '" data-kind="' + (anchored(l) ? 'place' : 'focus') + '" aria-label="' + escape(positionTip(l)) + ' (' + name + ')" title="' + escape(positionTip(l)) + '">' + icons.position + '</button>')
+                + (l.type === 'shape' && !shapes[l.shape] ? '' : '<button type="button" class="wpbn-icon-button wpbn-tile-position" data-row-action="position" data-index="' + i + '" data-kind="' + (anchored(l) ? 'place' : 'focus') + '" aria-label="' + escape(positionTip(l)) + ' (' + name + ')" title="' + escape(positionTip(l)) + '">' + icons.position + '</button>')
                 + '<button type="button" class="wpbn-icon-button" data-row-action="duplicate" data-index="' + i + '" aria-label="Duplicate ' + name + '" title="Duplicate"' + (scene.layers.length >= 40 ? ' disabled' : '') + '>' + icons.clone + '</button>'
                 + '</span><span class="wpbn-layer-tools wpbn-layer-tools--end">'
                 + '<button type="button" class="wpbn-icon-button wpbn-icon-button--danger" data-row-action="delete" data-index="' + i + '" aria-label="Delete ' + name + '" title="Delete"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>'
@@ -2386,7 +2393,7 @@
     // device shown (a placed layer's: a photo filling the scene has none).
     function devInfo() {
         const layers = {}, d = device();
-        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && (anchored(l) || (l.type === 'shape' && eff(l, 'shape_fit', d) === 'custom'))) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
+        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && (anchored(l) || (l.type === 'shape' && eff(l, 'shape_fit', d) !== 'stretch'))) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
         return {selected, layers};
     }
     // Developer mode told of the layer chosen and of names and places changed (its boxes follow at once, without an Update).
@@ -2581,7 +2588,7 @@
     positionModal.setAttribute('role','dialog');positionModal.setAttribute('aria-modal','true');positionModal.setAttribute('aria-labelledby','wpbn-position-title');
     positionModal.innerHTML='<div class="wpbn-modal__backdrop"></div><div class="wpbn-modal__box"><div class="wpbn-modal__head"><h2 class="wpbn-modal__title" id="wpbn-position-title"><span class="wpbn-modal__what">Position</span> <span class="wpbn-modal__layer"></span></h2><button type="button" class="wpbn-modal__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
         +'<div class="wpbn-modal__body"><p class="description wpbn-position-help"></p>'
-        +'<div class="wpbn-focus"><div class="wpbn-focus__main"><div class="wpbn-focus__stage" tabindex="0" role="slider" aria-label="Layer position" aria-valuemin="0" aria-valuemax="100"><img class="wpbn-focus__image" alt="" draggable="false"><div class="wpbn-position-canvas"></div><span class="wpbn-focus__point" aria-hidden="true"></span></div></div>'
+        +'<div class="wpbn-focus"><div class="wpbn-focus__main"><div class="wpbn-focus__stage" tabindex="0" role="slider" aria-label="Layer position" aria-valuemin="0" aria-valuemax="100"><img class="wpbn-focus__image" alt="" draggable="false"><div class="wpbn-focus__live" aria-hidden="true"><iframe name="wpbn_position_frame" tabindex="-1" title="" sandbox="allow-scripts allow-same-origin"></iframe></div><div class="wpbn-position-canvas"></div><span class="wpbn-focus__point" aria-hidden="true"></span></div></div>'
         // The devices' frames: buttons that switch the window to that device (user's request, 2026-11-10); an image's point is one for all, they only show it.
         +'<div class="wpbn-focus__frames" role="group" aria-label="Device">'+Object.entries(DEVICES).map(([d,[icon,name]])=>'<button type="button" class="wpbn-focus__device" data-device="'+d+'" aria-pressed="false" title="Position on '+name+'"><span class="wpbn-focus__frame"><span class="wpbn-position-canvas"></span></span><span class="wpbn-focus__caption"><span class="dashicons dashicons-'+icon+'" aria-hidden="true"></span>'+name+'</span></button>').join('')+'</div></div>'
         // Its X and Y: shown as it is dragged, and typed (user's request, 2026-11-09); Enter applies.
@@ -2590,6 +2597,31 @@
     document.body.append(positionModal);
     const focusStage=positionModal.querySelector('.wpbn-focus__stage');
     const focusPoint=positionModal.querySelector('.wpbn-focus__point');
+    // The big stage's backdrop (user's request, 2026-11-10): the scene as the server draws it (the preview's render, still:
+    // WPBN_Admin::preview_body()), from the unsaved settings, without the layer being placed (drawn over it, to be dragged),
+    // a little darker. Until it has loaded, and in the device frames, the drawing of the layers. Drawn again only when the
+    // device, its screen or the other layers change (liveKey).
+    const live=positionModal.querySelector('.wpbn-focus__live'), liveFrame=live.querySelector('iframe');
+    let liveKey='';
+    function drawLive() {
+        const d=positionDevice, [w,h]=screenOf(d), tall=Math.max(h,sceneHeight(d));
+        liveFrame.style.width=w+'px';liveFrame.style.height=tall+'px';
+        liveFrame.style.transform='scale('+(focusStage.getBoundingClientRect().width/w)+')';
+        const copy=JSON.parse(JSON.stringify(scene)), i=scene.layers.indexOf(positionLayer);
+        if(i>=0)copy.layers[i].hidden=true;
+        const json=JSON.stringify(copy), key=d+'|'+w+'|'+tall+'|'+json;
+        if(key===liveKey)return;
+        liveKey=key;positionModal.classList.remove('has-live');
+        const form=document.createElement('form');
+        form.method='post';form.action=boot.endpoint;form.target='wpbn_position_frame';form.hidden=true;
+        Object.entries({action:'wpbn_preview',nonce:boot.nonce,post_id:boot.postId,scene:json,still:'1'}).forEach(([name,value])=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);});
+        document.body.append(form);form.submit();form.remove();
+    }
+    liveFrame.addEventListener('load',()=>{
+        let ready=false;
+        try{ready=liveFrame.contentDocument.body.classList.contains('wpbn-still');}catch(error){/* Not ours. */}
+        positionModal.classList.toggle('has-live',ready && !!positionLayer);
+    });
     let positionLayer=null, positionDraft=null, positionReturn=null, dragging=null;
     // The big stage: the device the window is set to (positionDevice); a frame: its own.
     const canvasDevice=canvas=>canvas.parentElement===focusStage ? positionDevice : canvas.closest('.wpbn-focus__device').dataset.device;
@@ -2599,7 +2631,10 @@
     const fromScene=(layer,d,x)=>(x-boxOf(d,layer).left)/boxOf(d,layer).width*100;
     // A layer's point placed at its Position (as frontend.css ax, ay): an image's centre; a title's own Position
     // (0% its left / top edge, 100% its right / bottom), so it stays within its container.
-    const anchorAt=(layer,x,y,scale)=>'translate('+(anchored(layer) ? -x : -50)+'%,'+(anchored(layer) ? -y : -50)+'%) scale('+scale+')';
+    // A Shape's drawing fitted by Cover, Contain or Stretch (2026-11-10): placed so too, as background-position places a picture
+    // (0% flush left / top, 100% right / bottom; WPBN_Shape::fit_css()); a Custom size by its middle.
+    const pointPlaced=(layer,d)=>anchored(layer) || (layer.type==='shape' && eff(layer,'shape_fit',d||positionDevice)!=='custom');
+    const anchorAt=(layer,x,y,scale,d)=>'translate('+(pointPlaced(layer,d) ? -x : -50)+'%,'+(pointPlaced(layer,d) ? -y : -50)+'%) scale('+scale+')';
     const focusImage=positionModal.querySelector('.wpbn-focus__image');
     // The layer as it would be with the draft applied: an image's point in view, or the text's place on the device being edited.
     let positionDevice='desktop';
@@ -2678,7 +2713,7 @@
         positionModal.querySelectorAll('.wpbn-position-canvas').forEach(canvas=>{
             const target=canvas.querySelector('.wpbn-position-target'), d=canvasDevice(canvas);
             if(target && focusMode()){const img=target.querySelector('img');if(img)img.style.objectPosition=x+'% '+y+'%';}
-            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),eff(layer,'scale',d)/100);placeLabel(target,eff(layer,'y',d));}
+            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),layer.type==='shape' ? 1 : eff(layer,'scale',d)/100,d);placeLabel(target,eff(layer,'y',d));}
             drawGaps(canvas);
         });
         warn();
@@ -2711,11 +2746,11 @@
                 if(layer.hidden && layer!==positionLayer)return;
                 // A Shape layer: not drawn on the site yet, so not here either.
                 if(layer.type==='shape'){
-                    // Being placed (a Custom size): its drawing at its size there; at another Fit on this device, the whole scene.
+                    // Being placed: its drawing at its size on this device (its Fit), at its Position.
                     if(layer!==positionLayer)return;
                     const r=shapeRect(layer,device)||[100,100], item=document.createElement('span');
                     item.className='wpbn-position-item wpbn-position-target wpbn-position-shape';
-                    Object.assign(item.style,{left:eff(layer,'x',device)+'%',top:eff(layer,'y',device)+'%',width:r[0]+'%',height:r[1]+'%',transform:'translate(-50%,-50%)'});
+                    Object.assign(item.style,{left:eff(layer,'x',device)+'%',top:eff(layer,'y',device)+'%',width:r[0]+'%',height:r[1]+'%',transform:anchorAt(layer,eff(layer,'x',device),eff(layer,'y',device),1,device)});
                     item.innerHTML=shapeSvg(layer,-1,'',null,true);canvas.append(item);return;
                 }
                 const v=key=>eff(layer,key,device);
@@ -2752,6 +2787,7 @@
                 canvas.append(item);
             });
         });
+        if(!focusMode())drawLive();
         showPosition();
     }
     function openPosition(layer,button) {
@@ -2770,6 +2806,8 @@
             ? 'Click the part of the image to keep in view when its layer crops it. It applies on every device; the frames show each one. Arrow keys move the point by 1%; with Shift, by 10%.'
             : anchored(layer)
             ? 'Drag the '+(layer.type==='text' ? 'title' : layer.type==='richtext' ? 'text' : layer.type==='button' ? 'button' : layer.type==='shortcode' ? 'element' : layer.type==='image' ? 'image' : 'overlay')+' to move it within its container (dashed), or click to put it there. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
+            : layer.type==='shape'
+            ? 'Drag the drawing to choose which part of it shows where the scene crops it (Cover) or where it stands in the room left (Contain); a Custom size: where its middle is. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
             : 'Drag the layer to move it, or click to put its centre there. Arrow keys move it by 1%; with Shift, by 10%.';
         positionModal.hidden=false;document.body.classList.add('wpbn-modal-open');
         drawPositionScenes();focusStage.focus();
@@ -2792,7 +2830,7 @@
     function positionAt(event){
         const r=focusStage.getBoundingClientRect();if(!r.width || !r.height)return;
         const d=positionDevice, text=!focusMode(), share=text ? boxOf(d,positionLayer).width/100 : 1;
-        const title=text && anchored(positionLayer) && dragging && dragging.size;
+        const title=text && pointPlaced(positionLayer,d) && dragging && dragging.size;
         // The room a title moves in: its container (its height: the scene) less its own size. Larger than that (a slider
         // taller than the scene): less than none, so it follows the pointer the other way round in its values (0% shows its
         // top, 100% its bottom). As large (Width 100% of its container): no room: that way it stays as it is.

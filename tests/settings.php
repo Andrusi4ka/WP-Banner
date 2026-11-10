@@ -113,7 +113,7 @@ if (($argv[1] ?? '')==='--editor') {
 }
 if (($argv[1] ?? '')==='--preview') {
     $s=WPBN_Settings::sanitize(json_decode(stream_get_contents(STDIN),true));
-    echo '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/frontend.css"><link rel="stylesheet" href="/assets/css/preview-dev.css"><style>'.WPBN_Admin::PAGE_CSS.WPBN_Admin::theme_css().'</style></head><body>'.WPBN_Admin::preview_markup($s).WPBN_Admin::PAGE.'<script src="/assets/js/frontend.js"></script><script src="/assets/js/preview-dev.js"></script></body></html>'; exit;
+    echo '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/frontend.css"><link rel="stylesheet" href="/assets/css/preview-dev.css"><style>'.WPBN_Admin::PAGE_CSS.WPBN_Admin::theme_css().'</style></head>'.WPBN_Admin::preview_body(WPBN_Admin::preview_markup($s), getenv('WPBN_TEST_STILL')==='1').'<script src="/assets/js/frontend.js"></script><script src="/assets/js/preview-dev.js"></script></body></html>'; exit;
 }
 // The answer to an SVG uploaded in the editor (admin-ajax wpbn_shape_upload): attachment 900 (tests/motion.cjs).
 if (($argv[1] ?? '')==='--shape') { echo wp_json_encode(array('success'=>true, 'data'=>WPBN_Shape::editor(900))); exit; }
@@ -515,7 +515,7 @@ check(substr_count($sm,'class="wpbn-shape-item"')===2 && strpos($sm,'wpbn-shape-
 check(motion_of($sm,1)['move_y']===array(-50,-50,-50) && strpos($sm,'><div class="wpbn-shape-all wpbn-anim wpbn-anim--zoom wpbn-anim--alternate" style="--wpbn-a0-d:1;--wpbn-a1-d:1.1;')!==false && strpos($sm,'--wpbn-left:50%;')!==false,'The Shape layer: its travel and Loop animation move its objects\' windows, the layer stays in place');
 check(motion_of($sm,2)['move_y']===array(-80,-80,-80) && preg_match('/wpbn-shape-clip"><div class="wpbn-shape-fill"><div class="wpbn-layer wpbn-layer--image wpbn-layer--filter"[^>]*--wpbn-filter:brightness\(110%\);/',$sm)===1,'Fill Photo: a copy of the layer, moving as it does, with the object\'s filters instead of its own');
 check(strpos($sm,'--wpbn-filter:grayscale(100%);')!==false,'An image layer\'s Filters');
-check(strpos($sm,'--wpbn-dw:min(100cqw, 100cqh);--wpbn-dh:min(100cqh, 100cqw);--wpbn-dl:calc((100cqw - min(100cqw, 100cqh)) / 2);--wpbn-dt:calc((100cqh - min(100cqh, 100cqw)) / 2);')!==false
+check(strpos($sm,'--wpbn-dw:min(100cqw, 100cqh);--wpbn-dh:min(100cqh, 100cqw);--wpbn-dl:calc((100cqw - min(100cqw, 100cqh)) * 50 / 100);--wpbn-dt:calc((100cqh - min(100cqh, 100cqw)) * 50 / 100);')!==false
     && strpos($sm,'--wpbn-dw-m:100cqw;--wpbn-dh-m:100cqh;--wpbn-dl-m:0px;--wpbn-dt-m:0px;')!==false,'Fit per device as the drawing\'s box in the scene (Contain, Stretch)');
 // Effect (2026-11-10): Border instead of Edge (saved Edges: a Border Outside, as wide), on glass too; Shadow not on glass.
 check($so[0]['use_border']===true && $so[0]['border_width']===6.0 && $so[0]['border_position']==='outside' && $so[1]['use_border']===true && !isset($so[0]['stroke']),'A saved Edge: a Border Outside');
@@ -545,7 +545,9 @@ check($fitL['layers'][0]['shape_trim']===true && $fitL['layers'][0]['shape_fit']
 $fitH=WPBN_Render::markup($fitL);
 check(WPBN_Shape::area($fitL['layers'][0],WPBN_Shape::meta(900))===array(99.0,199.0,802.0,602.0) && strpos($fitH,'viewBox=&#039;99 199 802 602&#039;')!==false,'Trim: the objects\' box, a little room');
 check(strpos($fitH,'--wpbn-dw:399.67px;--wpbn-dh:300px;--wpbn-dl:calc(30cqw - 199.83px);--wpbn-dt:calc(40cqh - 150px);--wpbn-dw-t:399.67px;')!==false && strpos($fitH,'--wpbn-dw-m:max(100cqw, 133.22cqh);--wpbn-dh-m:max(100cqh, 75.06cqw);')!==false,'Custom size: its height, its width from its proportions, its middle at its Position; another Fit on mobile');
-check(strpos($fitH,'&quot;fit&quot;:[[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;cover&quot;]]')!==false && strpos($fitH,'--wpbn-left:50%;')!==false,'For frontend.js; the layer itself stays over the scene');
+check(strpos($fitH,'&quot;fit&quot;:[[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;cover&quot;,30,40]]')!==false && strpos($fitH,'--wpbn-left:50%;')!==false,'For frontend.js; the layer itself stays over the scene');
+// Cover and Contain at the layer's Position too (2026-11-10, user's request), as background-position: 0% flush left, 100% right.
+check(strpos($fitH,'--wpbn-dl-m:calc((100cqw - max(100cqw, 133.22cqh)) * 30 / 100);--wpbn-dt-m:calc((100cqh - max(100cqh, 75.06cqw)) * 40 / 100);')!==false,'Cover on mobile: the drawing at X 30%, Y 40%');
 $fitW=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_fit'=>'custom','shape_size_by'=>'width','shape_size_unit'=>'%','shape_size'=>50,'shape_objects'=>array(array('key'=>'o1')))))));
 check(strpos($fitW,'--wpbn-dw:50cqw;--wpbn-dh:50cqw;--wpbn-dl:calc(50cqw - 25cqw);')!==false,'By width in % of the scene');
 check(strpos($animCss,'.wpbn-scene .wpbn-layer.wpbn-layer--shape{container-type:size;transform:translate(-50%,-50%);opacity:1;')!==false && strpos($animCss,'mask-size:var(--wpbn-w0) var(--wpbn-h0);')!==false,'The masks placed in the scene\'s units; the layer itself never moved');

@@ -257,7 +257,6 @@
 .wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-t,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
-.wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-t,var(--wpbn-width))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-t,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-t,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,);backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-t)}
@@ -266,6 +265,8 @@
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-t,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font));letter-spacing:var(--wpbn-tablet-ls,var(--wpbn-ls,normal))}
+/* After .wpbn-layer (its width is every layer's): a button stays as wide as its text, so its Position places it. */
+.wpbn-scene .wpbn-layer--button{width:max-content;max-width:var(--wpbn-width-t,var(--wpbn-width))}
 }
 @media(max-width:767px){
 .wpbn-scene .wpbn-layer.wpbn-layer--shape{--wpbn-w0:var(--wpbn-dw-m,var(--wpbn-dw-t,var(--wpbn-dw,100cqw)));--wpbn-h0:var(--wpbn-dh-m,var(--wpbn-dh-t,var(--wpbn-dh,100cqh)));--wpbn-l0:var(--wpbn-dl-m,var(--wpbn-dl-t,var(--wpbn-dl,0px)));--wpbn-t0:var(--wpbn-dt-m,var(--wpbn-dt-t,var(--wpbn-dt,0px)))}
@@ -275,7 +276,6 @@
 .wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-m,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
-.wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-m,var(--wpbn-width))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-m,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-m,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,);backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-m)}
@@ -284,6 +284,7 @@
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-m,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
+.wpbn-scene .wpbn-layer--button{width:max-content;max-width:var(--wpbn-width-m,var(--wpbn-width-t,var(--wpbn-width)))}
 }
 @media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter,.wpbn-scene .wpbn-shape-in,.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter *,.wpbn-scene .wpbn-shape-loop *{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-shape-all,.wpbn-scene .wpbn-shape-loop{--wpbn-slx:0px!important;--wpbn-sly:0px!important;--wpbn-slz:1!important;--wpbn-sla:1!important;--wpbn-lox:0px!important;--wpbn-loy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
 /* A layer's Border (2026-11-09; WPBN_Render): its width per side and device, its line and colour; on what shows of it (an image's

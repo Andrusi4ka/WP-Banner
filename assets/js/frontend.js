@@ -138,7 +138,9 @@
             } else {
                 if (fit[0] === 'cover') sx = sy = Math.max(sx, sy);
                 else if (fit[0] === 'contain') sx = sy = Math.min(sx, sy);
-                ox = (W - vb[2] * sx) / 2; oy = (H - vb[3] * sy) / 2;
+                // At its Position (WPBN_Shape::fit_css()): 0% flush left / top, 100% right / bottom.
+                const px = Number.isFinite(Number(fit[1])) ? Number(fit[1]) / 100 : .5, py = Number.isFinite(Number(fit[2])) ? Number(fit[2]) / 100 : .5;
+                ox = (W - vb[2] * sx) * px; oy = (H - vb[3] * sy) * py;
             }
             const room = 4;
             const left = ox + (b[0] - vb[0]) * sx - room, top = oy + (b[1] - vb[1]) * sy - room, right = left + b[2] * sx + room * 2, bottom = top + b[3] * sy + room * 2;

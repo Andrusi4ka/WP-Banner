@@ -36,7 +36,8 @@
             let sx = W / vb[2], sy = H / vb[3];
             if (fit[0] === 'cover') sx = sy = Math.max(sx, sy);
             else if (fit[0] === 'contain') sx = sy = Math.min(sx, sy);
-            w = vb[2] * sx; h = vb[3] * sy; x = (W - w) / 2; y = (H - h) / 2;
+            const px = Number.isFinite(Number(fit[1])) ? Number(fit[1]) / 100 : .5, py = Number.isFinite(Number(fit[2])) ? Number(fit[2]) / 100 : .5;
+            w = vb[2] * sx; h = vb[3] * sy; x = (W - w) * px; y = (H - h) * py;
         }
         return {rect:{left:r.left + x, top:r.top + y, width:w, height:h, right:r.left + x + w, bottom:r.top + y + h}, custom:fit[0] === 'custom'};
     }

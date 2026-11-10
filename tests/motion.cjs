@@ -12,7 +12,7 @@ const posTip=async p=>{await p.hover(POS);return p.locator(POS).getAttribute('ti
 // The Position window's X and Y (typed or set by dragging, 2026-11-09), as "X% Y%".
 const focusValue=p=>p.evaluate(()=>document.getElementById('wpbn-pos-x').value+'% '+document.getElementById('wpbn-pos-y').value+'%');
 const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/PHP/php.exe';
-const fixture=(mode,input='',image=false)=>execFileSync(php,[path.join(__dirname,'settings.php'),mode],{encoding:'utf8',input,env:Object.assign({},process.env,image?{WPBN_TEST_IMAGE:'1'}:{})});
+const fixture=(mode,input='',image=false,still=false)=>execFileSync(php,[path.join(__dirname,'settings.php'),mode],{encoding:'utf8',input,env:Object.assign({},process.env,image?{WPBN_TEST_IMAGE:'1'}:{},still?{WPBN_TEST_STILL:'1'}:{})});
 const server=http.createServer((req,res)=>{
     const url=new URL(req.url,'http://localhost');
     if(url.pathname.startsWith('/assets/')) {
@@ -23,7 +23,7 @@ const server=http.createServer((req,res)=>{
     // An SVG uploaded in a Shape layer's card (multipart, as admin-ajax wpbn_shape_upload gets it): the attachment tests/settings.php keeps.
     if(req.method==='POST' && /^multipart\//.test(req.headers['content-type']||'')){req.resume();req.on('end',()=>{res.setHeader('Content-Type','application/json');res.end(fixture('--shape'));});return;}
     if(req.method==='POST'){
-        let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{res.setHeader('Content-Type','text/html');res.end(fixture('--preview',new URLSearchParams(body).get('scene')));});return;
+        let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{res.setHeader('Content-Type','text/html');const q=new URLSearchParams(body);res.end(fixture('--preview',q.get('scene'),false,q.get('still')==='1'));});return;
     }
     res.setHeader('Content-Type','text/html');res.end(fixture('--editor','',url.searchParams.has('image')));
 });
@@ -754,8 +754,22 @@ const server=http.createServer((req,res)=>{
         assert.ok(btn.text==='Book now' && btn.href==='https://example.com/book' && btn.target==='_blank' && /noopener/.test(btn.rel),'On the site: a link in a new window ('+JSON.stringify(btn)+')');
         await page.locator('#wpbn-settings').screenshot({path:path.join(__dirname,'button.png')});await page.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'button-preview.png')});
         assert.ok(btn.radius==='35px' && btn.bg==='rgba(0, 0, 0, 0)' && btn.border==='2px' && btn.h>=48 && btn.font==='14px' && btn.events==='auto','Round, a border, Large, clickable ('+JSON.stringify(btn)+')');
+        // On every device the button's layer is as wide as the button (the devices' .wpbn-layer width does not stretch it),
+        // so its Position (X 50%) centres it, not flush left in its container.
+        for (const device of ['tablet','mobile','desktop']) {
+            await page.click('[data-preview-device="'+device+'"]');
+            await frame().waitForFunction(d=>d==='mobile'?innerWidth<=767:d==='tablet'?innerWidth>767&&innerWidth<=1024:innerWidth>1024,device);
+            const b=await frame().locator('.wpbn-layer--button').evaluate(el=>{const r=el.getBoundingClientRect(),a=el.querySelector('.wpbn-button').getBoundingClientRect(),s=el.closest('.wpbn-scene').getBoundingClientRect();return {layer:r.width,button:a.width,centre:a.left+a.width/2,scene:s.left+s.width/2};});
+            assert.ok(Math.abs(b.layer-b.button)<1 && Math.abs(b.centre-b.scene)<2,device+': the button as wide as its text, centred at X 50% ('+JSON.stringify(b)+')');
+        }
         await page.click(POS);
         assert.equal(await page.locator('.wpbn-position-target').first().textContent(),'Book now','The Position window draws the button');
+        // Its backdrop (2026-11-10): the scene as the preview renders it, still, without the button (drawn over it to be
+        // dragged), as wide as the stage; the drawing of the other layers hidden then, a light veil over it.
+        await page.waitForSelector('.wpbn-modal--position.has-live');
+        const live=await page.evaluate(()=>{const f=document.querySelector('.wpbn-focus__live iframe'),doc=f.contentDocument,stage=document.querySelector('.wpbn-focus__stage').getBoundingClientRect(),canvas=document.querySelector('.wpbn-focus__stage>.wpbn-position-canvas');
+            return {still:doc.body.classList.contains('wpbn-still'),page:!!doc.querySelector('.wpbn-page'),button:doc.querySelectorAll('.wpbn-layer--button').length,layers:doc.querySelectorAll('.wpbn-layer').length,others:[...canvas.querySelectorAll('.is-other')].filter(x=>x.getClientRects().length).length,width:Math.abs(f.getBoundingClientRect().width-stage.width),veil:getComputedStyle(document.querySelector('.wpbn-focus__live'),'::after').backgroundColor,anim:[...doc.querySelectorAll('.wpbn-enter,.wpbn-anim')].map(x=>getComputedStyle(x).animationName).filter(n=>n!=='none').length};});
+        assert.ok(live.still && !live.page && live.button===0 && live.layers>0 && live.others===0 && live.width<1 && live.veil==='rgba(0, 0, 0, 0.18)' && live.anim===0,'The Position window shows the scene as rendered, without the layer placed, still ('+JSON.stringify(live)+')');
         await page.keyboard.press('Escape');
         await page.click('[data-row-action="delete"][data-index="'+buttonIndex+'"]');
         assert.equal((await data()).layers.some(l=>l.type==='button'),false,'Button deleted');
@@ -1098,9 +1112,9 @@ const server=http.createServer((req,res)=>{
         assert.ok(sd.layers[1].shape_objects[0].use_enter && sd.layers[1].shape_objects[0].enter_type==='reveal-left' && sd.layers[1].shape_objects[0].box.join()==='400,200,200,600','Saved on the object, its box with it');
         const so0=sd.layers[1].shape_objects[0];
         assert.ok(so0.use_border && so0.border_width===6 && so0.border_position==='outside' && so0.radius_tl===30 && so0.radius_br===30 && sd.layers[1].border_width===undefined,'Border and Radius saved on the object, not the layer');
-        // Fit (2026-11-10): Custom size shows its Size and Position, and a Position button on its tile.
+        // Fit (2026-11-10): Custom size shows its Size; a Position button on its tile at every Fit (Cover and Contain: which part shows, where it stands).
         await sh.click('[data-select="1"]');await sh.click('#wpbn-menu [data-block="fit"]');
-        assert.equal(await sh.locator('[data-row-action="position"][data-index="1"]').count(),0,'No Position for a Shape layer fitted to the scene');
+        assert.equal(await sh.locator('[data-row-action="position"][data-index="1"]').count(),1,'Position for a Shape layer fitted to the scene too');
         // The whole Shape's motion (2026-11-10): its blocks in the layers' order; its Entrance the objects' kinds.
         assert.deepEqual(await sh.locator('#wpbn-menu [data-block]').evaluateAll(b=>b.map(x=>x.dataset.block)),['content','fit','entrance','loop','scroll','mouse'],'A Shape layer\'s blocks: its motion in the layers\' order');
         await sh.click('#wpbn-menu [data-block="entrance"]');
@@ -1135,6 +1149,20 @@ const server=http.createServer((req,res)=>{
         assert.match(await shFrame.locator('.wpbn-shape-clip').first().evaluate(el=>getComputedStyle(el).maskImage||getComputedStyle(el).webkitMaskImage),/^url\("data:image\/svg\+xml/,'Each clipped by its mask');
         assert.equal(await shFrame.locator('.wpbn-shape-clip .wpbn-layer--image img').first().evaluate(el=>getComputedStyle(el).filter),'none','The photo in colour through the object…');
         assert.match(await shFrame.locator('.wpbn-layer--image img').first().evaluate(el=>getComputedStyle(el).filter),/^grayscale/,'…over the photo in black and white');
+        // Cover at its Position (2026-11-10): Y 0% shows the drawing's top, 100% its bottom (as background-position); the
+        // Position window drags it so.
+        const coverAt=async y=>{
+            await sh.click('#wpbn-layers [data-row-action="position"][data-index="1"]');
+            assert.match(await sh.locator('.wpbn-position-help').textContent(),/Cover/,'The Position window explains Cover');
+            await sh.fill('#wpbn-pos-y',String(y));await sh.press('#wpbn-pos-y','Enter');
+            await sh.click('#wpbn-refresh');await sh.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+            await sh.click('#wpbn-dev');await shFrame.locator('.wpbn-dev__box--shape').waitFor();
+            const box=await shFrame.locator('.wpbn-scene').evaluate(s=>{const b=s.querySelector('.wpbn-dev__box--shape');return {top:parseFloat(b.style.top),height:parseFloat(b.style.height),H:s.getBoundingClientRect().height};});
+            await sh.click('#wpbn-dev');
+            return box;
+        };
+        const top0=await coverAt(0), top100=await coverAt(100);
+        assert.ok(top0.height>top0.H+10 && Math.abs(top0.top)<1 && Math.abs(top100.top-(top100.H-top100.height))<1 && (await shData()).layers[1].y===100,'Cover: Y 0% its top edge at the scene\'s, 100% its bottom ('+JSON.stringify([top0,top100])+')');
         await sh.close();
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');

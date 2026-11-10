@@ -29,3 +29,8 @@
 .wpbn-dev__container-size{transform:translate(-50%,-100%);background:#d63638}
 /* The scene's size, at its top in the middle. */
 .wpbn-dev__size{transform:translateX(-50%);background:#2271b1}
+
+/* The Position window's backdrop (admin.js, WPBN_Admin::preview_body()): the scene alone on a transparent page, at rest:
+   as reduced motion draws it (frontend.css), the entrances at their end, no loop, no transition. */
+body.wpbn-still{background:transparent!important;overflow:hidden}
+body.wpbn-still .wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}body.wpbn-still .wpbn-scene.wpbn-scene--fill{animation:none}body.wpbn-still .wpbn-scene .wpbn-anim{animation:none}body.wpbn-still .wpbn-scene .wpbn-enter,body.wpbn-still .wpbn-scene .wpbn-shape-in,body.wpbn-still .wpbn-scene .wpbn-oenter,body.wpbn-still .wpbn-scene .wpbn-oenter *,body.wpbn-still .wpbn-scene .wpbn-shape-loop *{animation:none}body.wpbn-still .wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}body.wpbn-still .wpbn-scene .wpbn-shape-all,body.wpbn-still .wpbn-scene .wpbn-shape-loop{--wpbn-slx:0px!important;--wpbn-sly:0px!important;--wpbn-slz:1!important;--wpbn-sla:1!important;--wpbn-lox:0px!important;--wpbn-loy:0px!important}body.wpbn-still .wpbn-scene .wpbn-button{transition:none}

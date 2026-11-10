@@ -374,7 +374,9 @@ class WPBN_Shape {
      * The layer's Fit per device as CSS variables (frontend.css): the drawing's box in the scene, as lengths, so the whole
      * Shape's Zoom can scale it (2026-11-10): its width and height (--wpbn-dw, --wpbn-dh) and its top left corner (--wpbn-dl,
      * --wpbn-dt), each with -t, -m. cqw / cqh: shares of the layer, the scene. Cover / Contain: as large as the scene's larger
-     * / smaller side needs, centred; Stretch: the scene; Custom size: its own, its middle at the layer's Position.
+     * / smaller side needs, placed by the layer's Position as background-position places a picture (2026-11-10, user's request):
+     * 0% flush left / top, 50% centred, 100% flush right / bottom; Stretch: the scene; Custom size: its own, its middle at the
+     * layer's Position.
      * fit_data(): the same for frontend.js boxes().
      */
     public static function fit_css($l) {
@@ -398,7 +400,7 @@ class WPBN_Shape {
             } else {
                 $f = $fit === 'contain' ? 'min' : 'max';
                 $w = $f.'(100cqw, '.self::n(100 * $ratio).'cqh)'; $h = $f.'(100cqh, '.self::n(100 / $ratio).'cqw)';
-                $box = array($w, $h, 'calc((100cqw - '.$w.') / 2)', 'calc((100cqh - '.$h.') / 2)');
+                $box = array($w, $h, 'calc((100cqw - '.$w.') * '.self::n($where['x'][$device]).' / 100)', 'calc((100cqh - '.$h.') * '.self::n($where['y'][$device]).' / 100)');
             }
             foreach (array('dw', 'dh', 'dl', 'dt') as $i=>$name) { $css .= '--wpbn-'.$name.$suffix.':'.$box[$i].';'; }
         }
@@ -409,7 +411,8 @@ class WPBN_Shape {
         $out = array();
         $sizes = WPBN_Settings::resolved($l, 'shape_size');
         foreach (WPBN_Settings::resolved($l, 'shape_fit') as $device=>$fit) {
-            $out[] = $fit === 'custom' ? array('custom', (float) $l['shape_place']['x'][$device], (float) $l['shape_place']['y'][$device], (float) $sizes[$device], $l['shape_size_unit'], $l['shape_size_by']) : array($fit);
+            $x = (float) ($l['shape_place']['x'][$device] ?? 50); $y = (float) ($l['shape_place']['y'][$device] ?? 50);
+            $out[] = $fit === 'custom' ? array('custom', $x, $y, (float) $sizes[$device], $l['shape_size_unit'], $l['shape_size_by']) : array($fit, $x, $y);
         }
         return $out;
     }

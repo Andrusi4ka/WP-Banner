@@ -259,7 +259,16 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-position-item{display:block;position:absolute;text-align:center;font-weight:800;line-height:1.05;overflow-wrap:anywhere;transform-origin:center}
 .wpbn-position-item img{display:block;width:100%;height:100%;max-width:none}
 /* The layer being placed: outlined; the others dimmed. */
-.wpbn-position-item.is-other{filter:brightness(.6) saturate(.7)}
+.wpbn-position-item.is-other{filter:brightness(.85) saturate(.9)}
+/* The big stage's backdrop: the scene as the preview draws it (admin.js drawLive()), scaled to the stage, a little darker;
+   shown once loaded (has-live), the drawing of the other layers then hidden. Never for an image's point. */
+.wpbn-focus__live{position:absolute;inset:0;overflow:hidden;border-radius:4px;background:#f0f0f1;opacity:0;pointer-events:none}
+.wpbn-focus__live iframe{position:absolute;top:0;left:0;display:block;border:0;transform-origin:0 0}
+.wpbn-focus__live::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.18)}
+.wpbn-modal.has-live .wpbn-focus__live{opacity:1}
+.wpbn-modal.is-focus .wpbn-focus__live{display:none}
+.wpbn-modal.has-live:not(.is-focus) .wpbn-focus__stage>.wpbn-position-canvas{background:transparent}
+.wpbn-modal.has-live:not(.is-focus) .wpbn-focus__stage>.wpbn-position-canvas>.is-other{display:none}
 .wpbn-position-target{outline:2px dashed #fff;outline-offset:-2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 .wpbn-focus__frame .wpbn-position-target{outline-width:1px;outline-offset:-1px}
 /* What the layer leaves uncovered. */
