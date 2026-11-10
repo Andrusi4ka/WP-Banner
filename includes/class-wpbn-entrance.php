@@ -7,7 +7,8 @@
  *
  * Kept in the layer: use_enter (its switch), enter_type (TYPES), enter_start (WPBN_Animation::STARTS), enter_distance
  * (px, a slide's), enter_scale (%, a zoom's start size), enter_duration and enter_delay (s), enter_easing
- * (WPBN_Animation::EASINGS). Not for a Shape layer (the copies of layers in its objects would not line up while it moves).
+ * (WPBN_Animation::EASINGS). Not for a Shape layer (the copies of layers in its objects would not line up while it moves):
+ * its objects have their own (WPBN_Shape::ENTER), with these settings.
  */
 defined('ABSPATH') || exit;
 class WPBN_Entrance {

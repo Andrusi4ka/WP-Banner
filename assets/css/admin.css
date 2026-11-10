@@ -514,7 +514,8 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-object-row.is-hidden .wpbn-object-thumb,.wpbn-object-row.is-hidden .wpbn-layer-label{opacity:.5}
 .wpbn-object-thumb{display:flex;flex:0 0 22px;width:22px;height:22px;padding:2px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:3px;background:#fff}
 /* The drawing in the layer's card: as large as fits, a click on an object chooses it. */
-.wpbn-shape-canvas{display:flex;align-items:center;justify-content:center;max-width:100%;max-height:320px;margin:10px auto 0;padding:10px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/16px 16px}
+.wpbn-objects[hidden]{display:none}
+.wpbn-shape-canvas{display:flex;align-items:center;justify-content:center;max-width:100%;max-height:320px;margin:0 auto;padding:10px;box-sizing:border-box;border:1px solid #dcdcde;border-radius:4px;background:repeating-conic-gradient(#f0f0f1 0% 25%,#fff 0% 50%) 50%/16px 16px}
 .wpbn-shape-svg{display:block;width:100%;height:100%;max-height:300px;overflow:visible}
 .wpbn-shape-canvas .wpbn-shape-object{cursor:pointer;transition:fill .12s}
 .wpbn-shape-canvas .wpbn-shape-object:hover{fill:#787c82}
@@ -544,3 +545,6 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-icon-picker__icon svg{width:auto;height:24px;max-width:40px}
 .wpbn-icon-picker__label{display:block;max-width:100%;overflow:hidden;font-size:11px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
 .wpbn-icon-picker__note{margin:0;padding:8px 14px 12px;color:#646970;font-size:12px}
+/* A Shape layer placed in the Position window (a Custom size): its drawing at its size. */
+.wpbn-position-shape svg{display:block;width:100%;height:100%;overflow:visible}
+.wpbn-position-shape .wpbn-shape-object{fill:rgba(34,113,177,.55)}

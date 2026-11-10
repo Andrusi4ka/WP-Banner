@@ -126,12 +126,153 @@ class WPBN_Shape {
     // An object's settings, as a new one has them (key and name come from the file).
     public static function object_defaults() {
         return array('key'=>'', 'name'=>'', 'hidden'=>false, 'fill'=>'layer', 'source'=>'', 'image'=>0, 'color'=>'#ffffff', 'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
-            'glass_blur'=>12, 'glass_color'=>'rgba(255,255,255,0.15)', 'opacity'=>100, 'invert'=>false, 'stroke'=>0, 'stroke_color'=>'#ffffff',
-            'use_shadow'=>false, 'shadow_color'=>'rgba(0,0,0,0.5)', 'shadow_x'=>0, 'shadow_y'=>10, 'shadow_blur'=>25, 'use_scroll'=>false, 'move_x'=>0, 'move_y'=>0)
+            'glass_blur'=>12, 'glass_color'=>'rgba(255,255,255,0.15)', 'opacity'=>100, 'invert'=>false,
+            // Effect (2026-11-10, user's request; Border instead of Edge): a line along its outline, its width per device (in the
+            // drawing's px: it scales with the drawing), Inside / Center / Outside its edge; Radius: a rectangle's corners (px of
+            // the drawing or % of its shorter side), per device; radius_linked: the editor sets the four together.
+            'use_border'=>false, 'border_width'=>2, 'border_width_tablet'=>null, 'border_width_mobile'=>null, 'border_position'=>'inside', 'border_style'=>'solid', 'border_color'=>'#ffffff',
+            'use_radius'=>false, 'radius_linked'=>true, 'radius_tl'=>20, 'radius_tr'=>20, 'radius_br'=>20, 'radius_bl'=>20,
+            'radius_tl_tablet'=>null, 'radius_tr_tablet'=>null, 'radius_br_tablet'=>null, 'radius_bl_tablet'=>null,
+            'radius_tl_mobile'=>null, 'radius_tr_mobile'=>null, 'radius_br_mobile'=>null, 'radius_bl_mobile'=>null,
+            'radius_tl_unit'=>'px', 'radius_tr_unit'=>'px', 'radius_br_unit'=>'px', 'radius_bl_unit'=>'px',
+            'use_shadow'=>false, 'shadow_color'=>'rgba(0,0,0,0.5)', 'shadow_x'=>0, 'shadow_y'=>10, 'shadow_blur'=>25, 'use_scroll'=>false, 'move_x'=>0, 'move_y'=>0,
+            // Its box in the drawing [x, y, w, h] (the editor measures it, admin.js sync()): where Reveal and Zoom play.
+            'box'=>array())
+            // Entrance and Loop animation (2026-11-10, user's request): a layer's settings (Loop: From, To and Duration per device).
+            + WPBN_Entrance::defaults() + WPBN_Animation::defaults()
+            + array('anim_from_tablet'=>null, 'anim_from_mobile'=>null, 'anim_to_tablet'=>null, 'anim_to_mobile'=>null, 'anim_duration_tablet'=>null, 'anim_duration_mobile'=>null)
             + WPBN_Settings::filters(array());
     }
     private static function num($value, $fallback, $min, $max) {
         return is_scalar($value) && is_numeric($value) ? round(max($min, min($max, (float) $value)), 1) : $fallback;
+    }
+    /*
+     * An object's Entrance animation (2026-11-10, user's request): kind => [its keyframes (frontend.css .wpbn-oenter--…),
+     * the side a slide comes from]. A slide moves the window (what it shows stays), Reveal uncovers it from a side, Zoom
+     * grows it into place around its middle (frontend.js boxes(): its box on the screen). On glass no fading of the whole
+     * object (it would stop the blur until the end): its blur and tint come in instead.
+     */
+    const ENTER = array('fade'=>array('fade', null), 'slide-up'=>array('slide', array(0, 1)), 'slide-down'=>array('slide', array(0, -1)),
+        'slide-left'=>array('slide', array(1, 0)), 'slide-right'=>array('slide', array(-1, 0)),
+        'reveal-left'=>array('reveal-left', null), 'reveal-right'=>array('reveal-right', null), 'reveal-top'=>array('reveal-top', null), 'reveal-bottom'=>array('reveal-bottom', null),
+        'zoom'=>array('zoom', null));
+    // The editor's names (admin.js entranceCard()).
+    public static function enter_names() {
+        return array('fade'=>__('Fade in', 'wp-banner'), 'slide-up'=>__('Slide up (from below)', 'wp-banner'), 'slide-down'=>__('Slide down (from above)', 'wp-banner'),
+            'slide-left'=>__('Slide left (from the right)', 'wp-banner'), 'slide-right'=>__('Slide right (from the left)', 'wp-banner'),
+            'reveal-left'=>__('Reveal from the left', 'wp-banner'), 'reveal-right'=>__('Reveal from the right', 'wp-banner'), 'reveal-top'=>__('Reveal from the top', 'wp-banner'), 'reveal-bottom'=>__('Reveal from the bottom', 'wp-banner'),
+            'zoom'=>__('Zoom', 'wp-banner'));
+    }
+    // Its item's classes and CSS variables, and its box for frontend.js: [class, css, attributes]; none without one.
+    private static function entrance($o, $viewbox) {
+        if (empty($o['use_enter']) || !isset(self::ENTER[$o['enter_type']])) { return array('', '', ''); }
+        list($kind, $side) = self::ENTER[$o['enter_type']];
+        $css = '--wpbn-ed:'.$o['enter_duration'].'s;'.($o['enter_delay'] > 0 ? '--wpbn-edl:'.$o['enter_delay'].'s;' : '').($o['enter_easing'] !== 'ease-out' ? '--wpbn-ee:'.$o['enter_easing'].';' : '');
+        if ($side) { $css .= '--wpbn-ex:'.($side[0] * $o['enter_distance']).'px;--wpbn-ey:'.($side[1] * $o['enter_distance']).'px;'; }
+        if ($kind === 'zoom') { $css .= '--wpbn-es:'.round($o['enter_scale'] / 100, 3).';'; }
+        $class = ' wpbn-oenter wpbn-oenter--'.(strpos($kind, 'reveal') === 0 ? 'reveal wpbn-oenter--'.$kind : $kind).($o['fill'] === 'glass' ? ' wpbn-oenter--glass' : '').($o['enter_start'] === 'visible' ? ' wpbn-oenter--visible' : '');
+        return array($class, $css, $kind === 'zoom' || strpos($kind, 'reveal') === 0);
+    }
+    /*
+     * An object's Loop animation (2026-11-10, user's request): a layer's kinds (WPBN_Animation), on a box around its fill and
+     * line (.wpbn-shape-loop: apart from its Entrance animation's, so the two add up). Slide moves the window (--wpbn-lox,
+     * -loy added to its masks' place), Zoom grows it around a point of its own box (Direction: --wpbn-fx, -fy), Fade: on
+     * glass its blur and tint (a fading box around it would stop the blur), elsewhere the whole. [class, css]; none without one.
+     */
+    const ORIGIN_POINTS = array('center'=>array(.5, .5), 'top'=>array(.5, 0), 'bottom'=>array(.5, 1), 'left'=>array(0, .5), 'right'=>array(1, .5),
+        'top-left'=>array(0, 0), 'top-right'=>array(1, 0), 'bottom-left'=>array(0, 1), 'bottom-right'=>array(1, 1));
+    private static function loop($o) {
+        $types = WPBN_Animation::types();
+        if (empty($o['use_anim']) || !isset($types[$o['anim_type']])) { return array('', ''); }
+        $type = $types[$o['anim_type']];
+        $css = '';
+        foreach (array('desktop'=>'-d', 'tablet'=>'-t', 'mobile'=>'-m') as $device=>$suffix) {
+            $v = array();
+            foreach (array('anim_from', 'anim_to') as $key) { $v[] = round(max($type['min'], min($type['max'], self::at($o, $key, $device))) / $type['div'], 4); }
+            $seconds = max(WPBN_Animation::DURATION[0], min(WPBN_Animation::DURATION[1], self::at($o, 'anim_duration', $device)));
+            $css .= '--wpbn-a0'.$suffix.':'.$v[0].$type['unit'].';--wpbn-a1'.$suffix.':'.$v[1].$type['unit'].';--wpbn-ad'.$suffix.':'.$seconds.'s;';
+        }
+        if ($o['anim_delay'] > 0) { $css .= 'animation-delay:'.$o['anim_delay'].'s;--wpbn-ald:'.$o['anim_delay'].'s;'; }
+        if ($o['anim_easing'] !== 'ease-in-out') { $css .= 'animation-timing-function:'.$o['anim_easing'].';--wpbn-ale:'.$o['anim_easing'].';'; }
+        if ($o['anim_repeat'] !== 'alternate') { $css .= '--wpbn-alc:'.($o['anim_repeat'] === 'once' ? '1' : 'infinite').';--wpbn-alr:normal;'; }
+        if ($o['anim_type'] === 'zoom' && isset(self::ORIGIN_POINTS[$o['anim_origin']]) && $o['anim_origin'] !== 'center') {
+            $css .= '--wpbn-fx:'.self::ORIGIN_POINTS[$o['anim_origin']][0].';--wpbn-fy:'.self::ORIGIN_POINTS[$o['anim_origin']][1].';';
+        }
+        return array('wpbn-shape-loop wpbn-anim wpbn-anim--'.$o['anim_type'].' wpbn-anim--'.$o['anim_repeat'].($o['fill'] === 'glass' ? ' wpbn-oloop--glass' : '').($o['anim_start'] === 'visible' ? ' wpbn-anim--visible' : ''), $css);
+    }
+    const BORDER_POSITIONS = array('inside', 'center', 'outside');
+    const BORDER_STYLES = array('solid', 'dashed', 'dotted');
+    const CORNERS = array('tl', 'tr', 'br', 'bl');
+    // A value per device ($min to $max): desktop's always, tablet's and mobile's null where they follow the larger screen.
+    private static function per_device($o, $key, $fallback, $max, $min = 0) {
+        $out = array($key=>self::num($o[$key] ?? null, $fallback, $min, $max));
+        foreach (array('tablet', 'mobile') as $device) {
+            $v = $o[$key.'_'.$device] ?? null;
+            $out[$key.'_'.$device] = is_scalar($v) && is_numeric($v) ? self::num($v, null, $min, $max) : null;
+        }
+        return $out;
+    }
+    // An object's value on a device: its own, or the larger screen's.
+    private static function at($o, $key, $device) {
+        $chain = array('desktop'=>array(''), 'tablet'=>array('_tablet', ''), 'mobile'=>array('_mobile', '_tablet', ''));
+        foreach ($chain[$device] as $suffix) { if (isset($o[$key.$suffix])) { return (float) $o[$key.$suffix]; } }
+        return 0.0;
+    }
+    private static function n($value) { return rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.'); }
+
+    // An object that is one rectangle (in groups that place it): its Radius can round its corners.
+    const RECT = '#^((?:<g [^>]*>)*)<rect ([^>]*)/>((?:</g>)*)$#';
+    /**
+     * Its geometry on a device: a rectangle with Radius on as a path with those corners (as CSS, each at most half its
+     * shorter side; % of that side), its place, transform and fill rule kept; anything else as it is.
+     */
+    public static function rounded($markup, $o, $device) {
+        if (empty($o['use_radius']) || !preg_match(self::RECT, $markup, $m)) { return $markup; }
+        preg_match_all('/([\w:-]+)="([^"]*)"/', $m[2], $pairs, PREG_SET_ORDER);
+        $a = array();
+        foreach ($pairs as $p) { $a[$p[1]] = $p[2]; }
+        $x = (float) ($a['x'] ?? 0); $y = (float) ($a['y'] ?? 0); $w = (float) ($a['width'] ?? 0); $h = (float) ($a['height'] ?? 0);
+        if ($w <= 0 || $h <= 0) { return $markup; }
+        $side = min($w, $h);
+        $r = array();
+        foreach (self::CORNERS as $c) {
+            $v = self::at($o, 'radius_'.$c, $device);
+            if (($o['radius_'.$c.'_unit'] ?? 'px') === '%') { $v = $v / 100 * $side; }
+            $r[$c] = self::n(max(0, min($side / 2, $v)));
+        }
+        $n = function ($v) { return self::n($v); };
+        $d = 'M'.$n($x + $r['tl']).' '.$n($y).'H'.$n($x + $w - $r['tr']).'A'.$r['tr'].' '.$r['tr'].' 0 0 1 '.$n($x + $w).' '.$n($y + $r['tr'])
+            .'V'.$n($y + $h - $r['br']).'A'.$r['br'].' '.$r['br'].' 0 0 1 '.$n($x + $w - $r['br']).' '.$n($y + $h)
+            .'H'.$n($x + $r['bl']).'A'.$r['bl'].' '.$r['bl'].' 0 0 1 '.$n($x).' '.$n($y + $h - $r['bl'])
+            .'V'.$n($y + $r['tl']).'A'.$r['tl'].' '.$r['tl'].' 0 0 1 '.$n($x + $r['tl']).' '.$n($y).'Z';
+        $keep = '';
+        foreach (array('transform', 'fill-rule', 'clip-rule') as $k) { if (isset($a[$k])) { $keep .= ' '.$k.'="'.$a[$k].'"'; } }
+        return $m[1].'<path d="'.$d.'"'.$keep.'/>'.$m[3];
+    }
+    /**
+     * Its Border on a device as SVG (black, for a mask; admin.js lineSvg() the same): a line along its outline, its width in
+     * the drawing's px. Inside / Outside: twice as wide, the half outside (inside) the object hidden by a mask of it. '' for none.
+     */
+    public static function line($markup, $o, $device, $viewbox) {
+        $w = self::at($o, 'border_width', $device);
+        if (empty($o['use_border']) || $w <= 0) { return ''; }
+        $position = $o['border_position'] ?? 'inside';
+        $sw = $position === 'center' ? $w : $w * 2;
+        $dash = '';
+        if (($o['border_style'] ?? '') === 'dashed') { $dash = ' stroke-dasharray="'.self::n($w * 3).' '.self::n($w * 2).'"'; }
+        elseif (($o['border_style'] ?? '') === 'dotted') { $dash = ' stroke-linecap="round" stroke-dasharray="0 '.self::n($sw * 2).'"'; }
+        $stroke = '<g fill="none" stroke="#000" stroke-width="'.self::n($sw).'"'.$dash.'>'.$markup.'</g>';
+        if ($position === 'center') { return $stroke; }
+        $area = 'x="'.self::n($viewbox[0] - $sw).'" y="'.self::n($viewbox[1] - $sw).'" width="'.self::n($viewbox[2] + $sw * 2).'" height="'.self::n($viewbox[3] + $sw * 2).'"';
+        $mask = $position === 'inside' ? '<g fill="#fff">'.$markup.'</g>' : '<rect '.$area.' fill="#fff"/><g fill="#000">'.$markup.'</g>';
+        return '<mask id="b" maskUnits="userSpaceOnUse" '.$area.'>'.$mask.'</mask><g mask="url(#b)">'.$stroke.'</g>';
+    }
+    // CSS variables per device: desktop's, then tablet's and mobile's where they differ from the larger screen's (frontend.css).
+    private static function device_vars($name, $values) {
+        $css = $name.':'.$values['desktop'].';';
+        if ($values['tablet'] !== $values['desktop']) { $css .= $name.'-t:'.$values['tablet'].';'; }
+        if ($values['mobile'] !== $values['tablet']) { $css .= $name.'-m:'.$values['mobile'].';'; }
+        return $css;
     }
 
     /**
@@ -167,8 +308,22 @@ class WPBN_Shape {
         $out['glass_color'] = WPBN_Settings::color($o['glass_color'] ?? null, $d['glass_color']);
         $out['opacity'] = self::num($o['opacity'] ?? null, $d['opacity'], 0, 100);
         $out['invert'] = !empty($o['invert']);
-        $out['stroke'] = self::num($o['stroke'] ?? null, $d['stroke'], 0, 30);
-        $out['stroke_color'] = WPBN_Settings::color($o['stroke_color'] ?? null, $d['stroke_color']);
+        // Saved with an Edge (before 2026-11-10): a Border as wide, Outside, as the Edge was.
+        if (!array_key_exists('use_border', $o) && is_scalar($o['stroke'] ?? null) && (float) $o['stroke'] > 0) {
+            $o = array_merge($o, array('use_border'=>true, 'border_width'=>$o['stroke'], 'border_position'=>'outside', 'border_color'=>$o['stroke_color'] ?? $d['border_color']));
+        }
+        $out['use_border'] = !empty($o['use_border']);
+        $out += self::per_device($o, 'border_width', $d['border_width'], 100);
+        $out['border_position'] = in_array($o['border_position'] ?? null, self::BORDER_POSITIONS, true) ? $o['border_position'] : $d['border_position'];
+        $out['border_style'] = in_array($o['border_style'] ?? null, self::BORDER_STYLES, true) ? $o['border_style'] : $d['border_style'];
+        $out['border_color'] = WPBN_Settings::color($o['border_color'] ?? null, $d['border_color']);
+        $out['use_radius'] = !empty($o['use_radius']);
+        $out['radius_linked'] = array_key_exists('radius_linked', $o) ? !empty($o['radius_linked']) : true;
+        foreach (self::CORNERS as $c) {
+            $unit = ($o['radius_'.$c.'_unit'] ?? null) === '%' ? '%' : 'px';
+            $out += self::per_device($o, 'radius_'.$c, $d['radius_'.$c], $unit === '%' ? 50 : 1000);
+            $out['radius_'.$c.'_unit'] = $unit;
+        }
         $out['use_shadow'] = !empty($o['use_shadow']);
         $out['shadow_color'] = WPBN_Settings::color($o['shadow_color'] ?? null, $d['shadow_color']);
         foreach (array('shadow_x'=>array(-100, 100), 'shadow_y'=>array(-100, 100), 'shadow_blur'=>array(0, 200), 'move_x'=>array(-1000, 1000), 'move_y'=>array(-1000, 1000)) as $key=>$range) {
@@ -177,7 +332,17 @@ class WPBN_Shape {
         // Scroll animation: no switch since 2026-11-09 (user's request), always on; saved with it off: no travel (it stays as it was).
         if (array_key_exists('use_scroll', $o) && empty($o['use_scroll'])) { $out['move_x'] = 0; $out['move_y'] = 0; }
         $out['use_scroll'] = true;
-        return $out + WPBN_Settings::filters($o);
+        $box = is_array($o['box'] ?? null) ? array_values($o['box']) : array();
+        $out['box'] = count($box) === 4 && count(array_filter($box, 'is_numeric')) === 4 && $box[2] > 0 && $box[3] > 0 ? array_map(function ($v) { return round((float) $v, 2); }, $box) : array();
+        // Entrance animation (2026-11-10, user's request): a layer's settings, its own kinds (ENTER).
+        $enter = WPBN_Entrance::sanitize($o, array());
+        $enter['enter_type'] = isset(self::ENTER[$o['enter_type'] ?? '']) ? $o['enter_type'] : 'fade';
+        // Loop animation (2026-11-10, user's request): a layer's kinds and settings.
+        $loop = WPBN_Animation::sanitize($o, array());
+        foreach (array('anim_from'=>WPBN_Animation::RANGE, 'anim_to'=>WPBN_Animation::RANGE, 'anim_duration'=>WPBN_Animation::DURATION) as $key=>$range) {
+            $loop += self::per_device($o, $key, $d[$key], $range[1], $range[0]);
+        }
+        return $out + $enter + $loop + WPBN_Settings::filters($o);
     }
 
     /*
@@ -187,11 +352,60 @@ class WPBN_Shape {
      * the mask (the window), not what is seen through it (frontend.js --wpbn-ox, --wpbn-oy).
      */
     const MASK_SIZES = array('cover'=>'cover', 'contain'=>'contain', 'stretch'=>'100% 100%');
-    // The layer's Fit per device as CSS variables (frontend.css --wpbn-ms, -t, -m).
+    /*
+     * The layer's Fit per device as CSS variables (frontend.css): the masks' size (--wpbn-ms, -t, -m) and, with a Custom size
+     * on some device, their place (--wpbn-px, --wpbn-py: the drawing's top left corner, its middle at the layer's Position;
+     * cqw / cqh: shares of the layer, the scene). data-fit: the same for frontend.js boxes().
+     */
     public static function fit_css($l) {
-        $css = '';
-        foreach (WPBN_Settings::resolved($l, 'shape_fit') as $device=>$fit) { $css .= '--wpbn-ms'.WPBN_Render::SUFFIX[$device].':'.(self::MASK_SIZES[$fit] ?? 'cover').';'; }
-        return $css;
+        $css = ''; $place = ''; $custom = false;
+        $meta = self::meta($l['shape']);
+        $area = $meta ? self::area($l, $meta) : array(0, 0, 1, 1);
+        $ratio = $area[2] / $area[3];
+        $sizes = WPBN_Settings::resolved($l, 'shape_size');
+        $where = $l['shape_place'] ?? array('x'=>array('desktop'=>50, 'tablet'=>50, 'mobile'=>50), 'y'=>array('desktop'=>50, 'tablet'=>50, 'mobile'=>50));
+        foreach (WPBN_Settings::resolved($l, 'shape_fit') as $device=>$fit) {
+            $suffix = WPBN_Render::SUFFIX[$device];
+            if ($fit !== 'custom') { $css .= '--wpbn-ms'.$suffix.':'.(self::MASK_SIZES[$fit] ?? 'cover').';'; $place .= '--wpbn-px'.$suffix.':50%;--wpbn-py'.$suffix.':50%;'; continue; }
+            $custom = true;
+            $size = (float) $sizes[$device];
+            // [width, height] as numbers in one unit: px, or cqw / cqh (% of the scene's width or height).
+            if ($l['shape_size_by'] === 'width') { $unit = $l['shape_size_unit'] === '%' ? 'cqw' : 'px'; $wh = array($size, $size / $ratio); }
+            else { $unit = $l['shape_size_unit'] === '%' ? 'cqh' : 'px'; $wh = array($size * $ratio, $size); }
+            $css .= '--wpbn-ms'.$suffix.':'.self::n($wh[0]).$unit.' '.self::n($wh[1]).$unit.';';
+            $place .= '--wpbn-px'.$suffix.':calc('.self::n($where['x'][$device]).'cqw - '.self::n($wh[0] / 2).$unit.');--wpbn-py'.$suffix.':calc('.self::n($where['y'][$device]).'cqh - '.self::n($wh[1] / 2).$unit.');';
+        }
+        return $css.($custom ? $place : '');
+    }
+    // How the drawing is fitted per device, for frontend.js: [fit, x, y, size, unit, by] each.
+    public static function fit_data($l) {
+        $out = array();
+        $sizes = WPBN_Settings::resolved($l, 'shape_size');
+        foreach (WPBN_Settings::resolved($l, 'shape_fit') as $device=>$fit) {
+            $out[] = $fit === 'custom' ? array('custom', (float) $l['shape_place']['x'][$device], (float) $l['shape_place']['y'][$device], (float) $sizes[$device], $l['shape_size_unit'], $l['shape_size_by']) : array($fit);
+        }
+        return $out;
+    }
+    /**
+     * The drawing's area [x, y, w, h]: its viewBox or, with Trim empty space, its objects' box (as the editor measured them),
+     * with room for a line outside their edges. The viewBox where an object has no box yet.
+     */
+    public static function area($l, $meta) {
+        $viewbox = array_map('floatval', $meta['viewbox']);
+        if (empty($l['shape_trim'])) { return $viewbox; }
+        $x0 = INF; $y0 = INF; $x1 = -INF; $y1 = -INF; $room = 0;
+        foreach ($l['shape_objects'] as $o) {
+            if (empty($o['box'])) { return $viewbox; }
+            list($x, $y, $w, $h) = $o['box'];
+            $x0 = min($x0, $x); $y0 = min($y0, $y); $x1 = max($x1, $x + $w); $y1 = max($y1, $y + $h);
+            if (!empty($o['use_border'])) {
+                $width = max(self::at($o, 'border_width', 'desktop'), self::at($o, 'border_width', 'tablet'), self::at($o, 'border_width', 'mobile'));
+                $room = max($room, ($o['border_position'] ?? '') === 'outside' ? $width : (($o['border_position'] ?? '') === 'center' ? $width / 2 : 0));
+            }
+        }
+        if ($x1 <= $x0 || $y1 <= $y0) { return $viewbox; }
+        $room += 1;
+        return array(round($x0 - $room, 2), round($y0 - $room, 2), round($x1 - $x0 + $room * 2, 2), round($y1 - $y0 + $room * 2, 2));
     }
     // One object as a CSS mask: url("data:image/svg+xml,…") of the drawing's area with the object alone, black.
     // Not kept to its proportions inside its box (Stretch); Cover and Contain give it a box of its proportions anyway.
@@ -204,6 +418,8 @@ class WPBN_Shape {
     public static function inner($s, $l, $context, &$state) {
         $meta = self::meta($l['shape']);
         if (!$meta) { return ''; }
+        // The drawing's area: its viewBox, or trimmed to its objects.
+        $meta['viewbox'] = self::area($l, $meta);
         $markup = array();
         foreach ($meta['objects'] as $o) { $markup[$o['key']] = $o['markup']; }
         // The image layers others can show, by their uid.
@@ -233,23 +449,37 @@ class WPBN_Shape {
                 $gradient = $o['use_gradient'] ? WPBN_Gradient::css($o['gradient']) : '';
                 $clip .= 'background:'.($gradient !== '' ? $gradient : $o['color']).';';
             } elseif ($o['fill'] === 'glass') {
-                $clip .= 'background:'.$o['glass_color'].';-webkit-backdrop-filter:blur('.$o['glass_blur'].'px);backdrop-filter:blur('.$o['glass_blur'].'px);';
+                // Its blur and tint as variables too: its animations bring them in (frontend.css wpbn-oe-glass, wpbn-ol-glass).
+                $clip .= 'background:'.$o['glass_color'].';-webkit-backdrop-filter:blur('.$o['glass_blur'].'px);backdrop-filter:blur('.$o['glass_blur'].'px);--wpbn-gb:'.$o['glass_blur'].'px;--wpbn-gc:'.$o['glass_color'].';';
             }
             if ($o['opacity'] < 100) { $clip .= 'opacity:'.($o['opacity'] / 100).';'; }
-            // Its edge (a solid line around it: four shadows without blur, one each way) and its shadow, along its
-            // outline. Not on glass: a filter around it would leave the glass nothing behind it to blur.
-            $item = '--wpbn-mask:'.self::mask($meta['viewbox'], $markup[$o['key']]).';';
-            $effects = array();
-            if ($o['fill'] !== 'glass') {
-                if ($o['stroke'] > 0) {
-                    foreach (array(array(1, 0), array(-1, 0), array(0, 1), array(0, -1)) as $dir) { $effects[] = 'drop-shadow('.($dir[0] * $o['stroke']).'px '.($dir[1] * $o['stroke']).'px 0 '.$o['stroke_color'].')'; }
-                }
-                if ($o['use_shadow']) { $effects[] = 'drop-shadow('.$o['shadow_x'].'px '.$o['shadow_y'].'px '.$o['shadow_blur'].'px '.$o['shadow_color'].')'; }
+            // Its shape per device (a rectangle's Radius) as its mask, and its Border: a box of its colour masked by the line,
+            // sized and moved as the fill's (on glass too: no filter around it).
+            $fills = array(); $lines = array();
+            foreach (array('desktop', 'tablet', 'mobile') as $device) {
+                $geometry = self::rounded($markup[$o['key']], $o, $device);
+                $fills[$device] = self::mask($meta['viewbox'], $geometry);
+                $line = self::line($geometry, $o, $device, $meta['viewbox']);
+                $lines[$device] = $line === '' ? '' : self::mask($meta['viewbox'], $line);
             }
-            if ($effects) { $item .= 'filter:'.implode(' ', $effects).';'; }
+            $item = self::device_vars('--wpbn-mask', $fills);
+            $border = '';
+            if (array_filter($lines)) {
+                foreach ($lines as $device=>$line) { if ($line === '') { $lines[$device] = 'linear-gradient(transparent,transparent)'; } }
+                $item .= self::device_vars('--wpbn-line', $lines);
+                $border = '<div class="wpbn-shape-line" style="'.esc_attr('background:'.$o['border_color']).'"></div>';
+            }
+            // Its shadow, along its outline (and its Border). Not on glass: a filter around it would leave the glass nothing behind it to blur.
+            if ($o['fill'] !== 'glass' && $o['use_shadow']) { $item .= 'filter:drop-shadow('.$o['shadow_x'].'px '.$o['shadow_y'].'px '.$o['shadow_blur'].'px '.$o['shadow_color'].');'; }
             $move = $o['use_scroll'] && ($o['move_x'] || $o['move_y']) ? ' data-move="'.esc_attr(wp_json_encode(array('x'=>$o['move_x'], 'y'=>$o['move_y']))).'"' : '';
-            $html .= '<div class="wpbn-shape-item" style="'.esc_attr($item).'"'.$move.'><div class="wpbn-shape-clip'.($o['invert'] ? ' wpbn-shape-clip--invert' : '').'"'
-                .($clip !== '' ? ' style="'.esc_attr($clip).'"' : '').'>'.$content.'</div></div>';
+            list($enter_class, $enter_css, $boxed) = self::entrance($o, $meta['viewbox']);
+            list($loop_class, $loop_css) = self::loop($o);
+            $item .= $enter_css;
+            // Its box for frontend.js (boxes()): where a Reveal or a Zoom plays.
+            $attrs = $o['box'] && ($boxed || ($loop_class !== '' && $o['anim_type'] === 'zoom')) ? ' data-box="'.esc_attr(implode(' ', $o['box'])).'" data-vb="'.esc_attr(implode(' ', array_map('floatval', $meta['viewbox']))).'"' : '';
+            $inner = '<div class="wpbn-shape-clip'.($o['invert'] ? ' wpbn-shape-clip--invert' : '').'"'.($clip !== '' ? ' style="'.esc_attr($clip).'"' : '').'>'.$content.'</div>'.$border;
+            if ($loop_class !== '') { $inner = '<div class="'.$loop_class.'" style="'.esc_attr($loop_css).'">'.$inner.'</div>'; }
+            $html .= '<div class="wpbn-shape-item'.$enter_class.'" style="'.esc_attr($item).'"'.$move.$attrs.'>'.$inner.'</div>';
         }
         return $html;
     }

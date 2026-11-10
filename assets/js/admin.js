@@ -63,7 +63,14 @@
         const l = scene.layers[selected], o = l && l.type === 'shape' && selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
         return o || l;
     };
-    function sync() { $('data').value = JSON.stringify(scene); }
+    function sync() {
+        // A Shape object's box in the drawing (WPBN_Shape: where its Reveal and Zoom play), measured here.
+        (scene.layers || []).forEach(l => {
+            const data = l.type === 'shape' && shapes[l.shape];
+            if (data) (l.shape_objects || []).forEach(o => { const b = shapeBoxes(data)[o.key]; o.box = b && b.width > 0 && b.height > 0 ? [b.x, b.y, b.width, b.height].map(v => Math.round(v * 100) / 100) : []; });
+        });
+        $('data').value = JSON.stringify(scene);
+    }
     // Per-device layer settings, as in WP Swiper: desktop always has a value;
     // tablet and mobile null = the larger screen's (mobile → tablet → desktop).
     const UP = {tablet:'desktop', mobile:'tablet'};
@@ -93,7 +100,10 @@
      */
     const TYPE_NEW = {text:{container:'theme'}, button:{container:'theme'}, shortcode:{container:'theme'}, overlay:{color:boot.overlayColor || 'rgba(0,0,0,0.4)'},
         richtext:{content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'}};
-    const standard = o => o === scene ? (boot.sceneDefaults || {}) : Object.assign({}, boot.layer, {container:'full', move_y:0}, TYPE_NEW[o.type] || {});
+    const standard = o => o === scene ? (boot.sceneDefaults || {})
+        // A Shape object: as a new one (WPBN_Shape::object_defaults()).
+        : o.type === undefined && o.key !== undefined ? ((shapes[(scene.layers[selected] || {}).shape] || {}).defaults || {})
+        : Object.assign({}, boot.layer, {container:'full', move_y:0}, TYPE_NEW[o.type] || {});
     function isStandard(o, key) {
         let def = standard(o)[key];
         if ((key === 'anim_from' || key === 'anim_to') && ANIM && ANIM.types[o.anim_type]) def = ANIM.types[o.anim_type].def[key === 'anim_from' ? 0 : 1];
@@ -117,7 +127,7 @@
         font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size,
         anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse,
         // Filters (an image layer's, a Shape object's) at rest, and a Shape object's Edge and frosted glass.
-        rotate:0, enter_distance:60, enter_scale:80, enter_duration:1, enter_delay:0, f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, backdrop_blur:0, button_icon_size:16, button_icon_gap:8, stroke:0, glass_blur:12};
+        rotate:0, enter_distance:60, enter_scale:80, enter_duration:1, enter_delay:0, f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, backdrop_blur:0, button_icon_size:16, button_icon_gap:8, glass_blur:12, shape_size:300};
     // Is there something to reset? key: the stored key on this device; base: a per-device setting's name (null for a key of its own).
     function canReset(l, key, base) {
         if (base && key !== base) return l[key] != null;
@@ -800,6 +810,8 @@
         });
         const field = box.closest('.wpbn-field');
         Object.keys(DEVICES).forEach(dv => { const b = field.querySelector('[data-field-device="' + dv + '"]'); if (b) b.classList.toggle('has-value', radiusOwn(l, dv)); });
+        // A Shape object's corners: its drawing.
+        refreshShape();
     }
     // The box's sides drawn as the widths are (1–6px, its line; none: a light dashed line), the fields' values and the device dots.
     function refreshBorder() {
@@ -825,8 +837,8 @@
         const px = (key, label, min, max) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<span class="wpbn-number-unit"><input id="wpbn-f-' + key + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(l[key]) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>';
         return toggle + '<div class="wpbn-row wpbn-shadow">' + colorField('shadow_color', 'Color', {alpha:true, def:boot.layer.shadow_color})
             + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>'
-            // An overlay's shadow can fall Inside its edges (a vignette); a button's (not an Underline's: no box) too.
-            + (l.type === 'overlay' || (l.type === 'button' && l.button_style !== 'underline') ? check('shadow_inset', 'Inside') : '');
+            // An overlay's shadow can fall Inside its edges (a vignette); a button's (not an Underline's: no box) and a shortcode's too.
+            + (l.type === 'overlay' || l.type === 'shortcode' || (l.type === 'button' && l.button_style !== 'underline') ? check('shadow_inset', 'Inside') : '');
     }
     function inlineFor(l, kind, d) { const key = INLINE[kind].keys[d]; return d === 'desktop' || l[key] != null ? l[key] : inlineFor(l, kind, UP[d]); }
     const fontFor = (l, d) => inlineFor(l, 'font', d);
@@ -870,24 +882,29 @@
         return withTip('<div class="wpbn-field">' + head(id, 'Type') + '<select id="' + id + '" data-anim-kind="' + which + '">'
             + Object.entries(Object.assign({none:'None'}, types)).map(([v, t]) => '<option value="' + v + '"' + (v === value ? ' selected' : '') + '>' + escape(t) + '</option>').join('') + '</select></div>', help);
     }
-    function entranceCard(l) {
+    // obj: a Shape object's (its own kinds: WPBN_Shape::ENTER).
+    function entranceCard(l, obj) {
         if (!ENTER || l.type === 'shape') return '';
-        const toggle = kindSelect('enter', l, ENTER.types, 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
+        const toggle = obj ? kindSelect('enter', l, ENTER.objectTypes || {}, 'How the object comes in, once, as the page loads or once the banner is in view: fading in, its window sliding over what it shows, uncovered from a side (Reveal) or growing into place. On glass its blur and tint come in.')
+            : kindSelect('enter', l, ENTER.types, 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
         const starts = ANIM ? ANIM.starts : {load:'On load', visible:'In view'};
         // Its fields always active (user's request, 2026-11-09): with None they do nothing, their values kept.
         return card('Entrance animation', toggle + (withTip(select('enter_start', 'Starts', starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.')
             + (/^slide/.test(l.enter_type) ? range('enter_distance', 'Distance (px)', {min:0, max:1000, to:300, tip:'How far away it starts.'}) : '')
             + (l.enter_type === 'zoom' ? range('enter_scale', 'Start size (%)', {min:10, max:300, from:50, to:150, tip:'Under 100: it grows into place; over 100: it shrinks into place.'}) : '')
             + range('enter_duration', 'Duration (s)', {min:ENTER.duration[0], max:ENTER.duration[1], step:0.1, to:3})
-            + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, tip:'E.g. the title a moment after the photo.'})
+            + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, tip:obj ? 'E.g. the strips one after another: each a little later than the one before.' : 'E.g. the title a moment after the photo.'})
             + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : '')));
     }
-    function animationCard(l) {
+    // obj: a Shape object's (WPBN_Shape::loop()).
+    function animationCard(l, obj) {
         if (!ANIM) return '';
         const types = l.type === 'overlay' ? Object.fromEntries(Object.entries(ANIM.types).filter(([k]) => OVERLAY_ANIMS.includes(k))) : ANIM.types;
         const kinds = Object.keys(types), type = types[l.anim_type] || types[kinds[0]];
         // Its Type, None first (no switch: user's request, 2026-11-09), the help behind an "i" beside it.
-        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), l.type === 'overlay'
+        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), obj
+            ? 'Runs by itself, after its Entrance animation: the window drifting to and fro over what it shows (Slide), the object slowly growing and shrinking (Zoom) or fading in and out (Fade; on glass its blur and tint). Give each object its own Delay to set them moving one after another.'
+            : l.type === 'overlay'
             ? 'Runs by itself, on top of the scroll animation: the overlay slowly zooming, or sliding to and fro. For an overlay smaller than the scene (Size); one that fills it would show its edges. How it comes in: Entrance animation.'
             : 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
         // Reset takes the kind's own start and end.
@@ -935,8 +952,7 @@
     // A button: Open in a new window with a link only; Corners not for Underline.
     // An image object: Image fit and its photo's point in view only where its box can crop it (not with Height Auto).
     const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto', autoheight: autoHeight, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
-        // A Shape object's Edge color: with an Edge (not on glass); its Filters: on a photo or an image; Edge and Shadow: not on glass.
-        stroke: () => Number(current().stroke) > 0 && current().fill !== 'glass',
+        // A Shape object's Filters: on a photo or an image; its Shadow: not on glass.
         pictured: () => current().fill === 'layer' || current().fill === 'image',
         edged: () => current().fill !== 'glass'};
     // A button's Background or Corners: a sample of each, the chosen one pressed (as WP Top Info Bar's).
@@ -1126,13 +1142,38 @@
         const data = shapes[l.shape];
         if (!data) return '';
         const parts = shapeParts(data);
-        let vb = data.viewbox.map(Number);
+        let vb = shapeArea(l);
         const own = only != null && l.shape_objects[only] ? shapeBoxes(data)[l.shape_objects[only].key] : null;
         if (own && own.width > 0 && own.height > 0) { const pad = Math.max(own.width, own.height) * 0.06; vb = [own.x - pad, own.y - pad, own.width + pad * 2, own.height + pad * 2]; }
         return '<svg' + (className ? ' class="' + className + '"' : '') + ' viewBox="' + vb.map(n => Math.round(n * 100) / 100).join(' ') + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">'
-            + (l.shape_objects || []).map((o, j) => parts[o.key] == null || (only != null && only !== j) ? '' : '<g data-object="' + j + '" class="wpbn-shape-object' + (j === active ? ' is-active' : '') + (o.hidden ? ' is-hidden' : '') + '">' + parts[o.key] + '</g>').join('')
+            + (l.shape_objects || []).map((o, j) => parts[o.key] == null || (only != null && only !== j) ? '' : '<g data-object="' + j + '" class="wpbn-shape-object' + (j === active ? ' is-active' : '') + (o.hidden ? ' is-hidden' : '') + '">' + roundedPart(o, parts[o.key], device()) + '</g>').join('')
             + '</svg>';
     }
+    // The drawing's area [x, y, w, h] (as WPBN_Shape::area()): its viewBox or, with Trim empty space, its objects' box with
+    // room for a line outside their edges.
+    function shapeArea(l) {
+        const data = shapes[l.shape], vb = data.viewbox.map(Number);
+        if (!l.shape_trim) return vb;
+        const boxes = shapeBoxes(data);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, room = 0;
+        for (const o of l.shape_objects || []) {
+            const b = boxes[o.key];
+            if (!b || !(b.width > 0)) return vb;
+            x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+            if (o.use_border) { const w = Math.max(...Object.keys(DEVICES).map(d => Number(eff(o, 'border_width', d)) || 0)); room = Math.max(room, o.border_position === 'outside' ? w : o.border_position === 'center' ? w / 2 : 0); }
+        }
+        if (!(x1 > x0 && y1 > y0)) return vb;
+        room += 1;
+        return [x0 - room, y0 - room, x1 - x0 + room * 2, y1 - y0 + room * 2];
+    }
+    // A Custom size on a device: the drawing's box in % of the scene [width, height]; null on a device fitted otherwise.
+    function shapeRect(l, d) {
+        if (!shapes[l.shape] || eff(l, 'shape_fit', d) !== 'custom') return null;
+        const a = shapeArea(l), ratio = a[2] / a[3], W = sceneWidth(d), H = sceneHeight(d), size = Number(eff(l, 'shape_size', d)) || 0, by = l.shape_size_by === 'width';
+        const px = l.shape_size_unit === '%' ? size / 100 * (by ? W : H) : size, w = by ? px : px * ratio, h = by ? px / ratio : px;
+        return [w / W * 100, h / H * 100];
+    }
+    const shapeCustom = l => l.type === 'shape' && Object.keys(DEVICES).some(d => eff(l, 'shape_fit', d) === 'custom');
     // Objects without a name of their own: numbered in reading order (rows from the top, left to right in a row),
     // not in the file's order (a drawing program writes them as they were drawn).
     // Each object's box in the drawing's units, by its key (measured once, in an SVG drawn out of sight).
@@ -1159,6 +1200,53 @@
         items.slice().sort((a, b) => Math.abs(a.y - b.y) > Math.min(a.h, b.h) / 2 ? a.y - b.y : a.x - b.x).forEach((item, n) => { numbers[item.i] = n + 1; });
         return numbers;
     }
+    /*
+     * A Shape object's Effect (2026-11-10, user's request): Border (instead of Edge) and, for a rectangle, Radius; as
+     * WPBN_Shape::rounded() and ::line() draw them on the site (the same geometry here).
+     */
+    const RECT_PART = /^((?:<g [^>]*>)*)<rect ([^>]*?)\s*\/>((?:<\/g>)*)$/;
+    const isRectPart = markup => RECT_PART.test(String(markup || '').trim());
+    const n2 = v => String(Math.round(v * 100) / 100);
+    function roundedPart(o, markup, d) {
+        const m = o && o.use_radius ? RECT_PART.exec(String(markup || '').trim()) : null;
+        if (!m) return markup;
+        const a = {};
+        m[2].replace(/([\w:-]+)="([^"]*)"/g, (all, k, v) => { a[k] = v; });
+        const x = Number(a.x) || 0, y = Number(a.y) || 0, w = Number(a.width) || 0, h = Number(a.height) || 0;
+        if (w <= 0 || h <= 0) return markup;
+        const side = Math.min(w, h), r = {};
+        RADIUS_CORNERS.forEach(c => { let v = Number(eff(o, 'radius_' + c, d)) || 0; if (o['radius_' + c + '_unit'] === '%') v = v / 100 * side; r[c] = Math.round(Math.max(0, Math.min(side / 2, v)) * 100) / 100; });
+        const arc = (rr, ex, ey) => 'A' + rr + ' ' + rr + ' 0 0 1 ' + n2(ex) + ' ' + n2(ey);
+        const path = 'M' + n2(x + r.tl) + ' ' + n2(y) + 'H' + n2(x + w - r.tr) + arc(r.tr, x + w, y + r.tr) + 'V' + n2(y + h - r.br) + arc(r.br, x + w - r.br, y + h)
+            + 'H' + n2(x + r.bl) + arc(r.bl, x, y + h - r.bl) + 'V' + n2(y + r.tl) + arc(r.tl, x + r.tl, y) + 'Z';
+        return m[1] + '<path d="' + path + '"' + ['transform', 'fill-rule', 'clip-rule'].map(k => a[k] != null ? ' ' + k + '="' + a[k] + '"' : '').join('') + '/>' + m[3];
+    }
+    const SHAPE_POSITIONS = {inside:'Inside', center:'Center', outside:'Outside'};
+    // Border: its switch; on, its Width (one for the whole outline, per device: tablet / mobile empty follow the larger
+    // screen) beside its Color, as WP Swiper's Art SVG Shape (user's request, 2026-11-10); then where it runs and its line.
+    function shapeBorderField(l, o) {
+        const toggle = withTip(check('use_border', 'Border'), 'A line along the object\'s outline, on glass too. Its width is in the drawing\'s pixels: it grows and shrinks with the drawing. Inside, on (Center) or outside its edge.');
+        if (!o.use_border) return toggle;
+        const d = device(), key = dkey('border_width', d), own = o[key];
+        // Width on its own row, Line and Color on the next (as a layer's Border), then Position (user's request, 2026-11-10).
+        return toggle + '<div class="wpbn-field wpbn-field--shape-border" data-base="border_width">' + head('wpbn-f-' + key, 'Width (px)', devices(ownValues(o, 'border_width')))
+            + '<input type="number" id="wpbn-f-' + key + '" data-shape-border min="0" max="100" step="1" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + escape(eff(o, 'border_width', d)) + '"></div>'
+            + '<div class="wpbn-row wpbn-row--line">' + select('border_style', 'Line', {solid:'Solid', dashed:'Dashed', dotted:'Dotted'}) + colorField('border_color', 'Color', {alpha:true, def:'#ffffff'}) + '</div>'
+            + segmented(o, 'border_position', 'Position', SHAPE_POSITIONS);
+    }
+    // As the Border's width or a Radius changes: the drawing above the menu, the Width's placeholder and device dots.
+    function refreshShape() {
+        const l = selected >= 0 ? scene.layers[selected] : null;
+        if (!l || l.type !== 'shape') return;
+        const objects = $('objects');
+        if (objects && !objects.hidden) objects.innerHTML = shapeCanvas(l);
+        const o = current(), input = o !== l && $('settings').querySelector('[data-shape-border]');
+        if (!input) return;
+        const d = device();
+        if (document.activeElement !== input) input.value = o[dkey('border_width', d)] ?? '';
+        input.placeholder = eff(o, 'border_width', d);
+        refreshDots(input.closest('.wpbn-field'));
+    }
     const SKIPPED_NAMES = {text:'text not turned into outlines', image:'embedded pictures', use:'references to other objects (<use>)', line:'lines', other:'other elements'};
     function shapeField(l) {
         const data = shapes[l.shape], vb = data ? data.viewbox : null;
@@ -1169,11 +1257,16 @@
             + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="shape-upload"' + (shapeBusy ? ' disabled' : '') + '>' + (shapeBusy ? 'Uploading…' : data ? 'Replace' : 'Upload SVG') + '</button></span></div>'
             + (shapeError ? '<p class="wpbn-shape-error" role="alert">' + escape(shapeError) + '</p>' : '')
             + (skipped ? note('Left out: ' + escape(skipped) + '. Only filled shapes become objects.') : '') + '</div>';
-        if (data) {
-            html += '<div class="wpbn-shape-canvas" style="aspect-ratio:' + Number(vb[2]) + '/' + Number(vb[3]) + '">' + shapeSvg(l, selectedObject, 'wpbn-shape-svg') + '</div>'
-                + note('Click an object to choose it (or choose it under the layer in the list). Objects further down the list are behind the others.');
-        }
         return html;
+    }
+    // The drawing, large, above the menu (#wpbn-objects; user's request, 2026-11-10: not in the Shape block, nor above the
+    // settings): the object being set at a glance. A click on an object opens its settings, beside them the layer's.
+    function shapeCanvas(l) {
+        const data = l && l.type === 'shape' ? shapes[l.shape] : null;
+        if (!data) return '';
+        const vb = data.viewbox;
+        // In a frame named Objects, as the settings' (user's request, 2026-11-10).
+        return '<fieldset class="wpbn-section"><legend>Objects</legend><div class="wpbn-shape-canvas" style="aspect-ratio:' + Number(vb[2]) + '/' + Number(vb[3]) + '" title="Click an object to open its settings; beside them: the layer\'s">' + shapeSvg(l, selectedObject, 'wpbn-shape-svg') + '</div></fieldset>';
     }
     /*
      * A layer's (or the scene's) settings as blocks (2026-11-09, user's request: as WP Swiper's settings box): the menu in
@@ -1244,12 +1337,20 @@
     // A Shape layer's settings: its SVG and how it fits the scene; with an object chosen, that object's.
     function shapeSettings(l) {
         const o = selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
-        const svg = card('Shape', (o ? '' : nameField()) + withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
+        const svg = card('Shape', nameField() + withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
         if (!o) {
             return legend + blocks([['content', 'Shape', 'art', svg
-                + '<p class="description wpbn-after-cards">Choose an object (in the drawing or under the layer\'s tile) to set what fills it, its edge, shadow and motion. The layer itself stays in place.</p>'],
-                ['fit', 'Fit', 'editor-contract', shapes[l.shape] ? card('Fit', withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch'}),
-                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Choose a device to give it its own.')) : '']]);
+                + '<p class="description wpbn-after-cards">Choose an object (in the drawing on the left or under the layer\'s tile) to set what fills it, its border, shadow and motion. The layer itself stays in place.</p>'],
+                // Fit (2026-11-10, user's request): Trim empty space; a Custom size, by its height or width, at its Position.
+                ['fit', 'Fit', 'editor-contract', shapes[l.shape] ? card('Fit', withTip(check('shape_trim', 'Trim empty space'), 'The drawing cut to its objects: the empty space around them in the SVG left out (room kept for a Border outside them).')
+                    + withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch', custom:'Custom size'}),
+                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Custom size: as large as you set, where you put it (Position). Choose a device to give it its own.')
+                    + (shapeCustom(l) ? segmented(l, 'shape_size_by', 'Size by', {height:'Height', width:'Width'})
+                        + respRange('shape_size', (l.shape_size_by === 'width' ? 'Width' : 'Height') + ' (' + l.shape_size_unit + ')', {min:1, max:l.shape_size_unit === '%' ? 300 : 5000, to:l.shape_size_unit === '%' ? 100 : 1500,
+                            tip:'The other side follows the drawing\'s proportions. % is of the scene\'s ' + (l.shape_size_by === 'width' ? 'width' : 'height') + '. Used on the devices set to Custom size.'})
+                        + segmented(l, 'shape_size_unit', 'Unit', {px:'px', '%':'%'})
+                        + '<div class="wpbn-field">' + head('wpbn-f-shape-position', 'Position') + '<p><button type="button" class="button" id="wpbn-f-shape-position" data-action="position" data-kind="place">' + escape(positionTip(l)) + '</button></p>'
+                        + note('Drag the drawing to where it stands, per device. Its objects stay windows: a photo seen through them does not move with it.') + '</div>' : '')) : '']]);
         }
         let fill = '';
         if (o.fill === 'layer') {
@@ -1269,21 +1370,22 @@
             fill = range('glass_blur', 'Blur (px)', {min:0, max:60, note:'How strongly the layers behind it are blurred, as frosted glass.'})
                 + colorField('glass_color', 'Tint', {alpha:true, def:'rgba(255,255,255,0.15)', note:'A see-through color over the blur; fully transparent: none.'});
         } else {
-            fill = note('Nothing inside it: only its Edge and Shadow show, e.g. a frame.');
+            fill = note('Nothing inside it: only its Border and Shadow show, e.g. a frame.');
         }
         const choice = '<div class="wpbn-field">' + head('wpbn-f-fill', 'Fill') + '<div class="wpbn-fill-choice wpbn-fill-choice--wrap" role="group" aria-label="Fill">'
             + Object.entries(FILL_NAMES).map(([value, name], i) => '<button type="button" class="wpbn-device-button"' + (i ? '' : ' id="wpbn-f-fill"') + ' data-choice="fill" data-value="' + value + '" aria-pressed="' + (o.fill === value) + '">' + name + '</button>').join('') + '</div></div>';
-        // The drawing stays above the object's blocks: a click in it chooses another object.
-        return legend + svg + blocks([['content', 'Object', 'marker', card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
-                + range('opacity', 'Opacity (%)', {min:0, max:100})
+        return legend + blocks([['content', 'Object', 'marker', card('Object', '<div class="wpbn-field">' + head('wpbn-f-object-name', 'Name') + '<input type="text" id="wpbn-f-object-name" class="widefat" data-object-name value="' + escape(o.name) + '"></div>'
                 + withTip(check('invert', 'Invert'), 'The object becomes a hole: its fill covers the whole scene except the object\'s shape, e.g. a panel with a window cut in it.')
                 + '<p><button type="button" class="button" data-object-hide="' + selectedObject + '" data-layer="' + selected + '">' + (o.hidden ? 'Show the object' : 'Hide the object') + '</button> <button type="button" class="button-link" data-action="object-none">Layer settings</button></p>')],
             ['fill', 'Fill', 'art', card('Fill', choice + fill)],
-            // Greyed where they do not apply (the values kept): Filters change a picture (Photo, Image); glass has no Edge or
-            // Shadow (a filter around it would leave it nothing to blur: an object with Fill None and an Edge over it instead).
+            // In the layers' order (user's request, 2026-11-10): Effect, Filters, Entrance animation, Scroll animation.
+            // Effect (2026-11-10, user's request): Opacity (from Object), Border (Edge before), a rectangle's Radius, its Shadow (not on glass: greyed).
+            ['effect', 'Effect', 'admin-customizer', card('Effect', range('opacity', 'Opacity (%)', {min:0, max:100}) + shapeBorderField(l, o) + (isRectPart(shapeParts(shapes[l.shape])[o.key]) ? radiusField(o) : '')
+                + needsAll(shadowField(o), 'edged')), o.use_border || o.use_radius || o.use_shadow || Number(o.opacity) < 100],
+            // Greyed where they do not apply (the values kept): Filters change a picture (Photo, Image).
             ['filters', 'Filters', 'image-filter', card('Filters', needsAll(filterFields(), 'pictured'))],
-            ['edge', 'Edge and shadow', 'admin-appearance', card('Edge and shadow', withTip(needs(range('stroke', 'Edge (px)', {min:0, max:30}), 'edged'), 'A solid line around it, e.g. the white edge of torn paper; 0: none. Glass has none, nor a Shadow: put an object with Fill None and an Edge over it instead.')
-                + needs(colorField('stroke_color', 'Edge color', {alpha:true, def:'#ffffff'}), 'stroke') + needsAll(shadowField(o), 'edged'))],
+            ['entrance', 'Entrance animation', 'migrate', entranceCard(o, true), !!o.use_enter],
+            ['loop', 'Loop animation', 'controls-repeat', animationCard(o, true), !!o.use_anim],
             ['scroll', 'Scroll animation', 'sort', scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
                 + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'Negative: up.'})), scrolls(o), SCROLL_TIP]]);
     }
@@ -1374,7 +1476,7 @@
                 + '<button type="button" class="wpbn-icon-button" data-row-action="hide" data-index="' + i + '" aria-pressed="' + l.hidden + '" aria-label="' + (l.hidden ? 'Show ' : 'Hide ') + name + '" title="' + (l.hidden ? 'Show' : 'Hide') + '"><span class="dashicons dashicons-' + (l.hidden ? 'hidden' : 'visibility') + '" aria-hidden="true"></span></button>'
                 // Position (not a Shape layer's): where it stands, or a photo filling the scene its point in view; its value in its title
                 // (the browser's tooltip on hover, as Hide's and Duplicate's).
-                + (l.type === 'shape' ? '' : '<button type="button" class="wpbn-icon-button wpbn-tile-position" data-row-action="position" data-index="' + i + '" data-kind="' + (anchored(l) ? 'place' : 'focus') + '" aria-label="' + escape(positionTip(l)) + ' (' + name + ')" title="' + escape(positionTip(l)) + '">' + icons.position + '</button>')
+                + (l.type === 'shape' && !shapeCustom(l) ? '' : '<button type="button" class="wpbn-icon-button wpbn-tile-position" data-row-action="position" data-index="' + i + '" data-kind="' + (anchored(l) ? 'place' : 'focus') + '" aria-label="' + escape(positionTip(l)) + ' (' + name + ')" title="' + escape(positionTip(l)) + '">' + icons.position + '</button>')
                 + '<button type="button" class="wpbn-icon-button" data-row-action="duplicate" data-index="' + i + '" aria-label="Duplicate ' + name + '" title="Duplicate"' + (scene.layers.length >= 40 ? ' disabled' : '') + '>' + icons.clone + '</button>'
                 + '</span><span class="wpbn-layer-tools wpbn-layer-tools--end">'
                 + '<button type="button" class="wpbn-icon-button wpbn-icon-button--danger" data-row-action="delete" data-index="' + i + '" aria-label="Delete ' + name + '" title="Delete"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button>'
@@ -1706,9 +1808,10 @@
                     // Effect (user's request, 2026-11-09): an image's Scale and Opacity, every layer's Rotation, a Shadow (an image's along its
                     // outline, a title's or a text's behind its letters, an overlay's around its box or Inside it).
                     ['effect', 'Effect', 'admin-customizer', card('Effect', (l.type !== 'image' ? '' : respRange('scale', 'Scale (%)', {min:10, max:300, to:200, tip:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + respRange('opacity', 'Opacity (%)', {min:0, max:100}))
-                        + rotateField() + (['image', 'text', 'richtext', 'overlay', 'button'].includes(l.type) ? shadowField(l) : '') + borderField(l) + radiusField(l))],
+                        + rotateField() + (['image', 'text', 'richtext', 'overlay', 'button', 'shortcode'].includes(l.type) ? shadowField(l) : '') + borderField(l) + radiusField(l))],
                     // A button's (2026-11-10): its Blur alone, of what is under it (frosted glass).
-                    ['image', 'overlay', 'button'].includes(l.type) ? ['filters', 'Filters', 'image-filter', card('Filters', l.type === 'image' ? filterFields() : l.type === 'overlay' ? overlayFilterFields(l)
+                    // A shortcode's (2026-11-10): the image's, on the whole element.
+                    ['image', 'overlay', 'button', 'shortcode'].includes(l.type) ? ['filters', 'Filters', 'image-filter', card('Filters', l.type === 'image' || l.type === 'shortcode' ? filterFields() : l.type === 'overlay' ? overlayFilterFields(l)
                         : respRange('backdrop_blur', 'Blur (px)', {min:0, max:100, to:50, tip:'Blurs what is under the button, like frosted glass; 0: none. Shows through a see-through fill: Border, Underline, or Filled with a see-through color.'}))] : null,
                     ['entrance', 'Entrance animation', 'migrate', entranceCard(l), !!l.use_enter],
                     ['loop', 'Loop animation', 'controls-repeat', animationCard(l), !!l.use_anim],
@@ -1729,6 +1832,8 @@
         // The picker and the Font list belong to fields about to be redrawn.
         closePicker(); closeFonts(); stopEditor();
         $('menu').innerHTML = menuHtml;
+        const objects = $('objects'), drawing = shapeCanvas(scene.layers[selected]);
+        objects.innerHTML = drawing; objects.hidden = !drawing;
         $('settings').innerHTML = '<fieldset class="wpbn-section">' + html + '</fieldset>';
         blockTitle(shownBlock);
         applyStates();
@@ -1855,7 +1960,7 @@
             // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
             if (key === 'fill_scene' && !input.checked && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
                 && ['tablet', 'mobile'].every(dv => obj[WIDTH[dv][1]] == null && obj[HEIGHT[dv][1]] == null)) { obj.overlay_width = 50; obj.height_unit = 'auto'; }
-            if (/^use_/.test(key) || key === 'fill_scene') {
+            if (/^use_/.test(key) || key === 'fill_scene' || key === 'shape_trim') {
                 settings(); const again = $('settings').querySelector('[data-key="' + key + '"]'); if (again) again.focus();
                 list(); changed(); return;
             }
@@ -1891,10 +1996,21 @@
         // The font sample shows the title's text.
         if (key === 'text' || key === 'content') refreshFontSample();
         // A button's link: Open in a new window applies with one; a Shape object's Edge color, with an Edge.
-        if (key === 'button_url' || key === 'stroke') applyStates();
+        if (key === 'button_url') applyStates();
         // An overlay's thumbnail shows its fill; a layer's name shows in the list.
         if ((key === 'color' && obj.type === 'overlay') || key === 'name') list();
         changed();
+    });
+    // A Shape object's Border width typed (tablet / mobile empty: the larger screen's).
+    app.addEventListener('input', event => {
+        const input = event.target.closest && event.target.closest('[data-shape-border]'), o = input && current();
+        if (!o) return;
+        const d = device();
+        let value = null;
+        if (input.value === '') { if (d === 'desktop') return; }
+        else { const v = Number(input.value); if (!Number.isFinite(v)) return; value = Math.max(0, Math.min(100, v)); }
+        o[dkey('border_width', d)] = value;
+        refreshShape(); changed();
     });
     // Entrance / Loop animation's Type: None switches it off; another type switches it on (a Loop animation's kind: its own start, end and Repeat).
     app.addEventListener('change', event => {
@@ -1919,6 +2035,8 @@
         current()[key] = event.target.value === '' && event.target.dataset.inherit ? null : event.target.value;
         if (key === 'font_weight' || key === 'text_transform' || key === 'font_style') refreshFontSample();
         if (key === 'border_style') refreshBorder();
+        // A Shape layer's Fit: Custom size shows its Size and Position (and the tile its Position button).
+        if (/^shape_fit/.test(key)) { settings(); list(); $('settings').querySelector('[data-key="' + key + '"]').focus(); }
         // Container: its width field shows for Custom only.
         if (key === 'container') { settings(); $('settings').querySelector('[data-key="container"]').focus(); }
         // An Entrance animation's Type: its own fields (a slide's Distance, a zoom's Start size).
@@ -2081,14 +2199,15 @@
         event.preventDefault(); next.click();
     });
     $('scene-settings').onclick = () => { selected = -1; selectedObject = -1; list(); settings(); };
-    // A Shape layer's drawing in its card: a click on an object chooses it, beside them none.
-    $('settings').addEventListener('click', event => {
+    // A Shape layer's drawing (above the menu): a click on an object chooses it, beside them none.
+    $('objects').addEventListener('click', event => {
         const canvas = event.target.closest && event.target.closest('.wpbn-shape-canvas');
         if (!canvas || selected < 0) return;
         const g = event.target.closest('[data-object]');
         const j = g ? Number(g.getAttribute('data-object')) : -1;
         if (j === selectedObject) return;
-        selectedObject = j; list(); settings();
+        // An object: its settings (Object); beside them: the layer's, still on Objects.
+        selectedObject = j; if (j >= 0) block = 'content'; list(); settings();
     });
     const layersBox = $('layers');
     const freshTip = event => {
@@ -2500,7 +2619,7 @@
     // Hatched bands where the layer does not reach (images only: text never fills the scene).
     function drawGaps(canvas) {
         canvas.querySelectorAll('.wpbn-position-gap').forEach(gap=>gap.remove());
-        if(anchored(positionLayer))return;
+        if(anchored(positionLayer) || positionLayer.type==='shape')return;
         const b=layerBox(withDraft(),canvasDevice(canvas),0);
         const pct=(v,of)=>Math.max(0,Math.min(100,v/of*100));
         const top=pct(b.top,b.h), bottom=pct(b.bottom,b.h), left=pct(b.left,b.w), right=pct(b.right,b.w);
@@ -2513,7 +2632,7 @@
     function warn() {
         const box=positionModal.querySelector('.wpbn-position-warning'), layer=withDraft();
         // Edges uncovered at rest. While scrolling the site grows the layers that fill the scene, so their edges never show.
-        const found=anchored(positionLayer) ? [] : Object.keys(DEVICES).filter(d=>uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
+        const found=anchored(positionLayer) || positionLayer.type==='shape' ? [] : Object.keys(DEVICES).filter(d=>uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
         // A shortcode's element taller than the scene (as the preview drew it): the scene cuts it.
         const tall=positionLayer.type==='shortcode' ? Object.keys(DEVICES).filter(d=>{const real=shortcodeHeight(positionLayer,d);return real&&real.own&&real.height>100.5;}).map(d=>DEVICES[d][1]) : [];
         box.hidden=!found.length&&!tall.length;
@@ -2569,7 +2688,14 @@
             scene.layers.forEach(layer=>{
                 if(layer.hidden && layer!==positionLayer)return;
                 // A Shape layer: not drawn on the site yet, so not here either.
-                if(layer.type==='shape')return;
+                if(layer.type==='shape'){
+                    // Being placed (a Custom size): its drawing at its size there; at another Fit on this device, the whole scene.
+                    if(layer!==positionLayer)return;
+                    const r=shapeRect(layer,device)||[100,100], item=document.createElement('span');
+                    item.className='wpbn-position-item wpbn-position-target wpbn-position-shape';
+                    Object.assign(item.style,{left:eff(layer,'x',device)+'%',top:eff(layer,'y',device)+'%',width:r[0]+'%',height:r[1]+'%',transform:'translate(-50%,-50%)'});
+                    item.innerHTML=shapeSvg(layer,-1,'',null,true);canvas.append(item);return;
+                }
                 const v=key=>eff(layer,key,device);
                 const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');
                 const box=boxOf(device,layer);

@@ -20,11 +20,68 @@
 /* A Shape layer (WPBN_Shape): the whole scene; each object a box as large whose fill is clipped to the object's shape
    (its mask, --wpbn-mask), the drawing fitted to the scene as its Fit says (--wpbn-ms: cover, contain or 100% 100%),
    moved by its travel (--wpbn-ox, --wpbn-oy: the window moves, not what is seen through it). Invert: the shape cut out
-   of a box filling the scene instead. Its edge and shadow are filters on the box around the clipped one. */
-.wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms,cover)}
-.wpbn-scene .wpbn-shape-item,.wpbn-scene .wpbn-shape-clip{position:absolute;inset:0}
-.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mask);mask-image:var(--wpbn-mask);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:var(--wpbn-msz);mask-size:var(--wpbn-msz);-webkit-mask-position:calc(50% + var(--wpbn-ox,0px)) calc(50% + var(--wpbn-oy,0px));mask-position:calc(50% + var(--wpbn-ox,0px)) calc(50% + var(--wpbn-oy,0px))}
-.wpbn-scene .wpbn-shape-clip--invert{-webkit-mask-image:linear-gradient(#000 0 0),var(--wpbn-mask);mask-image:linear-gradient(#000 0 0),var(--wpbn-mask);-webkit-mask-size:100% 100%,var(--wpbn-msz);mask-size:100% 100%,var(--wpbn-msz);-webkit-mask-position:0 0,calc(50% + var(--wpbn-ox,0px)) calc(50% + var(--wpbn-oy,0px));mask-position:0 0,calc(50% + var(--wpbn-ox,0px)) calc(50% + var(--wpbn-oy,0px));-webkit-mask-composite:xor;mask-composite:exclude}
+   of a box filling the scene instead. Its Border: a box of its colour masked by the line; its shadow: a filter on the box around both. */
+/* Custom size (WPBN_Shape::fit_css()): the masks' size and place in shares of the layer (the scene: cqw, cqh). */
+.wpbn-scene .wpbn-layer--shape{container-type:size;--wpbn-msz:var(--wpbn-ms,cover);--wpbn-mpx:var(--wpbn-px,50%);--wpbn-mpy:var(--wpbn-py,50%)}
+/* Its shape and its Border's line per device (--wpbn-mask / --wpbn-line, -t, -m: WPBN_Shape::device_vars()). */
+.wpbn-scene .wpbn-shape-item{--wpbn-mk:var(--wpbn-mask);--wpbn-lk:var(--wpbn-line,none)}
+.wpbn-scene .wpbn-shape-item,.wpbn-scene .wpbn-shape-clip,.wpbn-scene .wpbn-shape-line{position:absolute;inset:0}
+.wpbn-scene .wpbn-shape-line{pointer-events:none;-webkit-mask-image:var(--wpbn-lk);mask-image:var(--wpbn-lk)}
+.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mk);mask-image:var(--wpbn-mk)}
+.wpbn-scene .wpbn-shape-clip,.wpbn-scene .wpbn-shape-line{-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:var(--wpbn-msz);mask-size:var(--wpbn-msz);-webkit-mask-position:calc(var(--wpbn-mpx,50%) + var(--wpbn-ox,0px) + var(--wpbn-eox,0px) + var(--wpbn-lox,0px)) calc(var(--wpbn-mpy,50%) + var(--wpbn-oy,0px) + var(--wpbn-eoy,0px) + var(--wpbn-loy,0px));mask-position:calc(var(--wpbn-mpx,50%) + var(--wpbn-ox,0px) + var(--wpbn-eox,0px) + var(--wpbn-lox,0px)) calc(var(--wpbn-mpy,50%) + var(--wpbn-oy,0px) + var(--wpbn-eoy,0px) + var(--wpbn-loy,0px))}
+.wpbn-scene .wpbn-shape-clip--invert{-webkit-mask-image:linear-gradient(#000 0 0),var(--wpbn-mk);mask-image:linear-gradient(#000 0 0),var(--wpbn-mk);-webkit-mask-size:100% 100%,var(--wpbn-msz);mask-size:100% 100%,var(--wpbn-msz);-webkit-mask-position:0 0,calc(var(--wpbn-mpx,50%) + var(--wpbn-ox,0px) + var(--wpbn-eox,0px) + var(--wpbn-lox,0px)) calc(var(--wpbn-mpy,50%) + var(--wpbn-oy,0px) + var(--wpbn-eoy,0px) + var(--wpbn-loy,0px));mask-position:0 0,calc(var(--wpbn-mpx,50%) + var(--wpbn-ox,0px) + var(--wpbn-eox,0px) + var(--wpbn-lox,0px)) calc(var(--wpbn-mpy,50%) + var(--wpbn-oy,0px) + var(--wpbn-eoy,0px) + var(--wpbn-loy,0px));-webkit-mask-composite:xor;mask-composite:exclude}
+/* An object's Entrance animation (WPBN_Shape::ENTER): its item, its fill and its Border's line timed alike. Slide moves
+   the window (--wpbn-eox/-eoy added to its mask's place), Reveal uncovers it from a side between its box's edges
+   (--wpbn-ol/-ot/-or/-ob: frontend.js boxes()), Zoom grows it around its middle (--wpbn-oc). On glass, no fading of the
+   whole: its blur and tint come in (a fading parent would stop the blur until the end). */
+@property --wpbn-eox{syntax:'<length>';inherits:true;initial-value:0px}
+@property --wpbn-eoy{syntax:'<length>';inherits:true;initial-value:0px}
+.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter .wpbn-shape-clip,.wpbn-scene .wpbn-oenter .wpbn-shape-line{animation-duration:var(--wpbn-ed,1s);animation-timing-function:var(--wpbn-ee,ease-out);animation-delay:var(--wpbn-edl,0s);animation-iteration-count:1;animation-fill-mode:both}
+.wpbn-scene .wpbn-oenter{transform-origin:var(--wpbn-oc,50% 50%)}
+.wpbn-scene .wpbn-oenter--fade{animation-name:wpbn-oe-fade}
+.wpbn-scene .wpbn-oenter--slide{animation-name:wpbn-oe-slide}
+.wpbn-scene .wpbn-oenter--zoom{animation-name:wpbn-oe-zoom}
+.wpbn-scene .wpbn-oenter--glass.wpbn-oenter--fade{animation-name:none}
+.wpbn-scene .wpbn-oenter--glass.wpbn-oenter--slide{animation-name:wpbn-oe-move}
+.wpbn-scene .wpbn-oenter--glass.wpbn-oenter--zoom{animation-name:wpbn-oe-scale}
+.wpbn-scene .wpbn-oenter--glass:not(.wpbn-oenter--reveal) .wpbn-shape-clip{animation-name:wpbn-oe-glass}
+.wpbn-scene .wpbn-oenter--glass:not(.wpbn-oenter--reveal) .wpbn-shape-line{animation-name:wpbn-oe-fade}
+.wpbn-scene .wpbn-oenter--reveal,.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-clip,.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-line{animation-fill-mode:backwards}
+.wpbn-scene .wpbn-oenter--reveal-left{--wpbn-rv:wpbn-oe-reveal-left}
+.wpbn-scene .wpbn-oenter--reveal-right{--wpbn-rv:wpbn-oe-reveal-right}
+.wpbn-scene .wpbn-oenter--reveal-top{--wpbn-rv:wpbn-oe-reveal-top}
+.wpbn-scene .wpbn-oenter--reveal-bottom{--wpbn-rv:wpbn-oe-reveal-bottom}
+.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-clip,.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-line{animation-name:var(--wpbn-rv)}
+@keyframes wpbn-oe-fade{from{opacity:0}}
+@keyframes wpbn-oe-move{from{--wpbn-eox:var(--wpbn-ex,0px);--wpbn-eoy:var(--wpbn-ey,0px)}}
+@keyframes wpbn-oe-slide{from{opacity:0;--wpbn-eox:var(--wpbn-ex,0px);--wpbn-eoy:var(--wpbn-ey,0px)}}
+@keyframes wpbn-oe-scale{from{transform:scale(var(--wpbn-es,.8))}}
+@keyframes wpbn-oe-zoom{from{opacity:0;transform:scale(var(--wpbn-es,.8))}}
+@keyframes wpbn-oe-glass{from{-webkit-backdrop-filter:blur(0px);backdrop-filter:blur(0px);background-color:transparent}}
+@keyframes wpbn-oe-reveal-left{from{clip-path:inset(0 calc(100% - var(--wpbn-ol,0px)) 0 0)}to{clip-path:inset(0 var(--wpbn-or,0px) 0 0)}}
+@keyframes wpbn-oe-reveal-right{from{clip-path:inset(0 0 0 calc(100% - var(--wpbn-or,0px)))}to{clip-path:inset(0 0 0 var(--wpbn-ol,0px))}}
+@keyframes wpbn-oe-reveal-top{from{clip-path:inset(0 0 calc(100% - var(--wpbn-ot,0px)) 0)}to{clip-path:inset(0 0 var(--wpbn-ob,0px) 0)}}
+@keyframes wpbn-oe-reveal-bottom{from{clip-path:inset(calc(100% - var(--wpbn-ob,0px)) 0 0 0)}to{clip-path:inset(var(--wpbn-ot,0px) 0 0 0)}}
+.wpbn-scene:not(.wpbn-scene--seen) .wpbn-oenter--visible,.wpbn-scene:not(.wpbn-scene--seen) .wpbn-oenter--visible *{animation-play-state:paused}
+/* An object's Loop animation (WPBN_Shape::loop()): a box around its fill and line, with a layer's .wpbn-anim (its values per
+   device, its timing, paused off the screen). Slide: the window moves (--wpbn-lox/-loy); Zoom: around a point of its box;
+   Fade on glass: its blur and tint (wpbn-ol-glass) and its line, timed as the box (--wpbn-al…), with a Reveal at once. */
+@property --wpbn-lox{syntax:'<length>';inherits:true;initial-value:0px}
+@property --wpbn-loy{syntax:'<length>';inherits:true;initial-value:0px}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{position:absolute;inset:0;height:auto;--wpbn-al:var(--wpbn-ad-d,8s);transform-origin:calc(var(--wpbn-ol,0px) + (100% - var(--wpbn-ol,0px) - var(--wpbn-or,0px)) * var(--wpbn-fx,.5)) calc(var(--wpbn-ot,0px) + (100% - var(--wpbn-ot,0px) - var(--wpbn-ob,0px)) * var(--wpbn-fy,.5))}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop.wpbn-anim--slide-x{animation-name:wpbn-ol-x}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop.wpbn-anim--slide-y{animation-name:wpbn-ol-y}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade{animation-name:none}
+.wpbn-scene .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-clip,.wpbn-scene .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-line{animation-duration:var(--wpbn-al,8s);animation-delay:var(--wpbn-ald,0s);animation-timing-function:var(--wpbn-ale,ease-in-out);animation-iteration-count:var(--wpbn-alc,infinite);animation-direction:var(--wpbn-alr,alternate);animation-fill-mode:both}
+.wpbn-scene .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-clip{animation-name:wpbn-ol-glass}
+.wpbn-scene .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-line{animation-name:wpbn-fade}
+.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>*{animation-duration:var(--wpbn-ed,1s),var(--wpbn-al,8s);animation-delay:var(--wpbn-edl,0s),var(--wpbn-ald,0s);animation-timing-function:var(--wpbn-ee,ease-out),var(--wpbn-ale,ease-in-out);animation-iteration-count:1,var(--wpbn-alc,infinite);animation-direction:normal,var(--wpbn-alr,alternate);animation-fill-mode:backwards,both}
+.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-clip{animation-name:var(--wpbn-rv),wpbn-ol-glass}
+.wpbn-scene .wpbn-oenter--reveal .wpbn-shape-loop.wpbn-oloop--glass.wpbn-anim--fade>.wpbn-shape-line{animation-name:var(--wpbn-rv),wpbn-fade}
+@keyframes wpbn-ol-x{from{--wpbn-lox:var(--wpbn-a0,0px)}to{--wpbn-lox:var(--wpbn-a1,0px)}}
+@keyframes wpbn-ol-y{from{--wpbn-loy:var(--wpbn-a0,0px)}to{--wpbn-loy:var(--wpbn-a1,0px)}}
+@keyframes wpbn-ol-glass{from{-webkit-backdrop-filter:blur(calc(var(--wpbn-gb,0px) * var(--wpbn-a0,1)));backdrop-filter:blur(calc(var(--wpbn-gb,0px) * var(--wpbn-a0,1)));background-color:color-mix(in srgb,var(--wpbn-gc,transparent) calc(var(--wpbn-a0,1) * 100%),transparent)}to{-webkit-backdrop-filter:blur(calc(var(--wpbn-gb,0px) * var(--wpbn-a1,1)));backdrop-filter:blur(calc(var(--wpbn-gb,0px) * var(--wpbn-a1,1)));background-color:color-mix(in srgb,var(--wpbn-gc,transparent) calc(var(--wpbn-a1,1) * 100%),transparent)}}
+.wpbn-scene:not(.wpbn-scene--seen) .wpbn-shape-loop.wpbn-anim--visible>*,.wpbn-scene.wpbn-scene--away .wpbn-shape-loop>*{animation-play-state:paused}
 /* An object's own picture: over its whole box (the object shows the part of it under its shape). */
 .wpbn-scene .wpbn-shape-img{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;border:0;border-radius:0;object-fit:cover}
 /* A title: as wide as its text, at most its container's width (--wpbn-width), wrapping there. */
@@ -59,6 +116,9 @@
 /* A Shortcode layer: another plugin's element (a slider…) as wide as its Width, as tall as it is; it can be used
    (clicked, swiped), unlike the other layers. */
 .wpbn-scene .wpbn-layer--shortcode{height:auto;pointer-events:auto}
+/* A shortcode's Shadow around its box and its Filters (the whole element), per device (--wpbn-cfl: the device's). */
+.wpbn-scene .wpbn-layer--boxshadow{box-shadow:var(--wpbn-lsh)}
+.wpbn-scene .wpbn-layer--cfilter{--wpbn-cfl:var(--wpbn-cf);filter:var(--wpbn-cfl)}
 .wpbn-scene .wpbn-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;padding:var(--wpbn-bp,5px 20px);min-height:var(--wpbn-bh,42px);margin:0;font-family:inherit;font-size:var(--wpbn-bf,13px);font-weight:600;line-height:1.2;text-align:center;text-decoration:none;text-transform:uppercase;white-space:nowrap;border:2px solid var(--wpbn-bc);border-radius:0;background:var(--wpbn-bc);color:var(--wpbn-bt);box-shadow:var(--wpbn-bsh,none);transition:filter .15s}
 .wpbn-scene .wpbn-button--rounded{border-radius:5px}
 .wpbn-scene .wpbn-button--round{border-radius:35px}
@@ -135,36 +195,42 @@
 .wpbn-scene .wpbn-layer--text .wpbn-text-gradient{-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .wpbn-scene .wpbn-layer--text .wpbn-text-gradient u{-webkit-text-fill-color:currentColor}
 @media(max-width:1024px){
-.wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms-t,var(--wpbn-ms,cover))}
+.wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms-t,var(--wpbn-ms,cover));--wpbn-mpx:var(--wpbn-px-t,var(--wpbn-px,50%));--wpbn-mpy:var(--wpbn-py-t,var(--wpbn-py,50%))}
+.wpbn-scene .wpbn-shape-item{--wpbn-mk:var(--wpbn-mask-t,var(--wpbn-mask));--wpbn-lk:var(--wpbn-line-t,var(--wpbn-line,none))}
 .wpbn-scene{height:var(--wpbn-tablet-height)}
 .wpbn-scene .wpbn-anim{--wpbn-a0:var(--wpbn-a0-t,var(--wpbn-a0-d));--wpbn-a1:var(--wpbn-a1-t,var(--wpbn-a1-d));animation-duration:var(--wpbn-ad-t,var(--wpbn-ad-d,8s))}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-t,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-t,var(--wpbn-width))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-t,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-t,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,);backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-t)}
+.wpbn-scene .wpbn-layer--cfilter{--wpbn-cfl:var(--wpbn-cf-t)}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-t,var(--wpbn-left));top:var(--wpbn-top-t,var(--wpbn-top));width:var(--wpbn-width-t,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-t,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-t,var(--wpbn-scale,1));--wpbn-r:var(--wpbn-rot-t,var(--wpbn-rot,0deg));--wpbn-ax:var(--wpbn-anx-t,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-t,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-t,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font));letter-spacing:var(--wpbn-tablet-ls,var(--wpbn-ls,normal))}
 }
 @media(max-width:767px){
-.wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms-m,var(--wpbn-ms-t,var(--wpbn-ms,cover)))}
+.wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms-m,var(--wpbn-ms-t,var(--wpbn-ms,cover)));--wpbn-mpx:var(--wpbn-px-m,var(--wpbn-px-t,var(--wpbn-px,50%)));--wpbn-mpy:var(--wpbn-py-m,var(--wpbn-py-t,var(--wpbn-py,50%)))}
+.wpbn-scene .wpbn-shape-item{--wpbn-mk:var(--wpbn-mask-m,var(--wpbn-mask-t,var(--wpbn-mask)));--wpbn-lk:var(--wpbn-line-m,var(--wpbn-line-t,var(--wpbn-line,none)))}
 .wpbn-scene{height:var(--wpbn-mobile-height)}
 .wpbn-scene .wpbn-anim{--wpbn-a0:var(--wpbn-a0-m,var(--wpbn-a0-d));--wpbn-a1:var(--wpbn-a1-m,var(--wpbn-a1-d));animation-duration:var(--wpbn-ad-m,var(--wpbn-ad-d,8s))}
+.wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-m,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-m,var(--wpbn-width))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-m,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-m,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,);backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-m)}
+.wpbn-scene .wpbn-layer--cfilter{--wpbn-cfl:var(--wpbn-cf-m)}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-m,var(--wpbn-left));top:var(--wpbn-top-m,var(--wpbn-top));width:var(--wpbn-width-m,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-m,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-m,var(--wpbn-scale,1));--wpbn-r:var(--wpbn-rot-m,var(--wpbn-rot,0deg));--wpbn-ax:var(--wpbn-anx-m,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-m,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-m,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
 }
-@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
+@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter,.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter *,.wpbn-scene .wpbn-shape-loop *{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
 /* A layer's Border (2026-11-09; WPBN_Render): its width per side and device, its line and colour; on what shows of it (an image's
    picture, an overlay's box, the others' own box), so it comes in and moves with it. */
 .wpbn-scene .wpbn-layer--border:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--border.wpbn-layer--image img,.wpbn-scene .wpbn-layer--border .wpbn-overlay{box-sizing:border-box;border-style:var(--wpbn-brs,solid);border-color:var(--wpbn-brc,#fff);border-width:var(--wpbn-brw)}

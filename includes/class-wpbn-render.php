@@ -272,6 +272,11 @@ class WPBN_Render {
             foreach (WPBN_Settings::heights($l) as $device=>$h) { $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.$h[0].$h[1].';'; }
         } elseif ($l['type'] === 'shortcode') {
             // The other plugin's element, as on a page (it loads its own styles and scripts); clickable (frontend.css).
+            // Its Shadow around its box (Inside: within it) and its Filters per device (2026-11-10, user's request): on the same
+            // box as its Border (frontend.css). Their own variables: a banner inside it must not take them.
+            if (WPBN_Settings::shadow($l) !== '') { $box .= ' wpbn-layer--boxshadow'; $css .= '--wpbn-lsh:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
+            $content_filter = WPBN_Settings::filter_vars($l, '--wpbn-cf');
+            if ($content_filter !== '') { $box .= ' wpbn-layer--cfilter'; $css .= $content_filter; }
             self::$in_shortcode = true;
             $inner = do_shortcode($l['shortcode']);
             self::$in_shortcode = false;
@@ -344,6 +349,8 @@ class WPBN_Render {
         } elseif ($l['type'] === 'shape') {
             // A Shape layer: each object a window onto its fill (WPBN_Shape::inner()); the SVG fitted per device.
             $css .= WPBN_Shape::fit_css($l);
+            // How it is fitted, for frontend.js (boxes()).
+            $motion['fit'] = WPBN_Shape::fit_data($l);
             $inner = WPBN_Shape::inner($s, $l, $context, $state);
         } else {
             // An image object: its Height per device (frontend.css; Auto: as tall as the image at its width).

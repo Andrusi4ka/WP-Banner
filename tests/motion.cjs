@@ -669,7 +669,8 @@ const server=http.createServer((req,res)=>{
         await addElement('shortcode');
         const scIndex=(await data()).layers.length-1, scOf=async()=>(await data()).layers[scIndex];
         assert.ok((await scOf()).type==='shortcode' && (await scOf()).container==='theme' && /^Shortcode \d+$/.test((await scOf()).name) && await page.locator('[data-select="'+scIndex+'"] .wpbn-layer-thumb--shortcode').count()===1,'A new shortcode layer, in the theme container, its icon in the list');
-        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards (Filters: 2026-11-10)');
+        assert.ok(await page.locator('#wpbn-block-effect #wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-block-filters #wpbn-f-f_grayscale').count()===1,'A shortcode: Shadow in Effect, the Filters');
         assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-height').count()===0,'Its Width; no Scale, no Height');
         await page.fill('#wpbn-f-shortcode','[wp_swiper id="12"]');
         await page.fill('#wpbn-f-overlay_width','60');
@@ -1063,14 +1064,49 @@ const server=http.createServer((req,res)=>{
         assert.deepEqual(sd.layers[1].shape_objects.map(o=>o.name),['Object 2','Object 3','Left strip'],'Objects without a name numbered in reading order, the file\'s names kept');
         assert.ok(sd.layers[0].uid && sd.layers[1].shape_objects.every(o=>o.fill==='layer' && o.source===sd.layers[0].uid),'New objects show the photo layer');
         assert.equal(await sh.locator('.wpbn-object-row').count(),3,'Its objects under the layer');
-        await sh.locator('.wpbn-shape-canvas [data-object="0"] rect').click();
-        assert.equal(await sh.locator('#wpbn-settings legend').textContent(),'Object','A click in the drawing chooses an object');
+        // The Shape block: its name and SVG only; the drawing above the menu (left), not in the settings.
+        assert.equal(await sh.locator('#wpbn-settings .wpbn-shape-canvas').count(),0,'No drawing in the settings');
+        assert.ok(await sh.locator('#wpbn-objects .wpbn-shape-canvas').isVisible(),'The drawing above the menu');
+        await sh.click('#wpbn-menu [data-block="fit"]');
+        await sh.locator('#wpbn-objects [data-object="0"] rect').click();
+        assert.equal(await sh.locator('#wpbn-settings legend').textContent(),'Object','A click in the drawing opens the object\'s settings');
+        assert.equal(await sh.locator('#wpbn-objects .wpbn-shape-object.is-active').getAttribute('data-object'),'0','The object being set marked in it');
+        await sh.click('#wpbn-scene-settings');
+        assert.ok(await sh.locator('#wpbn-objects').isHidden(),'No drawing for the scene or other layers');
+        await sh.click('[data-select="1"]');await sh.locator('#wpbn-objects [data-object="0"] rect').click();
         await sh.click('[data-choice="fill"][data-value="glass"]');
-        assert.ok(await sh.locator('#wpbn-f-stroke').isDisabled() && await sh.locator('#wpbn-f-f_grayscale').isDisabled(),'Glass: Edge and Filters greyed, not hidden');
+        assert.ok(await sh.locator('#wpbn-f-use_shadow').isDisabled() && await sh.locator('#wpbn-f-f_grayscale').isDisabled() && !(await sh.locator('#wpbn-f-use_border').isDisabled()),'Glass: Shadow and Filters greyed, not hidden; a Border on it too');
         await sh.click('[data-choice="fill"][data-value="layer"]');
-        await sh.fill('#wpbn-f-stroke','6');
+        // Effect (2026-11-10): Border (its Width beside its Color, as WP Swiper's Art SVG Shape), a rectangle's Radius.
+        await sh.click('#wpbn-menu [data-block="effect"]');
+        await sh.click('label[for="wpbn-f-use_border"]');
+        await sh.fill('[data-shape-border]','6');
+        assert.ok(await sh.locator('[data-shape-border]').evaluate(el=>document.querySelector('[data-key="border_style"]').closest('.wpbn-row').querySelector('[data-key="border_color"],.wpbn-color,[id="wpbn-f-border_color"]')!==null),'Line beside its Color');
+        await sh.click('[data-choice="border_position"][data-value="outside"]');
+        await sh.click('label[for="wpbn-f-use_radius"]');
+        await sh.fill('#wpbn-f-radius_tl','30');
+        assert.ok(await sh.locator('#wpbn-objects [data-object="0"] path').count()===1 && await sh.locator('#wpbn-objects [data-object="0"] rect').count()===0,'Its rounded corners in the drawing');
+        // Its blocks in the layers' order; an Entrance animation of its own kinds; its box measured for it.
+        assert.deepEqual(await sh.locator('#wpbn-menu [data-block]').evaluateAll(b=>b.map(x=>x.dataset.block)),['content','fill','effect','filters','entrance','loop','scroll'],'An object\'s blocks in the layers\' order');
+        await sh.click('#wpbn-menu [data-block="loop"]');
+        await sh.selectOption('#wpbn-f-anim_type','slide-x');
+        assert.ok((await shData()).layers[1].shape_objects[0].use_anim && (await shData()).layers[1].shape_objects[0].anim_type==='slide-x','An object\'s Loop animation');
+        await sh.click('#wpbn-menu [data-block="entrance"]');
+        assert.ok((await sh.locator('#wpbn-f-enter_type option').allTextContents()).includes('Reveal from the left'),'Its own kinds');
+        await sh.selectOption('#wpbn-f-enter_type','reveal-left');
         sd=await shData();
-        assert.ok(sd.layers[1].shape_objects[0].stroke===6 && sd.layers[1].stroke===undefined,'The Edge saved on the object, not the layer');
+        assert.ok(sd.layers[1].shape_objects[0].use_enter && sd.layers[1].shape_objects[0].enter_type==='reveal-left' && sd.layers[1].shape_objects[0].box.join()==='400,200,200,600','Saved on the object, its box with it');
+        const so0=sd.layers[1].shape_objects[0];
+        assert.ok(so0.use_border && so0.border_width===6 && so0.border_position==='outside' && so0.radius_tl===30 && so0.radius_br===30 && sd.layers[1].border_width===undefined,'Border and Radius saved on the object, not the layer');
+        // Fit (2026-11-10): Custom size shows its Size and Position, and a Position button on its tile.
+        await sh.click('[data-select="1"]');await sh.click('#wpbn-menu [data-block="fit"]');
+        assert.equal(await sh.locator('[data-row-action="position"][data-index="1"]').count(),0,'No Position for a Shape layer fitted to the scene');
+        await sh.selectOption('#wpbn-f-shape_fit','custom');
+        assert.ok(await sh.locator('#wpbn-f-shape_size').count()===1 && await sh.locator('[data-row-action="position"][data-index="1"]').count()===1,'Custom size: its Size, a Position button');
+        await sh.click('#wpbn-f-shape-position');
+        assert.equal(await sh.locator('.wpbn-focus__stage .wpbn-position-shape svg').count(),1,'Placed in the Position window, drawn at its size');
+        await sh.click('.wpbn-modal--position .wpbn-modal__cancel');
+        await sh.selectOption('#wpbn-f-shape_fit','cover');
         await sh.click('#wpbn-refresh');await sh.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         const shFrame=sh.frameLocator('#wpbn-frame');
         assert.equal(await shFrame.locator('.wpbn-shape-item').count(),3,'In the preview: an item per object');

@@ -74,6 +74,8 @@ class WPBN_Admin {
         $boot['animations'] = WPBN_Animation::editor();
         // The Entrance animation's kinds (WPBN_Entrance; admin.js entranceCard()).
         $boot['entrance'] = WPBN_Entrance::editor();
+        // A Shape object's kinds (WPBN_Shape::ENTER).
+        $boot['entrance']['objectTypes'] = WPBN_Shape::enter_names();
         // Shape layers' SVGs (WPBN_Shape::editor()) and the nonce to upload one.
         $boot['shapes'] = array();
         foreach ($s['layers'] as $l) {
@@ -94,7 +96,8 @@ class WPBN_Admin {
         // Add element: a dashed tile; it opens a window with the kinds of element (admin.js ELEMENTS, openAdd()).
         echo '<div class="wpbn-add" id="wpbn-add"><button type="button" class="wpbn-add__toggle" id="wpbn-add-toggle" aria-haspopup="dialog" aria-expanded="false"><span class="wpbn-add__plus dashicons dashicons-plus-alt2" aria-hidden="true"></span><span class="wpbn-add__label">'.esc_html__('Add element','wp-banner').'</span></button></div></div></fieldset>';
         // Under it, as WP Swiper's settings box: the menu of the chosen layer's (or the scene's) blocks, the chosen block, the preview.
-        echo '<div class="wpbn-workspace"><aside class="wpbn-sidebar"><nav class="wpbn-menu" id="wpbn-menu" aria-label="'.esc_attr__('Settings','wp-banner').'"></nav></aside>';
+        // A Shape layer's drawing above the menu (admin.js shapeCanvas()): a click on an object opens its settings.
+        echo '<div class="wpbn-workspace"><aside class="wpbn-sidebar"><div class="wpbn-objects" id="wpbn-objects" hidden></div><nav class="wpbn-menu" id="wpbn-menu" aria-label="'.esc_attr__('Settings','wp-banner').'"></nav></aside>';
         echo '<div class="wpbn-settings" id="wpbn-settings"></div>';
         echo '<div class="wpbn-preview"><div class="wpbn-toolbar"><span class="wpbn-preview-title">'.esc_html__('Preview','wp-banner').'</span>';
         $devices = array('desktop'=>array('desktop', __('Desktop','wp-banner')), 'tablet'=>array('tablet', __('Tablet','wp-banner')), 'mobile'=>array('smartphone', __('Mobile','wp-banner')));

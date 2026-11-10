@@ -513,11 +513,56 @@ check(motion_of($sm,1)['move_y']===array(0,0,0) && strpos($sm,'wpbn-anim')===fal
 check(motion_of($sm,2)['move_y']===array(-80,-80,-80) && preg_match('/wpbn-shape-clip"><div class="wpbn-layer wpbn-layer--image wpbn-layer--filter"[^>]*--wpbn-filter:brightness\(110%\);/',$sm)===1,'Fill Photo: a copy of the layer, moving as it does, with the object\'s filters instead of its own');
 check(strpos($sm,'--wpbn-filter:grayscale(100%);')!==false,'An image layer\'s Filters');
 check(strpos($sm,'--wpbn-ms:contain;--wpbn-ms-t:contain;--wpbn-ms-m:100% 100%;')!==false,'Fit per device as the masks\' size');
-check(strpos($sm,'filter:drop-shadow(6px 0px 0 #ffffff) drop-shadow(-6px 0px 0 #ffffff) drop-shadow(0px 6px 0 #ffffff) drop-shadow(0px -6px 0 #ffffff) drop-shadow(0px 10px 25px rgba(0,0,0,0.5));')!==false && strpos($sm,'drop-shadow(5px')===false,'Edge and Shadow along the outline; none on glass');
+// Effect (2026-11-10): Border instead of Edge (saved Edges: a Border Outside, as wide), on glass too; Shadow not on glass.
+check($so[0]['use_border']===true && $so[0]['border_width']===6.0 && $so[0]['border_position']==='outside' && $so[1]['use_border']===true && !isset($so[0]['stroke']),'A saved Edge: a Border Outside');
+check(substr_count($sm,'drop-shadow(')===1 && strpos($sm,'filter:drop-shadow(0px 10px 25px rgba(0,0,0,0.5));')!==false && substr_count($sm,'<div class="wpbn-shape-line" style="background:#ffffff"></div>')===2 && strpos($sm,'--wpbn-line:url(&quot;data:image/svg+xml,')!==false,'Border: a line of its colour masked by the outline (on glass too); Shadow not on glass');
+$rr=array('use_radius'=>1,'radius_tl'=>10,'radius_tr'=>100,'radius_tr_unit'=>'%','radius_br'=>0,'radius_bl'=>0,'radius_bl_mobile'=>5);
+check(WPBN_Shape::rounded('<rect x="0" y="0" width="100" height="50"/>',$rr,'desktop')==='<path d="M10 0H75A25 25 0 0 1 100 25V50A0 0 0 0 1 100 50H0A0 0 0 0 1 0 50V10A10 10 0 0 1 10 0Z"/>'
+    && WPBN_Shape::rounded('<circle r="5"/>',$rr,'desktop')==='<circle r="5"/>' && WPBN_Shape::rounded('<rect width="9" height="9"/>',array('use_radius'=>0),'desktop')==='<rect width="9" height="9"/>','Radius: a rectangle\'s corners (at most half its shorter side; % of it), not other shapes');
+check(strpos(WPBN_Shape::rounded('<g transform="translate(1,1)"><rect width="10" height="10" fill-rule="evenodd"/></g>',$rr,'mobile'),'<g transform="translate(1,1)"><path d="M5 0H5A5 5 0 0 1 10 5V10A0 0 0 0 1 10 10H5A5 5 0 0 1 0 5V5A5 5 0 0 1 5 0Z" fill-rule="evenodd"/></g>')===0,'Its groups and fill rule kept; per device');
+$rl=array('use_border'=>1,'border_width'=>4,'border_position'=>'inside','border_style'=>'dashed');
+check(WPBN_Shape::line('<rect width="9" height="9"/>',$rl,'desktop',array(0,0,10,10))==='<mask id="b" maskUnits="userSpaceOnUse" x="-8" y="-8" width="26" height="26"><g fill="#fff"><rect width="9" height="9"/></g></mask><g mask="url(#b)"><g fill="none" stroke="#000" stroke-width="8" stroke-dasharray="12 8"><rect width="9" height="9"/></g></g>'
+    && WPBN_Shape::line('<rect width="9" height="9"/>',array('border_position'=>'center')+$rl,'desktop',array(0,0,10,10))==='<g fill="none" stroke="#000" stroke-width="4" stroke-dasharray="12 8"><rect width="9" height="9"/></g>' && WPBN_Shape::line('<rect/>',array('use_border'=>0)+$rl,'desktop',array(0,0,1,1))==='','Border: Inside (half of a line twice as wide, the outside hidden), Center, none');
+$rs=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_objects'=>array(array('key'=>'o1','fill'=>'color','use_radius'=>1,'radius_tl_mobile'=>40,'use_border'=>1,'border_width_tablet'=>0)))))));
+// An object's Entrance animation (2026-11-10): its own kinds, a layer's settings; on its item, its box for Reveal and Zoom.
+$oe=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_objects'=>array(
+    array('key'=>'o1','fill'=>'color','use_enter'=>1,'enter_type'=>'reveal-left','enter_delay'=>0.5,'box'=>array(400,200,200,600)),
+    array('key'=>'o2','fill'=>'glass','use_enter'=>1,'enter_type'=>'slide-up','enter_distance'=>80,'enter_start'=>'load','box'=>array('x',1,2,3)),
+    array('key'=>'o3','fill'=>'color','use_enter'=>1,'enter_type'=>'flip-x-top'))))));
+$oo=$oe['layers'][0]['shape_objects'];
+check($oo[0]['box']===array(400.0,200.0,200.0,600.0) && $oo[1]['box']===array() && $oo[2]['enter_type']==='fade' && WPBN_Settings::sanitize($oe)==$oe,'Object entrance: its kinds only, its box checked, idempotent');
+$oeh=WPBN_Render::markup($oe);
+check(strpos($oeh,'class="wpbn-shape-item wpbn-oenter wpbn-oenter--reveal wpbn-oenter--reveal-left wpbn-oenter--visible"')!==false && strpos($oeh,'data-box="400 200 200 600" data-vb="0 0 1000 1000"')!==false && strpos($oeh,'--wpbn-edl:0.5s;')!==false,'Reveal: on its item, with its box');
+check(strpos($oeh,'class="wpbn-shape-item wpbn-oenter wpbn-oenter--slide wpbn-oenter--glass"')!==false && strpos($oeh,'--wpbn-ex:0px;--wpbn-ey:80px;')!==false,'A slide on glass: its window moves, its blur comes in');
+// Fit (2026-11-10): Trim empty space (the objects' box, as the editor measured it); Custom size by height or width at its Position.
+$fitL=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_trim'=>1,'shape_fit'=>'custom','shape_fit_mobile'=>'cover','shape_size'=>300,'shape_size_tablet'=>'','x'=>30,'y'=>40,'shape_objects'=>array(
+    array('key'=>'o1','fill'=>'color','box'=>array(400,200,200,600)),array('key'=>'o2','fill'=>'color','box'=>array(700,200,200,600)),array('key'=>'o3','fill'=>'color','box'=>array(100,200,200,600)))))));
+check($fitL['layers'][0]['shape_trim']===true && $fitL['layers'][0]['shape_fit']==='custom' && $fitL['layers'][0]['shape_size_tablet']===null && $fitL['layers'][0]['x']==30 && WPBN_Settings::sanitize($fitL)==$fitL,'Fit: Trim and a Custom size kept, its Position too');
+$fitH=WPBN_Render::markup($fitL);
+check(WPBN_Shape::area($fitL['layers'][0],WPBN_Shape::meta(900))===array(99.0,199.0,802.0,602.0) && strpos($fitH,'viewBox=&#039;99 199 802 602&#039;')!==false,'Trim: the objects\' box, a little room');
+check(strpos($fitH,'--wpbn-ms:399.67px 300px;--wpbn-ms-t:399.67px 300px;--wpbn-ms-m:cover;--wpbn-px:calc(30cqw - 199.83px);--wpbn-py:calc(40cqh - 150px);')!==false && strpos($fitH,'--wpbn-px-m:50%;')!==false,'Custom size: its height, its width from its proportions, its middle at its Position; another Fit on mobile');
+check(strpos($fitH,'&quot;fit&quot;:[[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;custom&quot;,30,40,300,&quot;px&quot;,&quot;height&quot;],[&quot;cover&quot;]]')!==false && strpos($fitH,'--wpbn-left:50%;')!==false,'For frontend.js; the layer itself stays over the scene');
+$fitW=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_fit'=>'custom','shape_size_by'=>'width','shape_size_unit'=>'%','shape_size'=>50,'shape_objects'=>array(array('key'=>'o1')))))));
+check(strpos($fitW,'--wpbn-ms:50cqw 50cqw;')!==false && strpos($fitW,'--wpbn-px:calc(50cqw - 25cqw);')!==false,'By width in % of the scene');
+check(strpos($animCss,'.wpbn-scene .wpbn-layer--shape{container-type:size;')!==false && strpos($animCss,'calc(var(--wpbn-mpx,50%) + var(--wpbn-ox,0px)')!==false,'The masks placed in the scene\'s units');
+// An object's Loop animation (2026-11-10): a layer's kinds, on a box around its fill and line; the window slides; Zoom around its box.
+$ol=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'shape_objects'=>array(
+    array('key'=>'o1','fill'=>'color','use_anim'=>1,'anim_type'=>'slide-x','anim_from'=>-40,'anim_to'=>40,'anim_to_mobile'=>20,'anim_duration'=>4,'anim_delay'=>1,'box'=>array(400,200,200,600)),
+    array('key'=>'o2','fill'=>'glass','use_anim'=>1,'anim_type'=>'fade','anim_from'=>50,'anim_to'=>100,'anim_repeat'=>'loop'),
+    array('key'=>'o3','fill'=>'color','use_anim'=>1,'anim_type'=>'zoom','anim_origin'=>'bottom','anim_duration_tablet'=>0.01,'box'=>array(100,200,200,600)))))));
+$lo=$ol['layers'][0]['shape_objects'];
+check($lo[0]['anim_to_mobile']===20.0 && $lo[0]['anim_to_tablet']===null && $lo[2]['anim_duration_tablet']===0.3 && WPBN_Settings::sanitize($ol)==$ol,'Object loop: per device, checked, idempotent');
+$olh=WPBN_Render::markup($ol);
+check(strpos($olh,'<div class="wpbn-shape-loop wpbn-anim wpbn-anim--slide-x wpbn-anim--alternate" style="--wpbn-a0-d:-40px;--wpbn-a1-d:40px;--wpbn-ad-d:4s;--wpbn-a0-t:-40px;--wpbn-a1-t:40px;--wpbn-ad-t:4s;--wpbn-a0-m:-40px;--wpbn-a1-m:20px;--wpbn-ad-m:4s;animation-delay:1s;--wpbn-ald:1s;"><div class="wpbn-shape-clip"')!==false,'A slide: around its fill and line, its values per device');
+check(strpos($olh,'wpbn-anim--fade wpbn-anim--loop wpbn-oloop--glass" style="--wpbn-a0-d:0.5;')!==false && strpos($olh,'--wpbn-alc:infinite;--wpbn-alr:normal;')!==false && strpos($olh,'--wpbn-gb:12px;')!==false,'Fade on glass: its blur and tint');
+check(strpos($olh,'--wpbn-fx:0.5;--wpbn-fy:1;')!==false && substr_count($olh,'data-box=')===1,'Zoom: from a point of its box, measured');
+check(strpos($animCss,'@keyframes wpbn-ol-x{from{--wpbn-lox:var(--wpbn-a0,0px)}')!==false && strpos($animCss,'.wpbn-scene .wpbn-shape-loop *{animation:none}')!==false,'The window slides; none with reduced motion');
+check(strpos($animCss,'@keyframes wpbn-oe-glass{from{-webkit-backdrop-filter:blur(0px);backdrop-filter:blur(0px);background-color:transparent}}')!==false && strpos($animCss,'.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter *,.wpbn-scene .wpbn-shape-loop *{animation:none}')!==false,'Glass comes in by its blur; none with reduced motion');
+check(strpos($rs,'--wpbn-mask-m:')!==false && strpos($rs,'--wpbn-mask-t:')===false && strpos($rs,'--wpbn-line-t:linear-gradient(transparent,transparent);')!==false && strpos($rs,'--wpbn-line-m:')===false,'Per device: a mask where its corners differ, no line where its width is 0');
 check(strpos($sm,'backdrop-filter:blur(60px)')!==false && strpos($sm,'data-move="{&quot;x&quot;:0,&quot;y&quot;:-40}"')!==false,'Glass blurs what is behind it; an object\'s travel for frontend.js');
 check(substr_count($sm,'data-move=')===1,'An object\'s travel: none where its Scroll animation was switched off');
 check(preg_match('/--wpbn-mask:url\(&quot;data:image\/svg\+xml,%3Csvg[^)]*%3Crect x=&#039;400&#039;/',$sm)===1,'Each object\'s mask: the object alone, as an SVG');
-check(strpos($animCss,'.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mask)')!==false && strpos($animCss,'mask-composite:exclude')!==false,'Masks and Invert in the stylesheet');
+check(strpos($animCss,'.wpbn-scene .wpbn-shape-clip{-webkit-mask-image:var(--wpbn-mk)')!==false && strpos($animCss,'--wpbn-mk:var(--wpbn-mask-m,var(--wpbn-mask-t,var(--wpbn-mask)))')!==false && strpos($animCss,'mask-composite:exclude')!==false,'Masks and Invert in the stylesheet');
 
 // Filters per device (2026-11-10): tablet and mobile follow the larger screen; each device's own as CSS variables.
 $fd=$lay(array('type'=>'image','image'=>3,'f_grayscale'=>100,'f_grayscale_tablet'=>0,'f_blur_mobile'=>4,'f_brightness_tablet'=>''));
@@ -556,6 +601,10 @@ function wp_roles() { return (object) array('roles'=>array('administrator'=>arra
 function get_role($r) { return new class($r) { private $r; public function __construct($r) { $this->r = $r; } public function has_cap($c) { return $this->r === 'administrator'; } }; }
 // Roles (WP Banner → Settings, as WP Swiper's): Add and clone, Delete, WPBakery element only with Edit scenes; known roles only.
 check(WPBN_Access::sanitize(array('editor'=>array('edit'=>1,'create'=>1,'x'=>1),'author'=>array('create'=>1,'delete'=>1),'ghost'=>array('edit'=>1),'administrator'=>array('edit'=>1)))===array('editor'=>array('edit'=>true,'create'=>true)),'Roles: the dependent rights only with Edit, unknown roles and administrators left out');
+// A shortcode (2026-11-10): Shadow around its box and Filters per device, on the box its Border is on (an animation's, if any).
+$scBox=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','use_shadow'=>1,'shadow_inset'=>1,'f_grayscale'=>100,'f_grayscale_mobile'=>0)))));
+check(strpos($scBox,'wpbn-layer--shortcode wpbn-layer--boxshadow wpbn-layer--cfilter')!==false && strpos($scBox,'--wpbn-lsh:inset 0px 2px 10px rgba(0,0,0,0.5);')!==false && strpos($scBox,'--wpbn-cf:grayscale(100%);--wpbn-cf-t:grayscale(100%);--wpbn-cf-m:brightness(100%);')!==false,'A shortcode\'s Shadow and Filters');
+check(preg_match('/class="wpbn-anim [^"]*wpbn-layer--boxshadow"/',WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','use_shadow'=>1,'use_anim'=>1,'anim_type'=>'zoom'))))))===1,'With an animation: on its wrapper, moving with it');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.

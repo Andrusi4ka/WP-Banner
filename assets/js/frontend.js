@@ -118,8 +118,41 @@
     // Edges kept out of view: the image layers that fill the scene at rest grow,
     // all by the same factor and around the scene's middle (so a photo and its
     // cutout stay aligned), just enough that their edges never show while they move.
+    /*
+     * A Shape object's Entrance animation (WPBN_Shape::ENTER): its box on the screen, from its box in the drawing (data-box,
+     * data-vb) and how the drawing is fitted (its mask's size: cover, contain or stretched, centred): Reveal runs between its
+     * edges (--wpbn-ol, -ot, -or, -ob: from the item's sides, a little room kept for its line), Zoom grows around its middle.
+     */
+    function boxes(s) {
+        s.el.querySelectorAll('.wpbn-shape-item[data-box]').forEach(function (item) {
+            const W = item.clientWidth, H = item.clientHeight, b = item.dataset.box.split(' ').map(Number), vb = item.dataset.vb.split(' ').map(Number);
+            const layer = item.closest('.wpbn-layer--shape');
+            if (!W || !H || b.length !== 4 || vb.length !== 4 || !vb[2] || !vb[3] || !layer) return;
+            // Its Fit on this device (WPBN_Shape::fit_data()): [fit] or ['custom', x, y, size, unit, by].
+            const fit = (parse(layer.dataset.motion).fit || [])[device()] || ['cover'];
+            let sx = W / vb[2], sy = H / vb[3], ox, oy;
+            if (fit[0] === 'custom') {
+                const ratio = vb[2] / vb[3], by = fit[5] === 'width', size = fit[4] === '%' ? fit[3] / 100 * (by ? W : H) : fit[3];
+                const w = by ? size : size * ratio, h = by ? size / ratio : size;
+                sx = w / vb[2]; sy = h / vb[3]; ox = fit[1] / 100 * W - w / 2; oy = fit[2] / 100 * H - h / 2;
+            } else {
+                if (fit[0] === 'cover') sx = sy = Math.max(sx, sy);
+                else if (fit[0] === 'contain') sx = sy = Math.min(sx, sy);
+                ox = (W - vb[2] * sx) / 2; oy = (H - vb[3] * sy) / 2;
+            }
+            const room = 4;
+            const left = ox + (b[0] - vb[0]) * sx - room, top = oy + (b[1] - vb[1]) * sy - room, right = left + b[2] * sx + room * 2, bottom = top + b[3] * sy + room * 2;
+            item.style.setProperty('--wpbn-ol', Math.max(0, left).toFixed(1) + 'px');
+            item.style.setProperty('--wpbn-ot', Math.max(0, top).toFixed(1) + 'px');
+            item.style.setProperty('--wpbn-or', Math.max(0, W - right).toFixed(1) + 'px');
+            item.style.setProperty('--wpbn-ob', Math.max(0, H - bottom).toFixed(1) + 'px');
+            item.style.setProperty('--wpbn-oc', ((left + right) / 2).toFixed(1) + 'px ' + ((top + bottom) / 2).toFixed(1) + 'px');
+        });
+    }
+
     function bleed(s) {
         edges(s);
+        boxes(s);
         const W = s.el.clientWidth, H = s.el.clientHeight, d = device();
         const fills = [];
         let k = 1;
