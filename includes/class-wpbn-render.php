@@ -19,18 +19,24 @@ class WPBN_Render {
         add_shortcode('wp_banner_motion', array(__CLASS__, 'shortcode'));
         add_action('wp_enqueue_scripts', array(__CLASS__, 'early_assets'));
     }
-    // A page whose content has a banner: its styles in <head>, so it never shows unstyled first. Banners from
-    // elsewhere (widgets, templates) still get them from shortcode(), late (printed in the footer).
+    // A page whose content has a banner (a post, or one of an archive's posts): its styles in <head>, so it never shows
+    // unstyled first. Banners from elsewhere (widgets, templates, a theme's HTML blocks) bring their stylesheet with them (scene()).
     public static function early_assets() {
         // WPBakery's frontend editor: a banner added there comes by AJAX, too late to load them itself.
         if (function_exists('vc_is_page_editable') && vc_is_page_editable()) { self::assets(); return; }
-        $post = get_post();
-        if (!is_singular() || !$post) { return; }
-        // The WP Banner block (WPBN_Block).
-        if (function_exists('has_block') && has_block('wp-banner/scene', $post)) { self::assets(); return; }
-        foreach (array(self::SHORTCODE, 'wp_layer_motion', 'wp_banner_motion') as $tag) {
-            if (has_shortcode($post->post_content, $tag)) { self::assets(); return; }
+        global $wp_query;
+        $posts = is_singular() ? array(get_post()) : (isset($wp_query->posts) && is_array($wp_query->posts) ? $wp_query->posts : array());
+        foreach ($posts as $post) {
+            if ($post instanceof WP_Post && self::has_banner($post)) { self::assets(); return; }
         }
+    }
+    // Whether a post's content has a banner: the WP Banner block (WPBN_Block) or the shortcode (or its old names).
+    private static function has_banner($post) {
+        if (function_exists('has_block') && has_block('wp-banner/scene', $post)) { return true; }
+        foreach (array(self::SHORTCODE, 'wp_layer_motion', 'wp_banner_motion') as $tag) {
+            if (has_shortcode($post->post_content, $tag)) { return true; }
+        }
+        return false;
     }
     public static function assets() {
         wp_enqueue_style('wpbn-frontend', WPBN_URL.'assets/css/frontend.css', array(), wpbn_asset('assets/css/frontend.css'));
@@ -40,9 +46,21 @@ class WPBN_Render {
         $atts = shortcode_atts(array('id'=>0), $atts, 'wp_banner');
         $id = is_scalar($atts['id']) ? absint($atts['id']) : 0;
         if (get_post_type($id) !== 'wpbn_scene' || get_post_status($id) !== 'publish') { return ''; }
+        return self::scene($id);
+    }
+    // A scene drawn by its id, whatever its status (shortcode() draws only published ones; the block editor shows drafts too).
+    public static function scene($id) {
         self::assets();
         $s = WPBN_Settings::get($id);
-        return self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : '', 'id'=>$id));
+        // Drawn after the page's <head> (a widget, a template, a theme's HTML block): its stylesheet just before it, once a
+        // page, so it never shows unstyled (a stylesheet in the body holds back what follows it until it has loaded).
+        $styles = '';
+        if (did_action('wp_head') && !doing_action('wp_head') && !wp_doing_ajax() && !(defined('REST_REQUEST') && REST_REQUEST) && !wp_style_is('wpbn-frontend', 'done')) {
+            ob_start();
+            wp_print_styles('wpbn-frontend');
+            $styles = (string) ob_get_clean();
+        }
+        return $styles.self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : '', 'id'=>$id));
     }
     // Placed by class: the scene moves into the nearest block around it with that class, as its
     // background, as soon as the browser reads it (so it does not show first where it stands);

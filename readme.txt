@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -55,6 +55,18 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 0.3.0 =
+* Shape layers: an SVG's objects as windows onto a photo layer, an image, a colour or gradient, or frosted glass; a border along their outline, rounded corners for rectangles, a shadow, invert, opacity and filters; entrance, loop and scroll animation for each object and for the whole Shape; the drawing fitted per device (cover, contain, stretch, or a size and place of your own), its empty space trimmed if wanted.
+* A new editor, as WP Swiper's: the layers as tiles across the top, a menu of each layer's blocks, the preview beside them.
+* Entrance animation for each layer: fade, slide, zoom, from the banner's edge, flips and a turn.
+* Layer names, rotation, padding, border and rounded corners; shadows for images, overlays, buttons and shortcodes.
+* Filters per device: black and white, blur, brightness, contrast and saturation, for images, Shape objects, overlays (of what is under them) and shortcodes.
+* Gradients for titles and buttons; icons for buttons (Font Awesome Free, or an image of your own); an eyedropper in the colour window where the browser has one.
+* WP Banner → Settings: which roles may edit, add and delete scenes and use the WPBakery element; a newer icon list.
+* A Developer mode in the preview: the scene's and the layers' boxes, sizes and distances.
+* The block editor shows a scene that is not published yet, with a note; banners outside a page's content (widgets, templates) no longer show unstyled for a moment.
+* Removed: export and import of scenes, the Decorative switch for images.
 
 = 0.2.0 =
 * Animation for each layer: zoom (with its direction), fade and slide, from the page's load or once the banner is in view, per device; paused off the screen.

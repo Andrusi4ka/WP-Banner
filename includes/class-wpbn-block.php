@@ -46,7 +46,21 @@ class WPBN_Block {
         $id = isset($attributes['id']) ? absint($attributes['id']) : 0;
         if (!$id) { return ''; }
         $html = WPBN_Render::shortcode(array('id'=>$id));
+        // In the block editor a scene that is not published (a draft…) shows too, with a word on why the page will not show it;
+        // one deleted, that word alone. The site shows neither.
+        if ($html === '' && self::editing()) {
+            if (get_post_type($id) !== 'wpbn_scene' || get_post_status($id) === 'trash') {
+                return '<p class="wpbn-block-note" style="margin:0 0 8px;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;font-size:13px">'.esc_html__('This scene no longer exists. Choose another one.', 'wp-banner').'</p>';
+            }
+            if (current_user_can('edit_post', $id)) {
+                $html = '<p class="wpbn-block-note" style="margin:0 0 8px;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;font-size:13px">'.esc_html__('This scene is not published: it shows here, not on the site.', 'wp-banner').'</p>'.WPBN_Render::scene($id);
+            }
+        }
         $align = isset($attributes['align']) && in_array($attributes['align'], array('wide', 'full'), true) ? ' align'.$attributes['align'] : '';
         return $html === '' ? '' : '<div class="wp-block-wp-banner-scene'.$align.'">'.$html.'</div>';
+    }
+    // The block editor's preview of the block (ServerSideRender: the REST block renderer, in the edit context).
+    private static function editing() {
+        return defined('REST_REQUEST') && REST_REQUEST && isset($_GET['context']) && sanitize_key(wp_unslash($_GET['context'])) === 'edit'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- REST checks the request; this only adds a note.
     }
 }

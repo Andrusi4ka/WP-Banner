@@ -36,6 +36,25 @@ class WPBN_Shape {
         add_action('init', array(__CLASS__, 'register'));
         add_action('init', array(__CLASS__, 'migrate'), 20);
         add_action('wp_ajax_'.self::AJAX, array(__CLASS__, 'upload'));
+        // Shapes no scene uses any more: removed when a scene is saved or deleted.
+        add_action('save_post_wpbn_scene', array(__CLASS__, 'cleanup'), 20);
+        add_action('after_delete_post', function ($id, $post) { if ($post && $post->post_type === 'wpbn_scene') { self::cleanup(); } }, 10, 2);
+    }
+
+    /*
+     * Each upload is a shape of its own (one uploaded again is a new one): those no scene nor revision of a scene uses are
+     * removed. Not before a day has passed (one just uploaded in an editor not saved yet is kept). Found by their id in the
+     * scenes' saved settings (serialized: "shape";i:<id>;).
+     */
+    const KEEP = DAY_IN_SECONDS;
+    public static function cleanup() {
+        global $wpdb;
+        $old = get_posts(array('post_type'=>self::POST_TYPE, 'post_status'=>'any', 'fields'=>'ids', 'numberposts'=>-1, 'date_query'=>array(array('before'=>gmdate('Y-m-d H:i:s', time() - self::KEEP), 'column'=>'post_date_gmt'))));
+        foreach ($old as $id) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.SlowDBQuery -- is the shape used by any scene or revision.
+            $used = $wpdb->get_var($wpdb->prepare("SELECT 1 FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value LIKE %s LIMIT 1", WPBN_Settings::META, '%'.$wpdb->esc_like('s:5:"shape";i:'.(int) $id.';').'%'));
+            if (!$used) { wp_delete_post((int) $id, true); }
+        }
     }
 
     public static function register() {

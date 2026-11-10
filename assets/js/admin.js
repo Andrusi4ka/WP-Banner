@@ -1340,6 +1340,8 @@
     }
     // What fills an object (WPBN_Shape::FILLS).
     const FILL_NAMES = {layer:'Photo', image:'Image', color:'Color', glass:'Glass', none:'None'};
+    // More Photo windows than this in one Shape: a word on their weight.
+    const PHOTO_WINDOWS = 6;
     // A Shape layer's settings: its SVG and how it fits the scene; with an object chosen, that object's.
     function shapeSettings(l) {
         const o = selectedObject >= 0 ? (l.shape_objects || [])[selectedObject] : null;
@@ -1371,6 +1373,9 @@
             sources.forEach(x => { list[x.uid] = escape(x.name); });
             fill = sources.length ? withTip(select('source', 'Photo of the layer', list), 'The object shows this image layer exactly where it is, and as it moves: a window onto it. Give it Filters other than the layer\'s, e.g. the layer in black and white and the object in color. A hidden layer shows only through its objects.')
                 : note('Add an image layer first: the object will show its photo, lined up with it.');
+            // Many Photo windows (2026-11-10 review): each is a full copy of the photo layer, moving as it does; heavy on phones.
+            const photos = (l.shape_objects || []).filter(x => x.fill === 'layer' && !x.hidden).length;
+            if (photos > PHOTO_WINDOWS) fill += '<p class="description" id="wpbn-photo-windows">This Shape has ' + photos + ' Photo windows. Each one is a copy of the photo, moving as it does: on phones keep them to about ' + PHOTO_WINDOWS + ' (an Image or Color fill costs less).</p>';
         } else if (o.fill === 'image') {
             const url = images[o.image];
             fill = '<div class="wpbn-field"><div class="wpbn-field__head"><span class="wpbn-field__label">Image</span></div><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (url ? '<img src="' + escape(url) + '" alt="">' : '') + '</span>'

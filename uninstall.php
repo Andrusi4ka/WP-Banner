@@ -41,8 +41,6 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
         // "What's new": the version last run and the one updated from.
         delete_option('wpbn_version');
         delete_option('wpbn_updated_from');
-        // The list of scenes placed by class.
-        delete_transient('wpbn_class_scenes');
         // The mark that the records under the plugin's old name were moved.
         delete_option('wpbn_renamed');
     };

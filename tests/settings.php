@@ -3,6 +3,7 @@
 define('ABSPATH', __DIR__);
 define('WPBN_URL', '/');
 define('WPBN_DIR', dirname(__DIR__).'/');
+define('DAY_IN_SECONDS', 86400);
 function sanitize_text_field($s) { return trim(preg_replace('/[\r\n\t ]+/', ' ', strip_tags($s))); }
 function sanitize_textarea_field($s) { return trim(strip_tags($s)); }
 function sanitize_hex_color($s) { return preg_match('/^#(?:[a-f0-9]{3}|[a-f0-9]{6})$/i', $s) ? $s : null; }
@@ -27,7 +28,8 @@ function wp_get_attachment_image_srcset($id, $size) { return false; }
 // WPBN_TEST_IMAGE: the editor opens a scene with one photo layer (tests/motion.cjs, Image position).
 // A Shape layer's SVG: the objects WPBN_Shape keeps for an attachment ($GLOBALS['wpbn_shapes'], set below).
 function get_post_meta($id,$key='',$single=false) { if ($key === '_wpbn_shape') { return $GLOBALS['wpbn_shapes'][(int) $id] ?? ''; } if ($key === '_wp_attachment_image_alt') { return ''; } return getenv('WPBN_TEST_IMAGE') ? array('layers'=>array(array('type'=>'image','image'=>3,'name'=>'Mountains'))) : array(); }
-function get_posts($args) { return array(); }
+// The posts a check set (WPBN_Shape::cleanup()), else none.
+function get_posts($args) { return $GLOBALS['wpbn_test_posts'] ?? array(); }
 function wp_nonce_field($a,$b) { echo '<input name="'.esc_attr($b).'" value="test">'; }
 function wp_create_nonce($a) { return 'test'; }
 function admin_url($path='') { return '/preview'; }
@@ -70,7 +72,7 @@ require_once __DIR__.'/../includes/class-wpbn-animation.php';
 require_once __DIR__.'/../includes/class-wpbn-entrance.php';
 
 // Shapes (2026-11-10): posts of their own type (WPBN_Shape::POST_TYPE), no longer attachments.
-function get_post_type($id) { return isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'wpbn_shape' : 'attachment'; }
+function get_post_type($id) { return $GLOBALS['wpbn_test_types'][(int) $id] ?? (isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'wpbn_shape' : 'attachment'); }
 function get_the_title($id) { return 'Image '.(int) $id; }
 function get_post_mime_type($id) { return isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'image/svg+xml' : ((int) $id === 2 ? 'image/png' : 'image/jpeg'); }
 require_once __DIR__.'/../includes/class-wpbn-render.php';
@@ -629,6 +631,35 @@ check(WPBN_Access::sanitize(array('editor'=>array('edit'=>1,'create'=>1,'x'=>1),
 $scBox=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','use_shadow'=>1,'shadow_inset'=>1,'f_grayscale'=>100,'f_grayscale_mobile'=>0)))));
 check(strpos($scBox,'wpbn-layer--shortcode wpbn-layer--boxshadow wpbn-layer--cfilter')!==false && strpos($scBox,'--wpbn-lsh:inset 0px 2px 10px rgba(0,0,0,0.5);')!==false && strpos($scBox,'--wpbn-cf:grayscale(100%);--wpbn-cf-t:grayscale(100%);--wpbn-cf-m:brightness(100%);')!==false,'A shortcode\'s Shadow and Filters');
 check(preg_match('/class="wpbn-anim [^"]*wpbn-layer--boxshadow"/',WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','use_shadow'=>1,'use_anim'=>1,'anim_type'=>'zoom'))))))===1,'With an animation: on its wrapper, moving with it');
+// The 2026-11-10 review's fixes, with WordPress's page functions as a page has them.
+$GLOBALS['wpbn_test_done']=array(); $GLOBALS['wpbn_test_head']=false; $GLOBALS['wpbn_test_enqueued']=array();
+function did_action($a) { return $a === 'wp_head' && $GLOBALS['wpbn_test_head'] ? 1 : 0; }
+function doing_action($a = null) { return false; }
+function wp_doing_ajax() { return false; }
+function wp_enqueue_style($h) { $GLOBALS['wpbn_test_enqueued'][$h]=true; }
+function wp_enqueue_script($h) { $GLOBALS['wpbn_test_enqueued'][$h]=true; }
+function wp_style_is($h, $list = 'enqueued') { return $list === 'done' ? !empty($GLOBALS['wpbn_test_done'][$h]) : !empty($GLOBALS['wpbn_test_enqueued'][$h]); }
+function wp_print_styles($h) { if (empty($GLOBALS['wpbn_test_done'][$h])) { $GLOBALS['wpbn_test_done'][$h]=true; echo "<link rel='stylesheet' id='".$h."-css' href='/frontend.css'>"; } }
+// A banner drawn after <head> (a widget, a template): its stylesheet just before it, once a page; in <head>: none of its own.
+$late1=WPBN_Render::scene(5); $GLOBALS['wpbn_test_head']=true; $late2=WPBN_Render::scene(5); $late3=WPBN_Render::scene(5);
+check(strpos($late1,'<link')===false && strpos($late2,"<link rel='stylesheet' id='wpbn-frontend-css'")===0 && strpos($late2,'<section')!==false && strpos($late3,'<link')===false,'A banner after <head> brings its stylesheet, once');
+// An archive's posts with a banner: the styles in <head> too, not only on a post's own page.
+class WP_Post { public $post_content; public function __construct($c) { $this->post_content=$c; } }
+function is_singular() { return false; }
+function has_block($b, $p) { return false; }
+function has_shortcode($content, $tag) { return strpos($content, '['.$tag) !== false; }
+$GLOBALS['wpbn_test_enqueued']=array(); $GLOBALS['wp_query']=(object) array('posts'=>array(new WP_Post('plain'), new WP_Post('Intro [wp_banner id="5"]')));
+WPBN_Render::early_assets(); $archive=!empty($GLOBALS['wpbn_test_enqueued']['wpbn-frontend']);
+$GLOBALS['wpbn_test_enqueued']=array(); $GLOBALS['wp_query']->posts=array(new WP_Post('plain'));
+WPBN_Render::early_assets();
+check($archive && empty($GLOBALS['wpbn_test_enqueued']),'An archive with a banner in one of its posts: its styles in <head>; without: none');
+// Shapes no scene uses: removed (a day after their upload: get_posts() picks those); one a scene or revision uses: kept.
+class WPBN_Test_DB { public $postmeta='wp_postmeta'; public $used=array(); public function esc_like($s) { return $s; }
+    public function prepare($q, ...$a) { return array($q, $a); } public function get_var($p) { foreach ($this->used as $id) { if (strpos($p[1][1], 's:5:"shape";i:'.$id.';') !== false) { return '1'; } } return null; } }
+$GLOBALS['wpdb']=new WPBN_Test_DB(); $GLOBALS['wpdb']->used=array(901); $GLOBALS['wpbn_test_posts']=array(900, 901, 9012); $GLOBALS['wpbn_test_deleted']=array();
+function wp_delete_post($id, $force=false) { $GLOBALS['wpbn_test_deleted'][]=$id; }
+WPBN_Shape::cleanup(); unset($GLOBALS['wpbn_test_posts']);
+check($GLOBALS['wpbn_test_deleted']===array(900, 9012),'Shapes no scene uses removed; the one used kept (id 901, not mistaken for 9012)');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.
@@ -639,5 +670,28 @@ check($header[1]===$constant[1] && $header[1]===$stable[1],'Version header, WPBN
 check(preg_match('/^\s*\*\s*Author:\s*Relevant AS$/m',$main) && preg_match('#^\s*\*\s*Author URI:\s*https://relevant\.no/$#m',$main),'Author is Relevant AS');
 $log=WPBN_Whats_New::parse_changelog($readme);
 check(isset($log[$header[1]]) && count($log[$header[1]])>0,'The current version has Changelog items for What\'s new');
+// Translations (2026-11-10 review): languages/wp-banner.pot has every translatable string of the PHP (npm run pot).
+$root=dirname(__DIR__);$pot=(string) @file_get_contents($root.'/languages/wp-banner.pot');
+$missing=array();
+foreach (array_merge(array('wp-banner.php','uninstall.php'),array_map(function($f){return 'includes/'.basename($f);},glob($root.'/includes/*.php'))) as $f) {
+    preg_match_all("/\\b(?:__|_e|esc_html__|esc_html_e|esc_attr__|esc_attr_e)\\(\\s*'((?:[^'\\\\]|\\\\.)*)'\\s*,\\s*'wp-banner'/", file_get_contents($root.'/'.$f), $mm);
+    foreach ($mm[1] as $text) { $text=str_replace(array("\\'","\\\\"),array("'","\\"),$text); if (strpos($pot,'msgid "'.addcslashes($text,"\"\\\n").'"')===false) { $missing[]=$text; } }
+}
+check($pot!=='' && !$missing,'languages/wp-banner.pot is up to date (npm run pot); missing: '.implode(' | ',array_slice($missing,0,3)));
 check(array_keys(WPBN_Whats_New::between(array('0.2.0'=>array('b'),'0.1.0'=>array('a')),'0.1.0','0.2.0'))===array('0.2.0'),'Only the versions after the one seen');
+// The block: on the site only a published scene; in the block editor's preview (REST, edit context) a draft too, with a note,
+// and a deleted one as a note alone (2026-11-10 review).
+require_once __DIR__.'/../includes/class-wpbn-block.php';
+function get_post_status($id) { return $GLOBALS['wpbn_test_status'][(int) $id] ?? false; }
+function current_user_can($cap, $id = 0) { return true; }
+function sanitize_key($s) { return strtolower(preg_replace('/[^a-z0-9_\-]/i', '', $s)); }
+function wp_unslash($s) { return $s; }
+function shortcode_atts($pairs, $atts) { return array_merge($pairs, array_intersect_key((array) $atts, $pairs)); }
+$GLOBALS['wpbn_test_types']=array(70=>'wpbn_scene', 71=>'wpbn_scene'); $GLOBALS['wpbn_test_status']=array(70=>'publish', 71=>'draft');
+$siteDraft=WPBN_Block::render(array('id'=>71));
+define('REST_REQUEST', true); $_GET['context']='edit';
+$edPub=WPBN_Block::render(array('id'=>70)); $edDraft=WPBN_Block::render(array('id'=>71)); $edGone=WPBN_Block::render(array('id'=>72));
+check($siteDraft==='' && strpos($edPub,'wpbn-block-note')===false && strpos($edPub,'<section')!==false
+    && strpos($edDraft,'This scene is not published: it shows here, not on the site.')!==false && strpos($edDraft,'<section')!==false
+    && strpos($edGone,'This scene no longer exists.')!==false && strpos($edGone,'<section')===false,'Block: a draft shows in the editor with a note, not on the site; a deleted scene: a note');
 echo "Release checks passed.\n";

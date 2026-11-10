@@ -1,11 +1,12 @@
 {
   "name": "wp-banner-dev",
   "private": true,
-  "description": "Development tools for WP Banner (not part of the plugin zip): the browser tests in tests/motion.cjs.",
+  "description": "Development tools for WP Banner (not part of the plugin zip): the browser tests in tests/motion.cjs; npm run pot writes languages/wp-banner.pot.",
   "scripts": {
     "test": "npm run test:php && npm run test:browser",
     "test:php": "node -e \"require('child_process').execFileSync(process.env.PHP_BIN||'C:/OSPanel/modules/PHP-8.3/PHP/php.exe',['tests/settings.php'],{stdio:'inherit'})\"",
-    "test:browser": "node tests/motion.cjs"
+    "test:browser": "node tests/motion.cjs",
+    "pot": "node tests/make-pot.cjs"
   },
   "devDependencies": {
     "playwright-core": "1.65.0"

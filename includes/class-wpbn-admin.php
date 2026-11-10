@@ -181,8 +181,10 @@ class WPBN_Admin {
         check_ajax_referer('wpbn_preview', 'nonce');
         $id = isset($_POST['post_id']) && is_scalar($_POST['post_id']) ? absint($_POST['post_id']) : 0;
         if (!WPBN_Access::can('edit') || !current_user_can('edit_post',$id) || get_post_type($id)!=='wpbn_scene') { wp_die('Forbidden', '', array('response'=>403)); }
-        if (!isset($_POST['scene']) || !is_string($_POST['scene']) || strlen($_POST['scene'])>200000) { wp_die('Invalid scene', '', array('response'=>400)); }
-        $s = WPBN_Settings::sanitize(json_decode(wp_unslash($_POST['scene']),true));
+        // As large as a scene may be saved (MAX_DATA, unslashed as save() counts it): a scene that saves also previews.
+        $json = isset($_POST['scene']) && is_string($_POST['scene']) ? wp_unslash($_POST['scene']) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, sanitized below.
+        if (!is_string($json) || strlen($json) > self::MAX_DATA) { wp_die('Invalid scene', '', array('response'=>400)); }
+        $s = WPBN_Settings::sanitize(json_decode($json, true));
         // A Shortcode layer: the plugins' styles and scripts it loads, as on a page. Their assets are registered as on a
         // page (wp_enqueue_scripts); what that queues for every page (the theme's) is dropped: only the shortcodes' own.
         $shortcodes = (bool) array_filter($s['layers'], function ($l) { return $l['type'] === 'shortcode' && !$l['hidden'] && $l['shortcode'] !== ''; });

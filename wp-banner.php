@@ -3,7 +3,7 @@
  * Plugin Name:       WP Banner
  * Plugin URI:        https://github.com/Andrusi4ka/WP-Banner
  * Description:       Layered scenes that move as the page scrolls: a photo, a title and a cutout in front, for a sense of depth. A visual layer editor with desktop, tablet and phone previews; insert a scene with a shortcode or the WPBakery element.
- * Version:           0.2.0
+ * Version:           0.3.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Relevant AS
@@ -16,7 +16,7 @@
  */
 // "Update URI": updates come from this plugin's GitHub releases (wpbn_updates()), never from wordpress.org.
 defined('ABSPATH') || exit;
-define('WPBN_VERSION', '0.2.0');
+define('WPBN_VERSION', '0.3.0');
 define('WPBN_REPOSITORY', 'https://github.com/Andrusi4ka/WP-Banner/');
 define('WPBN_FILE', __FILE__);
 define('WPBN_DIR', plugin_dir_path(__FILE__));
