@@ -35,8 +35,8 @@ class WPBN_Block {
             $scenes = class_exists('WPBN_WPBakery') ? WPBN_WPBakery::scenes() : array();
             wp_add_inline_script('wpbn-block', 'window.wpbnBlock='.wp_json_encode(array(
                 'scenes'=>$scenes,
-                'edit'=>current_user_can('manage_options') ? admin_url('post.php?action=edit&post=') : '',
-                'add'=>current_user_can('manage_options') ? admin_url('post-new.php?post_type=wpbn_scene') : '',
+                'edit'=>WPBN_Access::can('edit') ? admin_url('post.php?action=edit&post=') : '',
+                'add'=>WPBN_Access::can('create') ? admin_url('post-new.php?post_type=wpbn_scene') : '',
             )).';', 'before');
         });
     }

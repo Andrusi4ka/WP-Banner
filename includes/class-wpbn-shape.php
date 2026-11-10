@@ -3,7 +3,9 @@
  * A Shape layer's SVG (WPBN_Settings type "shape"): a file of several objects (rectangles, paths…) whose shapes
  * become windows onto the layers' contents. An SVG may carry scripts, so it is never kept as it was sent: its
  * shapes' geometry is read out (parse()) and a new SVG is written from it alone (no colours, styles, links or
- * scripts), kept as an attachment (image/svg+xml) with its objects in META.
+ * scripts), kept as a post of the plugin's own type (POST_TYPE) with its objects in META. Not in the media library, nor a
+ * file in the uploads folder (user's request, 2026-11-10: so it cannot be deleted there by mistake; the site draws the objects
+ * from META, the editor its SVG written from them). Before that, an attachment (image/svg+xml): migrate() moves those, ids kept.
  *
  * Objects: the top-level elements of the drawing (a shape, or a group of shapes as one object); a single group
  * around everything (an Illustrator layer) is looked into. Text, embedded images, <use> and lines are left out
@@ -13,7 +15,11 @@ defined('ABSPATH') || exit;
 class WPBN_Shape {
     // The attachment's objects: array('viewbox'=>[x, y, w, h], 'objects'=>[['key'=>'o1', 'name'=>'', 'markup'=>'<path…/>']], 'skipped'=>[kind=>count]).
     const META = '_wpbn_shape';
+    // Its post type: not public, no screen of its own, not in menus, searches or exports.
+    const POST_TYPE = 'wpbn_shape';
+    // The mime type the shapes had as attachments (until 2026-11-10; migrate()).
     const MIME = 'image/svg+xml';
+    const MIGRATED = 'wpbn_shapes_moved';
     const AJAX = 'wpbn_shape_upload';
     const MAX_FILE = 1048576;
     const MAX_OBJECTS = 60;
@@ -27,13 +33,42 @@ class WPBN_Shape {
     const NS = 'http://www.w3.org/2000/svg';
 
     public static function init() {
+        add_action('init', array(__CLASS__, 'register'));
+        add_action('init', array(__CLASS__, 'migrate'), 20);
         add_action('wp_ajax_'.self::AJAX, array(__CLASS__, 'upload'));
+    }
+
+    public static function register() {
+        register_post_type(self::POST_TYPE, array('label'=>'WP Banner shapes', 'public'=>false, 'show_ui'=>false, 'show_in_menu'=>false, 'show_in_nav_menus'=>false,
+            'show_in_rest'=>false, 'exclude_from_search'=>true, 'publicly_queryable'=>false, 'query_var'=>false, 'rewrite'=>false, 'can_export'=>false, 'supports'=>array('title')));
+    }
+
+    /*
+     * Once per site: the shapes kept as attachments (before 2026-11-10) become posts of POST_TYPE, their ids (in the scenes'
+     * layers) kept; their files (the SVGs this class wrote, not the ones uploaded) and the attachment's records removed.
+     */
+    public static function migrate() {
+        if (get_option(self::MIGRATED)) { return; }
+        global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.SlowDBQuery -- one-off move of the plugin's own rows.
+        $ids = $wpdb->get_col($wpdb->prepare("SELECT p.ID FROM {$wpdb->posts} p INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s WHERE p.post_type = 'attachment' AND p.post_mime_type = %s", self::META, self::MIME));
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            $file = get_attached_file($id);
+            $wpdb->update($wpdb->posts, array('post_type'=>self::POST_TYPE, 'post_status'=>'publish', 'post_mime_type'=>'', 'guid'=>'', 'post_parent'=>0), array('ID'=>$id));
+            delete_post_meta($id, '_wp_attached_file');
+            delete_post_meta($id, '_wp_attachment_metadata');
+            if ($file && is_file($file) && strtolower(pathinfo($file, PATHINFO_EXTENSION)) === 'svg') { wp_delete_file($file); }
+            clean_post_cache($id);
+        }
+        // phpcs:enable
+        add_option(self::MIGRATED, 1);
     }
 
     // An SVG uploaded in the Shape layer's card: checked, rewritten and kept; its editor data (editor()) back.
     public static function upload() {
         check_ajax_referer(self::AJAX, 'nonce');
-        if (!current_user_can('manage_options') || !current_user_can('upload_files')) { wp_send_json_error(array('message'=>__('You cannot upload shapes.', 'wp-banner')), 403); }
+        if (!WPBN_Access::can('edit')) { wp_send_json_error(array('message'=>__('You cannot upload shapes.', 'wp-banner')), 403); }
         $file = $_FILES['file'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- an uploaded file, read below.
         if (!is_array($file) || !isset($file['tmp_name'], $file['error'], $file['size'], $file['name']) || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
             wp_send_json_error(array('message'=>__('The file could not be uploaded.', 'wp-banner')));
@@ -46,25 +81,19 @@ class WPBN_Shape {
         wp_send_json_success(self::editor($id));
     }
 
-    // The rewritten SVG as a file in the uploads folder and an attachment; its id (or a WP_Error). Also an imported scene's (WPBN_Tools).
+    // The rewritten SVG's objects as a post of POST_TYPE (no file); its id (or a WP_Error).
     public static function store($name, $parsed) {
-        $name = ($name !== '' ? $name : 'shape').'.svg';
-        // Only this file, which parse() wrote: SVG is not an upload WordPress takes otherwise.
-        $allow = function ($mimes) { $mimes['svg'] = self::MIME; return $mimes; };
-        add_filter('upload_mimes', $allow);
-        $upload = wp_upload_bits($name, null, self::svg($parsed));
-        remove_filter('upload_mimes', $allow);
-        if (!empty($upload['error'])) { return new WP_Error('wpbn_shape', (string) $upload['error']); }
-        $id = wp_insert_attachment(array('post_mime_type'=>self::MIME, 'post_title'=>sanitize_text_field(wp_basename($name, '.svg')), 'post_content'=>'', 'post_status'=>'inherit'), $upload['file'], 0, true);
+        $id = wp_insert_post(array('post_type'=>self::POST_TYPE, 'post_title'=>sanitize_text_field($name !== '' ? $name : 'shape'), 'post_content'=>'', 'post_status'=>'publish'), true);
         if (is_wp_error($id)) { return $id; }
         update_post_meta($id, self::META, wp_slash($parsed));
         return (int) $id;
     }
 
-    // A shape attachment's objects (META), or null.
+    // A shape's objects (META), or null. A shape not moved yet (migrate()) is still read as the attachment it was.
     public static function meta($id) {
         $id = absint($id);
-        if (!$id || get_post_mime_type($id) !== self::MIME) { return null; }
+        $type = $id ? get_post_type($id) : false;
+        if ($type !== self::POST_TYPE && !($type === 'attachment' && get_post_mime_type($id) === self::MIME)) { return null; }
         $meta = get_post_meta($id, self::META, true);
         return is_array($meta) && isset($meta['viewbox'], $meta['objects']) && is_array($meta['objects']) ? $meta : null;
     }
@@ -80,8 +109,9 @@ class WPBN_Shape {
     public static function editor($id) {
         $meta = self::meta($id);
         if (!$meta) { return null; }
-        $file = get_attached_file($id);
-        return array('id'=>(int) $id, 'name'=>$file ? wp_basename($file) : '', 'viewbox'=>array_map('floatval', $meta['viewbox']), 'defaults'=>self::object_defaults(),
+        $file = get_post_type($id) === 'attachment' ? get_attached_file($id) : '';
+        $name = $file ? wp_basename($file) : (get_the_title($id) !== '' ? get_the_title($id).'.svg' : '');
+        return array('id'=>(int) $id, 'name'=>$name, 'viewbox'=>array_map('floatval', $meta['viewbox']), 'defaults'=>self::object_defaults(),
             'objects'=>array_map(function ($o) { return array('key'=>$o['key'], 'name'=>$o['name']); }, $meta['objects']),
             'svg'=>self::svg($meta), 'skipped'=>is_array($meta['skipped'] ?? null) ? $meta['skipped'] : array());
     }
@@ -98,7 +128,7 @@ class WPBN_Shape {
         return array('key'=>'', 'name'=>'', 'hidden'=>false, 'fill'=>'layer', 'source'=>'', 'image'=>0, 'color'=>'#ffffff', 'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
             'glass_blur'=>12, 'glass_color'=>'rgba(255,255,255,0.15)', 'opacity'=>100, 'invert'=>false, 'stroke'=>0, 'stroke_color'=>'#ffffff',
             'use_shadow'=>false, 'shadow_color'=>'rgba(0,0,0,0.5)', 'shadow_x'=>0, 'shadow_y'=>10, 'shadow_blur'=>25, 'use_scroll'=>false, 'move_x'=>0, 'move_y'=>0)
-            + array_map(function ($f) { return $f[2]; }, WPBN_Settings::FILTERS);
+            + WPBN_Settings::filters(array());
     }
     private static function num($value, $fallback, $min, $max) {
         return is_scalar($value) && is_numeric($value) ? round(max($min, min($max, (float) $value)), 1) : $fallback;
@@ -184,7 +214,7 @@ class WPBN_Shape {
             if ($o['hidden'] || !isset($markup[$o['key']])) { continue; }
             $content = '';
             $clip = '';
-            $filters = array_intersect_key($o, WPBN_Settings::FILTERS);
+            $filters = array_intersect_key($o, array_flip(WPBN_Settings::filter_keys()));
             if ($o['fill'] === 'layer' && isset($sources[$o['source']])) {
                 // The layer as it is drawn (its place, size, motion), with the object's filters instead of its own, its
                 // shadow left to it; drawn even while it is hidden itself (a photo seen only through the objects).
@@ -194,9 +224,10 @@ class WPBN_Shape {
                 $url = wp_get_attachment_image_url($o['image'], 'full');
                 if ($url) {
                     $srcset = wp_get_attachment_image_srcset($o['image'], 'full');
-                    $filter = WPBN_Settings::filter_css($o);
-                    $content = '<img class="wpbn-shape-img" src="'.esc_url($url).'" alt=""'.($srcset ? ' srcset="'.esc_attr($srcset).'" sizes="100vw"' : '')
-                        .' decoding="async" loading="'.($state['first'] ? 'eager' : 'lazy').'"'.($filter !== '' ? ' style="'.esc_attr('filter:'.$filter).'"' : '').'>';
+                    // Its Filters per device (frontend.css .wpbn-shape-img--filter).
+                    $filter = WPBN_Settings::filter_vars($o, '--wpbn-filter');
+                    $content = '<img class="wpbn-shape-img'.($filter !== '' ? ' wpbn-shape-img--filter' : '').'" src="'.esc_url($url).'" alt=""'.($srcset ? ' srcset="'.esc_attr($srcset).'" sizes="100vw"' : '')
+                        .' decoding="async" loading="'.($state['first'] ? 'eager' : 'lazy').'"'.($filter !== '' ? ' style="'.esc_attr($filter).'"' : '').'>';
                 }
             } elseif ($o['fill'] === 'color') {
                 $gradient = $o['use_gradient'] ? WPBN_Gradient::css($o['gradient']) : '';

@@ -130,8 +130,8 @@ class WPBN_Render {
         // fetchpriority); links: the Google fonts' <link>s the layers need.
         $state = array('first'=>$first, 'loaded'=>false, 'links'=>'');
         foreach ($s['layers'] as $i=>$l) {
-            // Hidden, or a button without text (as WP Top Info Bar's): not drawn.
-            if ($l['hidden'] || ($l['type'] === 'button' && trim($l['button_text']) === '')) { continue; }
+            // Hidden, or a button without text and without an Icon (as WP Top Info Bar's): not drawn.
+            if ($l['hidden'] || ($l['type'] === 'button' && trim($l['button_text']) === '' && self::button_icon($l) === '')) { continue; }
             // A Shortcode layer: none set, or inside another one's banner: not drawn.
             if ($l['type'] === 'shortcode' && ($l['shortcode'] === '' || self::$in_shortcode)) { continue; }
             // A Shape layer without an SVG: nothing to show.
@@ -140,6 +140,29 @@ class WPBN_Render {
         }
         $html = $state['links'].$html.'</section>';
         return empty($context['host']) ? $html : $html.'<script>'.self::HOST_SCRIPT.'</script>';
+    }
+    // What an icon alone says: the image's alt text (or its title), or the icon's name (solid/arrow-right: arrow right).
+    private static function icon_label($l) {
+        if ($l['button_icon_type'] === 'image') {
+            $alt = trim((string) get_post_meta($l['button_icon_image'], '_wp_attachment_image_alt', true));
+            return $alt !== '' ? $alt : get_the_title($l['button_icon_image']);
+        }
+        return str_replace('-', ' ', preg_replace('#^[a-z]+/#', '', $l['button_icon']));
+    }
+    // A button's Icon: a Font Awesome icon (its own SVG, in the text colour), or an image (its own colours, or tinted: its
+    // shape in the text colour, a mask); '' for none.
+    private static function button_icon($l) {
+        if ($l['button_icon_type'] === 'icon') {
+            $svg = WPBN_Icons::svg($l['button_icon_svg']);
+            return $svg !== '' ? '<span class="wpbn-button__icon" aria-hidden="true">'.$svg.'</span>' : '';
+        }
+        if ($l['button_icon_type'] !== 'image' || !$l['button_icon_image']) { return ''; }
+        $url = wp_get_attachment_image_url($l['button_icon_image'], 'medium');
+        if (!$url) { return ''; }
+        if ($l['button_icon_tint']) {
+            return '<span class="wpbn-button__icon wpbn-button__icon--tint" aria-hidden="true" style="'.esc_attr('--wpbn-im:url("'.esc_url_raw($url).'")').'"></span>';
+        }
+        return '<span class="wpbn-button__icon" aria-hidden="true"><img src="'.esc_url($url).'" alt="" decoding="async"></span>';
     }
     /**
      * One layer's <div>: its settings as CSS variables, its motion for frontend.js, its content. $i: its place in the
@@ -181,7 +204,7 @@ class WPBN_Render {
         // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain, a title or text,
         // an overlay (it does not move) or a layer in a container does not.
         $motion['fill'] = !WPBN_Settings::fills($l) || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
-        // Follow the mouse (px; frontend.js, devices with a mouse): an overlay stays put, as with the scroll.
+        // Follow the mouse (px; frontend.js, devices with a mouse): not an overlay.
         $motion['mouse'] = !empty($l['use_mouse']) && !in_array($l['type'], array('overlay', 'shape'), true) ? (float) $l['mouse'] : 0;
         // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
         $motion['slack'] = WPBN_Entrance::slack($l, WPBN_Animation::slack($l));
@@ -204,22 +227,25 @@ class WPBN_Render {
                 }
             }
         }
+        // Its Padding, Radius and Border (classes in $box): on the layer, or, for a title, text, button or shortcode with an
+        // animation, on its innermost animation wrapper (below), so they come in and move with what they frame (2026-11-10).
+        $box = '';
         // Its Padding (WPBN_Settings::paddings(); frontend.css): the space inside its box, per device.
         $padding = WPBN_Settings::paddings($l);
         if ($padding) {
-            $classes .= ' wpbn-layer--padding';
+            $box .= ' wpbn-layer--padding';
             $css .= '--wpbn-pad:'.$padding['desktop'].';--wpbn-pad-t:'.$padding['tablet'].';--wpbn-pad-m:'.$padding['mobile'].';';
         }
         // Its Radius (WPBN_Settings::radii(); frontend.css): on the same as its Border, per device.
         $radius = WPBN_Settings::radii($l);
         if ($radius) {
-            $classes .= ' wpbn-layer--radius';
+            $box .= ' wpbn-layer--radius';
             $css .= '--wpbn-brr:'.$radius['desktop'].';--wpbn-brr-t:'.$radius['tablet'].';--wpbn-brr-m:'.$radius['mobile'].';';
         }
         // Its Border (WPBN_Settings::borders(); frontend.css): on its picture, an overlay's box or its own box, per device.
         $border = WPBN_Settings::borders($l);
         if ($border) {
-            $classes .= ' wpbn-layer--border';
+            $box .= ' wpbn-layer--border';
             $css .= '--wpbn-brw:'.$border['desktop'].';--wpbn-brw-t:'.$border['tablet'].';--wpbn-brw-m:'.$border['mobile'].';--wpbn-brs:'.$l['border_style'].';--wpbn-brc:'.$l['border_color'].';';
         }
         $inner = '';
@@ -231,13 +257,17 @@ class WPBN_Render {
             $fill = 'background:'.($gradient !== '' ? $gradient : $l['color']).';';
             // Its Shadow (the title's keys and block): around its box, or Inside its edges (a vignette).
             if (WPBN_Settings::shadow($l) !== '') { $fill .= 'box-shadow:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
-            // Its Blur per device (frontend.css): the layers under it blurred; none anywhere: no backdrop-filter at all.
+            // Its Filters (2026-11-10): of the layers under it (backdrop-filter, frontend.css). Its Blur per device, then the
+            // image's others (black and white, brightness…: their f_blur is not an overlay's); none: no backdrop-filter at all.
             $blur = WPBN_Settings::blurs($l);
             if (max($blur) > 0) { $css .= '--wpbn-blur:'.$blur['desktop'].'px;--wpbn-blur-t:'.$blur['tablet'].'px;--wpbn-blur-m:'.$blur['mobile'].'px;'; }
+            $tones = WPBN_Settings::filter_vars($l, '--wpbn-bdf', array('f_blur'));
+            $css .= $tones;
+            $backdrop = max($blur) > 0 || $tones !== '';
             // Its Entrance animation on this box itself, not a wrapper: a box fading or moving around it would cut its blur off
             // from the layers behind (it would blur nothing).
             list($enter_class, $enter_css) = WPBN_Entrance::active($l) ? WPBN_Entrance::wrapper($l) : array('', '');
-            $inner = '<div class="wpbn-overlay'.(max($blur) > 0 ? ' wpbn-layer--blur' : '').($enter_class !== '' ? ' '.$enter_class : '').'" style="'.esc_attr($fill.$enter_css).'"></div>';
+            $inner = '<div class="wpbn-overlay'.($backdrop ? ' wpbn-layer--blur' : '').($enter_class !== '' ? ' '.$enter_class : '').'" style="'.esc_attr($fill.$enter_css).'"></div>';
             // Its Height per device (frontend.css; % of the scene).
             foreach (WPBN_Settings::heights($l) as $device=>$h) { $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.$h[0].$h[1].';'; }
         } elseif ($l['type'] === 'shortcode') {
@@ -249,6 +279,15 @@ class WPBN_Render {
             // A button: its colours and its Size's padding, height and font size per device (frontend.css), a link
             // (a new window: noopener noreferrer) or, without one, a span.
             $css .= '--wpbn-bc:'.$l['button_color'].';--wpbn-bt:'.$l['button_text_color'].';';
+            // Its Gradient (2026-11-10): its fill, border or line in it (frontend.css .wpbn-button--gradient).
+            $gradient = !empty($l['use_button_gradient']) ? WPBN_Gradient::css($l['gradient']) : '';
+            if ($gradient !== '') { $css .= '--wpbn-bg:'.$gradient.';'; }
+            // Its Shadow (2026-11-10, the title's keys and block; frontend.css): Filled and Border around the button (Inside: within
+            // its edges); Underline along its text and line (drop-shadow), as it has no box to see.
+            if (WPBN_Settings::shadow($l) !== '') {
+                $css .= $l['button_style'] === 'underline' ? '--wpbn-bds:drop-shadow('.WPBN_Settings::shadow($l).');'
+                    : '--wpbn-bsh:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';';
+            }
             foreach (WPBN_Settings::resolved($l, 'button_size') as $device=>$size) {
                 $suffix = self::SUFFIX[$device];
                 list($padding, $height, $font) = WPBN_Settings::BUTTON_SIZES[$size];
@@ -257,7 +296,21 @@ class WPBN_Render {
             $url = $l['button_url'];
             $tag = $url !== '' ? 'a' : 'span';
             $attrs = $url !== '' ? ' href="'.esc_url($url, WPBN_Settings::BUTTON_PROTOCOLS).'"'.($l['button_new_tab'] ? ' target="_blank" rel="noopener noreferrer"' : '') : '';
-            $inner = '<'.$tag.' class="wpbn-button wpbn-button--'.$l['button_style'].' wpbn-button--'.$l['button_shape'].'"'.$attrs.'>'.esc_html($l['button_text']).'</'.$tag.'>';
+            // Its Blur (2026-11-10, the overlay's keys): what is under it blurred, per device (frontend.css .wpbn-layer--blur on the button).
+            $blur = WPBN_Settings::blurs($l);
+            if (max($blur) > 0) { $css .= '--wpbn-blur:'.$blur['desktop'].'px;--wpbn-blur-t:'.$blur['tablet'].'px;--wpbn-blur-m:'.$blur['mobile'].'px;'; }
+            // Its Icon (WPBN_Icons), left or right of the text, its Size and Gap per device (frontend.css).
+            $icon = self::button_icon($l);
+            if ($icon !== '') {
+                foreach (array('button_icon_size'=>'is', 'button_icon_gap'=>'ig') as $key=>$var) {
+                    foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) { $css .= '--wpbn-'.$var.self::SUFFIX[$device].':'.$value.'px;'; }
+                }
+            }
+            $text = esc_html($l['button_text']);
+            // An icon alone (no text): its name for screen readers (the image's alt, or the icon's name).
+            if (trim($l['button_text']) === '' && $icon !== '') { $attrs .= ' aria-label="'.esc_attr(self::icon_label($l)).'"'; }
+            $inner = '<'.$tag.' class="wpbn-button wpbn-button--'.$l['button_style'].' wpbn-button--'.$l['button_shape'].($gradient !== '' ? ' wpbn-button--gradient' : '').(max($blur) > 0 ? ' wpbn-layer--blur' : '').'"'.$attrs.'>'
+                .($l['button_icon_position'] === 'left' ? $icon.$text : $text.$icon).'</'.$tag.'>';
         } elseif ($l['type'] === 'richtext') {
             // Text: its paragraphs and lists (sanitized: WPBN_Settings::rich_text()), its font, size per device, colour and shadow.
             $font = WPBN_Settings::fonts($l);
@@ -274,14 +327,18 @@ class WPBN_Render {
                 .($l['accent_color'] !== '' ? '--wpbn-accent:'.$l['accent_color'].';' : '');
             // Letter spacing per device (frontend.css), Case, Style and Shadow.
             $spacing = WPBN_Settings::spacings($l);
+            // Its Gradient (2026-11-10): the letters filled with it, the accent words keeping their colour (frontend.css
+            // .wpbn-text-gradient). Its Shadow then along the letters' outline (drop-shadow): a text-shadow would show through them.
+            $gradient = !empty($l['use_text_gradient']) ? WPBN_Gradient::css($l['gradient']) : '';
             $css .= '--wpbn-ls:'.$spacing['desktop'].'px;--wpbn-tablet-ls:'.$spacing['tablet'].'px;--wpbn-mobile-ls:'.$spacing['mobile'].'px;'
                 .($l['text_transform'] !== 'none' ? 'text-transform:'.$l['text_transform'].';' : '')
                 .($l['font_style'] === 'italic' ? 'font-style:italic;' : '')
-                .(WPBN_Settings::shadow($l) !== '' ? 'text-shadow:'.WPBN_Settings::shadow($l).';' : '');
+                .(WPBN_Settings::shadow($l) !== '' && $gradient === '' ? 'text-shadow:'.WPBN_Settings::shadow($l).';' : '');
             $text = self::title_html($l['text']);
             $tag = $l['tag'];
-            $tag_css = ($l['font_family'] !== '' ? 'font-family:'.WPBN_Fonts::css($l['font_family']).';' : '');
-            $inner = '<'.$tag.($tag_css !== '' ? ' style="'.esc_attr($tag_css).'"' : '').'>'.$text.'</'.$tag.'>';
+            $tag_css = ($l['font_family'] !== '' ? 'font-family:'.WPBN_Fonts::css($l['font_family']).';' : '')
+                .($gradient !== '' ? 'background-image:'.$gradient.';'.(WPBN_Settings::shadow($l) !== '' ? 'filter:drop-shadow('.WPBN_Settings::shadow($l).');' : '') : '');
+            $inner = '<'.$tag.($gradient !== '' ? ' class="wpbn-text-gradient"' : '').($tag_css !== '' ? ' style="'.esc_attr($tag_css).'"' : '').'>'.$text.'</'.$tag.'>';
             // A Google font (Woodmart's list) loaded here, at its weight; empty: the theme's heading font (its weight may not be loaded yet).
             $links .= WPBN_Fonts::link($l['font_family'] !== '' ? $l['font_family'] : 'var(--wd-title-font)', $l['font_weight'], $context['id'] ?? 0, $l['font_style'] === 'italic' ? 'italic' : '');
         } elseif ($l['type'] === 'shape') {
@@ -296,22 +353,29 @@ class WPBN_Render {
             }
             // Its Shadow (the title's keys and block): along the image's outline, a transparent PNG's shape (frontend.css drop-shadow).
             if (WPBN_Settings::shadow($l) !== '') { $classes .= ' wpbn-layer--shadow'; $css .= '--wpbn-ds:'.WPBN_Settings::shadow($l).';'; }
-            // Its Filters (black and white, blur…: WPBN_Settings::filter_css()).
-            $filter = WPBN_Settings::filter_css($l);
-            if ($filter !== '') { $classes .= ' wpbn-layer--filter'; $css .= '--wpbn-filter:'.$filter.';'; }
+            // Its Filters (black and white, blur…) per device (WPBN_Settings::filter_vars()).
+            $filter = WPBN_Settings::filter_vars($l, '--wpbn-filter');
+            if ($filter !== '') { $classes .= ' wpbn-layer--filter'; $css .= $filter; }
             // The first scene's images load at once, its back one first; later scenes' when they come near.
             $attrs = $first ? ' decoding="async" loading="eager"'.(!$loaded ? ' fetchpriority="high"' : '') : ' decoding="async" loading="lazy"';
             $inner = self::image($s, $l, $attrs);
             if ($inner) { $loaded = true; }
         }
+        // An image's border is on its picture, an overlay's on its box (both inside the wrappers): theirs stay on the layer.
+        $framed = !in_array($l['type'], array('image', 'overlay'), true);
+        $anim = $inner !== '' && WPBN_Animation::active($l);
+        $enter = $inner !== '' && WPBN_Entrance::active($l) && $l['type'] !== 'overlay';
+        if (!$framed || (!$anim && !$enter)) { $classes .= $box; $box = ''; }
         // Animation (WPBN_Animation): the content in a box of its own that it moves, so it adds up with the scroll motion on the layer.
-        if ($inner !== '' && WPBN_Animation::active($l)) {
+        if ($anim) {
             list($anim_class, $anim_css) = WPBN_Animation::wrapper($l);
+            $anim_class .= $box; $box = '';
             $inner = '<div class="'.esc_attr($anim_class).'" style="'.esc_attr($anim_css).'">'.$inner.'</div>';
         }
         // Entrance animation (WPBN_Entrance): around that, so it comes in once, then the Loop animation runs on.
-        if ($inner !== '' && WPBN_Entrance::active($l) && $l['type'] !== 'overlay') {
+        if ($enter) {
             list($enter_class, $enter_css) = WPBN_Entrance::wrapper($l);
+            $enter_class .= $box; $box = '';
             $inner = '<div class="'.esc_attr($enter_class).'" style="'.esc_attr($enter_css).'">'.$inner.'</div>';
         }
         return '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'">'.$inner.'</div>';

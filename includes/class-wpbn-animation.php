@@ -80,9 +80,13 @@ class WPBN_Animation {
         return $l;
     }
 
-    // Whether the layer is animated: its switch on, a layer that has content to move (an overlay stays put, as with the scroll).
+    // An overlay's kinds (2026-11-10, user's request): those that move its box, for an overlay smaller than the scene. Not
+    // Fade: a fading box around it would cut its Filters (backdrop-filter) off from the layers behind.
+    const OVERLAY = array('zoom', 'slide-x', 'slide-y');
+
+    // Whether the layer is animated: its switch on, a kind it may have.
     public static function active($l) {
-        return !empty($l['use_anim']) && $l['type'] !== 'overlay' && isset(self::types()[$l['anim_type']]);
+        return !empty($l['use_anim']) && isset(self::types()[$l['anim_type']]) && ($l['type'] !== 'overlay' || in_array($l['anim_type'], self::OVERLAY, true));
     }
 
     // The most the layer grows by (1: not at all), on a device: the image's sizes (WPBN_Render::size_for()) allow for it.

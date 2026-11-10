@@ -1,0 +1,32 @@
+/* WP Banner → Settings (class-wpbn-access.php): the roles' table, as WP Swiper's roles.css. */
+.wpbn-roles__table {
+	max-width: 960px;
+	margin-top: 12px;
+}
+
+.wpbn-roles__table th,
+.wpbn-roles__table td {
+	vertical-align: middle;
+}
+
+.wpbn-roles__table thead th {
+	vertical-align: bottom;
+	font-weight: 600;
+}
+
+.wpbn-roles__table .wpbn-roles__action {
+	width: 17%;
+	text-align: center;
+}
+
+/* Administrators: always all, their boxes greyed. */
+.wpbn-roles__always {
+	display: block;
+	color: #646970;
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.wpbn-roles__table input[type="checkbox"] {
+	margin: 0;
+}

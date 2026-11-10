@@ -13,9 +13,10 @@
 .wpbn-scene .wpbn-layer img{display:block;width:100%;height:100%;max-width:none;border:0;border-radius:0;object-fit:var(--wpbn-fit,cover);object-position:var(--wpbn-focus,50% 50%)}
 /* An image's Shadow: along its outline, so a transparent PNG (a cutout) casts it from its shape, not its box. */
 .wpbn-scene .wpbn-layer--shadow img{filter:drop-shadow(var(--wpbn-ds))}
-/* An image's Filters (black and white, blur…); with a Shadow too, both. */
-.wpbn-scene .wpbn-layer--filter img{filter:var(--wpbn-filter)}
-.wpbn-scene .wpbn-layer--filter.wpbn-layer--shadow img{filter:var(--wpbn-filter) drop-shadow(var(--wpbn-ds))}
+/* An image's Filters (black and white, blur…), per device (--wpbn-fl: the device's); with a Shadow too, both. A Shape object's image's too. */
+.wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter)}
+.wpbn-scene .wpbn-layer--filter img,.wpbn-scene .wpbn-shape-img--filter{filter:var(--wpbn-fl)}
+.wpbn-scene .wpbn-layer--filter.wpbn-layer--shadow img{filter:var(--wpbn-fl) drop-shadow(var(--wpbn-ds))}
 /* A Shape layer (WPBN_Shape): the whole scene; each object a box as large whose fill is clipped to the object's shape
    (its mask, --wpbn-mask), the drawing fitted to the scene as its Fit says (--wpbn-ms: cover, contain or 100% 100%),
    moved by its travel (--wpbn-ox, --wpbn-oy: the window moves, not what is seen through it). Invert: the shape cut out
@@ -44,8 +45,8 @@
 .wpbn-scene .wpbn-layer--richtext ol{list-style:decimal}
 /* The words in <u> (as Woodmart's titles): the accent color, not underlined; without one of its own, the
    theme's primary color (Woodmart's), and without that, the title's. */
-/* An overlay's Blur: the layers under it (within the scene) blurred, per device. */
-.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur));backdrop-filter:blur(var(--wpbn-blur))}
+/* An overlay's Filters: the layers under it (within the scene) blurred per device, and its others (--wpbn-bdf). */
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur,0px)) var(--wpbn-bdf,);backdrop-filter:blur(var(--wpbn-blur,0px)) var(--wpbn-bdf,)}
 /* An overlay's fill, shadow and blur: its box, as large as the layer (WPBN_Render). */
 .wpbn-scene .wpbn-overlay{width:100%;height:100%}
 /* An overlay: its own Height per device (a share of the scene, px or vh). */
@@ -58,13 +59,26 @@
 /* A Shortcode layer: another plugin's element (a slider…) as wide as its Width, as tall as it is; it can be used
    (clicked, swiped), unlike the other layers. */
 .wpbn-scene .wpbn-layer--shortcode{height:auto;pointer-events:auto}
-.wpbn-scene .wpbn-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;padding:var(--wpbn-bp,5px 20px);min-height:var(--wpbn-bh,42px);margin:0;font-family:inherit;font-size:var(--wpbn-bf,13px);font-weight:600;line-height:1.2;text-align:center;text-decoration:none;text-transform:uppercase;white-space:nowrap;border:2px solid var(--wpbn-bc);border-radius:0;background:var(--wpbn-bc);color:var(--wpbn-bt);box-shadow:none;transition:filter .15s}
+.wpbn-scene .wpbn-button{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;padding:var(--wpbn-bp,5px 20px);min-height:var(--wpbn-bh,42px);margin:0;font-family:inherit;font-size:var(--wpbn-bf,13px);font-weight:600;line-height:1.2;text-align:center;text-decoration:none;text-transform:uppercase;white-space:nowrap;border:2px solid var(--wpbn-bc);border-radius:0;background:var(--wpbn-bc);color:var(--wpbn-bt);box-shadow:var(--wpbn-bsh,none);transition:filter .15s}
 .wpbn-scene .wpbn-button--rounded{border-radius:5px}
 .wpbn-scene .wpbn-button--round{border-radius:35px}
 .wpbn-scene .wpbn-button--bordered{background:transparent}
-.wpbn-scene .wpbn-button--underline{background:transparent;border:0;border-bottom:3px solid var(--wpbn-bc);border-radius:0}
+.wpbn-scene .wpbn-button--underline{background:transparent;border:0;border-bottom:3px solid var(--wpbn-bc);border-radius:0;filter:var(--wpbn-bds,none)}
+/* A button's Gradient (--wpbn-bg): Filled, its fill under its border too; Border, its border alone (a ring of it: the
+   gradient masked to the border's width); Underline, its line. */
+.wpbn-scene .wpbn-button--gradient{border-color:transparent;background:var(--wpbn-bg) border-box}
+.wpbn-scene .wpbn-button--gradient.wpbn-button--bordered{position:relative;background:transparent}
+.wpbn-scene .wpbn-button--gradient.wpbn-button--bordered::before{content:"";position:absolute;inset:-2px;padding:2px;border-radius:inherit;background:var(--wpbn-bg);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;pointer-events:none}
+.wpbn-scene .wpbn-button--gradient.wpbn-button--underline{background:var(--wpbn-bg) left bottom/100% 3px no-repeat border-box}
 .wpbn-scene a.wpbn-button{pointer-events:auto;cursor:pointer}
-.wpbn-scene a.wpbn-button:hover,.wpbn-scene a.wpbn-button:focus{filter:brightness(.9);color:var(--wpbn-bt);text-decoration:none}
+/* A button's Icon (WPBN_Icons): beside its text, as tall as its Size (an SVG or an image in its proportions; tinted: a
+   square of the text colour in the image's shape), its Gap from the text; per device (--wpbn-isz, --wpbn-igz). */
+.wpbn-scene .wpbn-button{--wpbn-isz:var(--wpbn-is,16px);--wpbn-igz:var(--wpbn-ig,8px);gap:var(--wpbn-igz)}
+.wpbn-scene .wpbn-button__icon{display:inline-flex;flex:none;align-items:center;height:var(--wpbn-isz)}
+.wpbn-scene .wpbn-button__icon svg,.wpbn-scene .wpbn-layer .wpbn-button__icon img{display:block;width:auto;height:100%;max-width:none;object-fit:contain}
+.wpbn-scene .wpbn-button__icon--tint{width:var(--wpbn-isz);background:currentColor;-webkit-mask:var(--wpbn-im) center/contain no-repeat;mask:var(--wpbn-im) center/contain no-repeat}
+/* Hovered: a little darker; an Underline's shadow (a filter too) kept. */
+.wpbn-scene a.wpbn-button:hover,.wpbn-scene a.wpbn-button:focus{filter:brightness(.9) var(--wpbn-bds,);color:var(--wpbn-bt);text-decoration:none}
 .wpbn-scene a.wpbn-button:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 /* A layer's Animation (WPBN_Animation): its content in a box the animation moves, from the first frame, endlessly
    (back and forth, or from the start again) or once. The type's keyframes (wpbn-<type>) go from --wpbn-a0 to --wpbn-a1;
@@ -117,6 +131,9 @@
 @keyframes wpbn-enter-rotate-z{from{opacity:0;transform:rotate(-20deg) scale(.8)}}
 .wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible,.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}
 .wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,var(--wp--preset--color--primary,currentColor)));text-decoration:none}
+/* A title's Gradient: its letters filled with it (its colour where a browser cannot), the accent words in their own colour. */
+.wpbn-scene .wpbn-layer--text .wpbn-text-gradient{-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.wpbn-scene .wpbn-layer--text .wpbn-text-gradient u{-webkit-text-fill-color:currentColor}
 @media(max-width:1024px){
 .wpbn-scene .wpbn-layer--shape{--wpbn-msz:var(--wpbn-ms-t,var(--wpbn-ms,cover))}
 .wpbn-scene{height:var(--wpbn-tablet-height)}
@@ -124,8 +141,9 @@
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-t,var(--wpbn-width))}
-.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px))}
-.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur)))}
+.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-t,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-t,var(--wpbn-ig,8px))}
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,);backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,)}
+.wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-t)}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-t,var(--wpbn-left));top:var(--wpbn-top-t,var(--wpbn-top));width:var(--wpbn-width-t,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-t,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-t,var(--wpbn-scale,1));--wpbn-r:var(--wpbn-rot-t,var(--wpbn-rot,0deg));--wpbn-ax:var(--wpbn-anx-t,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-t,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-t,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-t,var(--wpbn-tw,max-content));max-width:var(--wpbn-width-t,var(--wpbn-width));font-size:var(--wpbn-tablet-font,var(--wpbn-font))}
@@ -138,8 +156,9 @@
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
 .wpbn-scene .wpbn-layer--button{max-width:var(--wpbn-width-m,var(--wpbn-width))}
-.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px))}
-.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)));backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur)))}
+.wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-m,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-m,var(--wpbn-ig,8px))}
+.wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,);backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,)}
+.wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-m)}
 .wpbn-scene .wpbn-layer{left:var(--wpbn-left-m,var(--wpbn-left));top:var(--wpbn-top-m,var(--wpbn-top));width:var(--wpbn-width-m,var(--wpbn-width));opacity:calc(var(--wpbn-opacity-m,var(--wpbn-opacity)) + var(--wpbn-f,0));--wpbn-s:var(--wpbn-scale-m,var(--wpbn-scale,1));--wpbn-r:var(--wpbn-rot-m,var(--wpbn-rot,0deg));--wpbn-ax:var(--wpbn-anx-m,var(--wpbn-anx,.5));--wpbn-ay:var(--wpbn-any-m,var(--wpbn-any,.5))}
 .wpbn-scene .wpbn-layer img{object-fit:var(--wpbn-fit-m,var(--wpbn-fit,cover))}
 .wpbn-scene .wpbn-layer--richtext{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font)}
@@ -157,6 +176,6 @@
 @media(max-width:767px){.wpbn-scene .wpbn-layer--radius:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img,.wpbn-scene .wpbn-layer--radius .wpbn-overlay{border-radius:var(--wpbn-brr-m,var(--wpbn-brr-t,var(--wpbn-brr)))}}
 /* A layer's Padding (2026-11-09; WPBN_Render): the space inside its box per side and device (its box keeps its size, the box
    being border-box: its content keeps away from its edges, a title's lines wrap inside it). */
-.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad)}
+.wpbn-scene .wpbn-layer--padding{box-sizing:border-box;padding:var(--wpbn-pad)}
 @media(max-width:1024px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-t,var(--wpbn-pad))}}
 @media(max-width:767px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-m,var(--wpbn-pad-t,var(--wpbn-pad)))}}

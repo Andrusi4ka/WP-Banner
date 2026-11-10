@@ -62,8 +62,9 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 /* A title's and a text's thumbnail: the word (user's request, 2026-11-09), a title's bold. */
 .wpbn-thumb-word{color:#50575e;font-size:18px;line-height:1}
 .wpbn-layer-thumb--text .wpbn-thumb-word{font-size:22px;font-weight:700}
-/* A title, a text, a button and a shortcode: the icon their element has under Add element, dark on grey (an image's empty one stays light). */
-.wpbn-layer-thumb--text,.wpbn-layer-thumb--richtext,.wpbn-layer-thumb--button,.wpbn-layer-thumb--shortcode{background:#f0f0f1;color:#50575e}
+/* A title, a text, a button and a shortcode: the icon their element has under Add element, dark, over the checkerboard as every
+   layer's thumbnail (user's request, 2026-11-10: each layer shows as see-through, as an overlay does; an image's empty one stays light). */
+.wpbn-layer-thumb--text,.wpbn-layer-thumb--richtext,.wpbn-layer-thumb--button,.wpbn-layer-thumb--shortcode{color:#50575e}
 /* An overlay: its fill over the checkerboard (a see-through one shows as such). */
 /* An overlay: over the photo under it, its box at its size and place (admin.js overlayThumb()). */
 .wpbn-overlay-thumb{position:absolute;display:block}
@@ -91,7 +92,6 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 .wpbn-layer-tools .wpbn-tile-position svg{width:16px;height:16px}
 .wpbn-tile-position svg path{stroke-width:2.2}
 .wpbn-position-own{margin:8px 0 0}
-.wpbn-empty{grid-column:span 2;margin:0;padding:12px;border:1px solid #e4e4e4;border-radius:6px;background:#f2f2f2;color:#646970}
 
 /* Add element: a dashed tile; it opens the elements in a window. */
 .wpbn-add{display:flex;border:1px dashed #a7aaad;border-radius:6px;background:#fff}
@@ -231,10 +231,16 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-focus__stage:focus-visible{outline:2px solid #2271b1}
 .wpbn-focus__point{position:absolute;width:22px;height:22px;border:2px solid #fff;border-radius:50%;background:rgba(34,113,177,.55);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4);transform:translate(-50%,-50%);pointer-events:none;z-index:2}
 /* The scene on each device, at its own height (WP Swiper shows crops here). */
-.wpbn-focus__frames{display:flex;flex:0 0 150px;flex-direction:column;gap:10px}
-.wpbn-focus__device{margin:0}
+.wpbn-focus__frames{display:flex;flex:0 0 160px;flex-direction:column;gap:10px}
+/* A device's frame: a button switching the window to it (the one shown outlined); an image's point: one for all, not switched. */
+.wpbn-focus__device{display:block;margin:0;padding:4px;border:1px solid transparent;border-radius:6px;background:none;font:inherit;text-align:left;cursor:pointer}
+.wpbn-focus__device:hover:not(:disabled){border-color:#c3c4c7}
+.wpbn-focus__device.is-active{border-color:var(--wpbn-accent,#2271b1);background:#f0f6fc}
+.wpbn-focus__device.is-active .wpbn-focus__caption{color:var(--wpbn-accent,#2271b1);font-weight:600}
+.wpbn-focus__device:disabled{cursor:default}
+.wpbn-focus__device:focus-visible{outline:none;box-shadow:0 0 0 2px var(--wpbn-accent,#2271b1)}
 .wpbn-focus__frame{display:block;position:relative;overflow:hidden;border-radius:4px;background:#f0f0f1}
-.wpbn-focus__device figcaption{display:flex;align-items:center;gap:4px;margin-top:4px;color:#646970;font-size:12px;line-height:1.3}
+.wpbn-focus__caption{display:flex;align-items:center;gap:4px;margin-top:4px;color:#646970;font-size:12px;line-height:1.3}
 .wpbn-focus__device .dashicons{width:14px;height:14px;font-size:14px}
 /* The Position window's X and Y: numbers with % after them, typed or set by dragging. */
 .wpbn-focus__value{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 0}
@@ -348,14 +354,15 @@ body.wpbn-modal-open{overflow:hidden}
 .pcr-app.wpbn-pcr{z-index:100060}
 .pcr-app.wpbn-pcr[data-theme="classic"]{width:20em}
 .pcr-app.wpbn-pcr[data-theme="classic"] .pcr-selection .pcr-color-palette{height:11em}
-/* The eyedropper beside the colour's value (where the browser has one), the format buttons on the next line. */
+/* The eyedropper beside the colour's value (where the browser has one), the format buttons on the next line. The value's size not
+   animated (Pickr: transition all): it would shrink in view as the eyedropper is added. */
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper{display:flex;flex:0 0 2.6em;align-items:center;justify-content:center;height:2.6em;margin:.75em .2em 0;padding:0;font-size:.85em;border:0;border-radius:.15em;background:#f1f3f4;color:#50575e;cursor:pointer}
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper:hover{background:#e2e4e7;color:#2271b1}
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper:focus-visible{outline:none;box-shadow:0 0 0 1px rgba(255,255,255,.85),0 0 0 3px rgba(66,133,244,.75)}
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper svg{display:block;width:18px;height:18px}
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper+.wpbn-pcr__break{flex-basis:100%;height:0}
 .pcr-app.wpbn-pcr .pcr-interaction .wpbn-pcr__dropper~.pcr-result,.pcr-app.wpbn-pcr .pcr-interaction .pcr-result:has(+.wpbn-pcr__dropper){flex:1 1 0;min-width:0}
-.pcr-app.wpbn-pcr .pcr-interaction .pcr-result{flex:1 0 100%;height:2.6em;padding:0 .6em;border:0;border-radius:.15em;background:#f1f3f4;color:#75797e;font-size:.85em}
+.pcr-app.wpbn-pcr .pcr-interaction .pcr-result{flex:1 0 100%;transition:background .2s,box-shadow .2s;height:2.6em;padding:0 .6em;border:0;border-radius:.15em;background:#f1f3f4;color:#75797e;font-size:.85em}
 .pcr-app.wpbn-pcr .pcr-interaction .pcr-result:focus{box-shadow:0 0 0 1px rgba(255,255,255,.85),0 0 0 3px rgba(66,133,244,.75)}
 .pcr-app.wpbn-pcr .pcr-interaction .pcr-type,.pcr-app.wpbn-pcr .pcr-interaction .pcr-cancel,.pcr-app.wpbn-pcr .pcr-interaction .pcr-clear{flex:1 1 auto}
 /* Closing (it fades out): a click there goes through, it changes no color. */
@@ -433,6 +440,8 @@ body.wpbn-modal-open{overflow:hidden}
    icons at the right of its label, as tall as the other fields; the two side by side (.wpbn-row). */
 /* The icons at the right of the label; under it when the column is too narrow for both. */
 .wpbn-field--device-number .wpbn-field__head{flex-wrap:wrap}
+/* With a slider (an overlay's Blur): the slider, then the number with its unit. */
+.wpbn-field--device-number .wpbn-field__row .wpbn-number-unit{flex:0 0 110px}
 .wpbn-number-unit{display:flex;align-items:stretch;border:1px solid #8c8f94;border-radius:4px;background:#fff;overflow:hidden}
 .wpbn-number-unit:focus-within{border-color:var(--wpbn-accent);box-shadow:0 0 0 1px var(--wpbn-accent)}
 #wpbn-app .wpbn-number-unit input[type=number]{flex:1 1 auto;width:0;min-width:0;min-height:40px;padding:0 10px;margin:0;border:0;border-radius:0;box-shadow:none}
@@ -491,7 +500,7 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-shape-object.is-active{fill:var(--wpbn-accent)}
 .wpbn-shape-object.is-hidden{fill:none;stroke:#8c8f94;stroke-width:1px;stroke-dasharray:3 3}
 .wpbn-shape-object.is-hidden *{vector-effect:non-scaling-stroke}
-.wpbn-layer-thumb--shape{background:#fff;color:#50575e}
+.wpbn-layer-thumb--shape{color:#50575e}
 .wpbn-layer-thumb--shape svg,.wpbn-picker__thumb svg,.wpbn-object-thumb svg{display:block;width:100%;height:100%}
 .wpbn-layer-thumb--shape svg{padding:3px;box-sizing:border-box}
 .wpbn-picker__thumb svg{padding:4px;box-sizing:border-box}
@@ -517,3 +526,21 @@ body.wpbn-modal-open{overflow:hidden}
 /* A Shape object's Fill: five choices, wrapping on a narrow column. */
 .wpbn-fill-choice--wrap{flex-wrap:wrap}
 .wpbn-fill-choice--wrap .wpbn-device-button{flex:1 1 52px;padding:4px 6px}
+
+
+/* A button's Icon (admin.js iconCard()): the chosen one in its thumbnail; the picker, a dialog of icons. */
+.wpbn-icon-thumb svg{width:28px;height:28px;color:#1d2327}
+.wpbn-icon-picker{width:min(760px,calc(100vw - 32px));max-height:min(640px,calc(100vh - 64px));padding:0;border:0;border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden}
+.wpbn-icon-picker[open]{display:flex;flex-direction:column}
+.wpbn-icon-picker::backdrop{background:rgba(0,0,0,.45)}
+.wpbn-icon-picker__head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #dcdcde}
+.wpbn-icon-picker__search{flex:1 1 220px;min-height:34px}
+.wpbn-icon-picker__styles{flex:0 1 300px;margin:0}
+.wpbn-icon-picker__close{margin-left:auto}
+.wpbn-icon-picker__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;padding:12px 14px;overflow:auto;flex:1 1 auto}
+.wpbn-icon-picker__icon{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:78px;padding:8px 4px;border:1px solid #dcdcde;border-radius:6px;background:#fff;color:#1d2327;cursor:pointer}
+.wpbn-icon-picker__icon:hover,.wpbn-icon-picker__icon:focus-visible{border-color:#2271b1;color:#2271b1;outline:0;box-shadow:0 0 0 1px #2271b1}
+.wpbn-icon-picker__icon.is-chosen{border-color:#2271b1;background:#f0f6fc;color:#2271b1}
+.wpbn-icon-picker__icon svg{width:auto;height:24px;max-width:40px}
+.wpbn-icon-picker__label{display:block;max-width:100%;overflow:hidden;font-size:11px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+.wpbn-icon-picker__note{margin:0;padding:8px 14px 12px;color:#646970;font-size:12px}

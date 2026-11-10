@@ -19,6 +19,25 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
         foreach ($ids as $id) {
             wp_delete_post((int) $id, true);
         }
+        // The Shape layers' SVGs (WPBN_Shape: posts of their own type, with their objects in post meta).
+        $shapes = $wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", 'wpbn_shape')); // phpcs:ignore WordPress.DB.DirectDatabaseQuery -- one-off cleanup.
+        foreach ($shapes as $id) {
+            wp_delete_post((int) $id, true);
+        }
+        delete_option('wpbn_shapes_moved');
+        // Who may do what (WPBN_Access).
+        delete_option('wpbn_access');
+        delete_option('wpbn_roles');
+        // The buttons' icons, if they were updated (WPBN_Icons): the list in uploads/wp-banner/ and its record.
+        $icons = get_option('wpbn_icons', array());
+        if (is_array($icons) && !empty($icons['file']) && preg_match('#^wp-banner/fontawesome-[0-9.]+\.json$#', $icons['file'])) {
+            $uploads = wp_upload_dir(null, false);
+            if (empty($uploads['error'])) {
+                wp_delete_file(trailingslashit($uploads['basedir']).$icons['file']);
+                @rmdir(trailingslashit($uploads['basedir']).'wp-banner'); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- only if empty.
+            }
+        }
+        delete_option('wpbn_icons');
         // "What's new": the version last run and the one updated from.
         delete_option('wpbn_version');
         delete_option('wpbn_updated_from');

@@ -29,7 +29,7 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 * A name for each layer, the first field of its settings.
 * Shortcode layers: another plugin's element (a slider…) by its shortcode, in its place among the layers, with its Width per device.
 * Button layers: text, a link (also in a new window), Filled / Border / Underline, Square / Rounded / Round corners, preset sizes per device, colours; clickable on the banner.
-* Overlay layers: a colour or a gradient shading the layers under it (e.g. the photo under the title), over the whole scene or a band of it (its container, a width and a height per device in %, px or vw / vh, its position); a blur of what is under it (frosted glass), per device; it can fade out as the page scrolls.
+* Overlay layers: a colour or a gradient shading the layers under it (e.g. the photo under the title), over the whole scene or a band of it (its container, a width and a height per device in %, px or vw / vh, its position); a blur of what is under it (frosted glass), per device; filters of what is under it, a rotation, a Loop animation (zoom or slide) and, as the page scrolls, travel, zoom and a fade out (for an overlay smaller than the scene).
 * Gradient for an overlay (as in WP Swiper): linear or radial, up to ten colours with opacity.
 * Container, for each layer: it lines up with the page's content (the theme's container: Woodmart's or a block theme's content width), a width of your own (per device), or the whole scene.
 * Title: line breaks, heading (h1–h5; h2 by default), colour (with opacity and the theme's colours, as in WP Swiper), an accent colour for the words wrapped in <u></u> (as Woodmart's titles; the theme's primary colour by default), font (with Woodmart: its fonts in a list with a search box, Google fonts loaded with the banner), weight (the font's own weights), size and letter spacing per device, case, italic and a shadow.
@@ -37,10 +37,10 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 * Placed by class: inside a row, column or block with the scene's class, the element becomes that block's background, as wide and tall as the block, behind its content.
 * The WPBakery element lists the scenes, with "Edit scene" and "Add scene"; with Woodmart it is under "Theme elements".
 * Undo and Redo in the editor (Ctrl + Z, Ctrl + Shift + Z); the scene's earlier versions under Revisions (WordPress 6.4 or later).
-* Duplicate a scene, export it to a file and import it on another site (its images downloaded into the media library).
 * Preview beside the settings, as on a desktop, tablet or phone (or a screen size of your own), turned sideways too, with a page under the banner and a scroll simulation.
 * Shape layers: an SVG of several objects (strips, a torn edge…), each a window onto a photo layer (with filters of its own: colour over black and white, sharp over blurred), an image, a colour or gradient, or frosted glass; an edge, a shadow, invert (a window cut out), opacity and its own travel as the page scrolls; the drawing fitted to the scene per device. Only the shapes of the SVG are kept: its scripts, styles and links are removed.
-* Filters for image layers: black and white, blur, brightness, contrast, saturation.
+* Button icons: a Font Awesome Free icon (in the text colour) or an image of its own, left or right of the text, its size and gap per device; new icons from WP Banner → Settings → Icons.
+* Filters for image layers: black and white, blur, brightness, contrast, saturation; for overlays the same, of the layers under them; each per device.
 * Respects the visitor's reduced-motion setting.
 
 Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-checker) 5 (MIT) and [Pickr](https://github.com/simonwep/pickr) 1.9.1 (MIT).

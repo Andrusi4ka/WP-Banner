@@ -75,7 +75,9 @@ class WPBN_Settings {
     // zoom (% of the layer's size added) and end_opacity (the layer's opacity at the end, %; it starts at its Opacity).
     // rotate: the layer turned around its middle (degrees, clockwise; 2026-11-09 at the user's request, after its removal on 2026-11-07).
     const RESPONSIVE = array('x'=>array(-100,200), 'y'=>array(-100,200), 'width'=>array(1,300), 'scale'=>array(10,300), 'opacity'=>array(0,100), 'rotate'=>array(-180,180),
-        'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100))
+        'move_x'=>array(-1000,1000), 'move_y'=>array(-1000,1000), 'zoom'=>array(-90,300), 'end_opacity'=>array(0,100),
+        // A button's Icon: its size and its gap to the text (px).
+        'button_icon_size'=>array(6,200), 'button_icon_gap'=>array(0,100))
         // The Animation's per-device values (WPBN_Animation): where it starts and ends, how long a run takes.
         + WPBN_Animation::RESPONSIVE;
     const MOTION = array('move_x', 'move_y', 'zoom');
@@ -166,19 +168,50 @@ class WPBN_Settings {
     // Filters (an image layer's, a Shape layer's object's): key => [min, max, value at rest, CSS function, unit].
     const FILTERS = array('f_grayscale'=>array(0, 100, 0, 'grayscale', '%'), 'f_blur'=>array(0, 40, 0, 'blur', 'px'), 'f_brightness'=>array(0, 200, 100, 'brightness', '%'),
         'f_contrast'=>array(0, 200, 100, 'contrast', '%'), 'f_saturate'=>array(0, 300, 100, 'saturate', '%'));
+    // Per device since 2026-11-10 (user's request): key, key_tablet, key_mobile; tablet and mobile empty follow the larger screen.
     public static function filters($raw) {
         $out = array();
-        foreach (self::FILTERS as $key=>$f) { $out[$key] = round(self::number($raw[$key] ?? null, $f[2], $f[0], $f[1]), 1); }
+        foreach (self::FILTERS as $key=>$f) {
+            $out[$key] = round(self::number($raw[$key] ?? null, $f[2], $f[0], $f[1]), 1);
+            foreach (array('_tablet', '_mobile') as $suffix) {
+                $value = $raw[$key.$suffix] ?? null;
+                $out[$key.$suffix] = $value === null || $value === '' ? null : round(self::number($value, $f[2], $f[0], $f[1]), 1);
+            }
+        }
         return $out;
     }
-    // The filters as CSS filter (only those away from their rest); '' for none.
-    public static function filter_css($o) {
+    // The filters' keys, the tablet and mobile ones with them.
+    public static function filter_keys() {
+        $keys = array();
+        foreach (array_keys(self::FILTERS) as $key) { array_push($keys, $key, $key.'_tablet', $key.'_mobile'); }
+        return $keys;
+    }
+    // The filters on a device as CSS filter (only those away from their rest; skip: keys left out); '' for none.
+    public static function filter_css($o, $device = 'desktop', $skip = array()) {
         $parts = array();
         foreach (self::FILTERS as $key=>$f) {
-            $value = isset($o[$key]) ? (float) $o[$key] : $f[2];
+            if (in_array($key, $skip, true)) { continue; }
+            $value = $o[$key] ?? $f[2];
+            if ($device !== 'desktop' && ($o[$key.'_tablet'] ?? null) !== null) { $value = $o[$key.'_tablet']; }
+            if ($device === 'mobile' && ($o[$key.'_mobile'] ?? null) !== null) { $value = $o[$key.'_mobile']; }
+            $value = (float) $value;
             if ($value != $f[2]) { $parts[] = $f[3].'('.$value.$f[4].')'; }
         }
         return implode(' ', $parts);
+    }
+    /*
+     * The filters per device as CSS variables: $name, $name-t, $name-m (frontend.css picks them by breakpoint); '' when no
+     * device has any. A device without: a filter that changes nothing, so it does not take the larger screen's.
+     */
+    public static function filter_vars($o, $name, $skip = array()) {
+        $css = '';
+        $any = false;
+        foreach (array('desktop'=>'', 'tablet'=>'-t', 'mobile'=>'-m') as $device=>$suffix) {
+            $value = self::filter_css($o, $device, $skip);
+            $any = $any || $value !== '';
+            $css .= $name.$suffix.':'.($value !== '' ? $value : 'brightness(100%)').';';
+        }
+        return $any ? $css : '';
     }
     // A Shape layer's SVG in the scene, per device: Cover (fills it, cropped), Contain (whole, inside it), Stretch (its size).
     const SHAPE_FITS = array('cover', 'contain', 'stretch');
@@ -211,7 +244,7 @@ class WPBN_Settings {
             // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
             'height'=>100, 'height_unit'=>'%', 'tablet_height'=>null, 'tablet_height_unit'=>null, 'mobile_height'=>null, 'mobile_height_unit'=>null,
             // Its Blur (px, per device as Font size): the layers under it blurred (backdrop-filter); 0: none.
-            'backdrop_blur'=>0, 'tablet_backdrop_blur'=>null, 'mobile_backdrop_blur'=>null,
+            'backdrop_blur'=>0, 'backdrop_blur_tablet'=>null, 'backdrop_blur_mobile'=>null,
             // Its Width per device, kept as its Height (widths()): 100% of its container.
             'overlay_width'=>100, 'overlay_width_unit'=>'%', 'tablet_overlay_width'=>null, 'tablet_overlay_width_unit'=>null, 'mobile_overlay_width'=>null, 'mobile_overlay_width_unit'=>null,
             // A title's or a Text layer's Width per device (TEXT_WIDTHS): Auto, its text's.
@@ -229,6 +262,15 @@ class WPBN_Settings {
             'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
             // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
             'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
+            // A title's Gradient (2026-11-10): its letters filled with the gradient above (not the accent words). A switch of
+            // its own: titles saved with use_gradient on (until 2026-11-08) do not get it back.
+            'use_text_gradient'=>false,
+            // A button's Gradient (2026-11-10): its fill, border or line (its Background) in the gradient above.
+            'use_button_gradient'=>false,
+            // A button's Icon (2026-11-10, as Woodmart's; WPBN_Icons): none, a Font Awesome icon (its name and its own SVG,
+            // "width height|path") or an image (tint: in the text colour), left or right of the text; its Size and Gap per device.
+            'button_icon_type'=>'none', 'button_icon'=>'', 'button_icon_svg'=>'', 'button_icon_image'=>0, 'button_icon_tint'=>false,
+            'button_icon_position'=>'right', 'button_icon_size'=>16, 'button_icon_gap'=>8,
             // A button (as WP Top Info Bar's): its text, link (a new window or not), Background, Corners, Size per device
             // (tablet and mobile null: the larger screen's), Fill / border color and Text color.
             'button_text'=>'Learn more', 'button_url'=>'', 'button_new_tab'=>false, 'button_style'=>'filled', 'button_shape'=>'square',
@@ -241,8 +283,8 @@ class WPBN_Settings {
             + WPBN_Animation::defaults()
             // Entrance animation (WPBN_Entrance): how it comes in, once; off by default.
             + WPBN_Entrance::defaults()
-            // Filters: at rest (none).
-            + array_map(function ($f) { return $f[2]; }, self::FILTERS);
+            // Filters: at rest (none); tablet and mobile follow the larger screen.
+            + self::filters(array());
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         return $l;
     }
@@ -273,11 +315,11 @@ class WPBN_Settings {
         if (self::anchored($l)) {
             foreach (array('x', 'y') as $key) { foreach (array('', '_tablet', '_mobile') as $suffix) { if ($l[$key.$suffix] !== null) { $l[$key.$suffix] = max(0, min(100, $l[$key.$suffix])); } } }
         }
-        // An overlay: as wide as its Container, its own Height, placed by its Position as a title is; it stays there:
-        // at 100% scale and opacity, no travel or zoom (its edges would show); only its Opacity at the end (the values
-        // kept are not used).
+        // An overlay: as wide as its Container, its own Height, placed by its Position as a title is; at 100% scale and
+        // opacity (the values kept are not used). Since 2026-11-10 (user's request) it travels and zooms with the scroll, as
+        // an overlay smaller than the scene may; its Opacity at the end as before.
         if ($l['type'] === 'overlay') {
-            foreach (array('scale'=>100, 'opacity'=>100, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+            foreach (array('scale'=>100, 'opacity'=>100) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         }
         // A Shape layer: the whole scene, in place (its objects move on their own: WPBN_Shape); no Animation or fade
         // (the copies of the layers in its objects would no longer line up with them, frosted glass would show nothing).
@@ -303,7 +345,7 @@ class WPBN_Settings {
     // A title's letter spacing on each device (px), the inherited ones filled in.
     public static function spacings($l) { return self::inherited($l, 'letter_spacing'); }
     // An overlay's Blur on each device (px), the inherited ones filled in.
-    public static function blurs($l) { return self::inherited($l, 'backdrop_blur'); }
+    public static function blurs($l) { return self::resolved($l, 'backdrop_blur'); }
     // A title's Shadow as CSS text-shadow; '' with its switch off.
     public static function shadow($l) {
         return empty($l['use_shadow']) ? '' : $l['shadow_x'].'px '.$l['shadow_y'].'px '.$l['shadow_blur'].'px '.$l['shadow_color'];
@@ -579,11 +621,12 @@ class WPBN_Settings {
                 $range = array('%'=>array(100, 100), 'vh'=>array(100, 200), 'px'=>array(300, 2400), 'auto'=>array(100, 2400));
                 $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
             }
-            // An overlay's Blur (px): tablet and mobile empty follow the larger screen.
+            // An overlay's Blur (px): tablet and mobile empty follow the larger screen. Kept as the Filters are since 2026-11-10
+            // (backdrop_blur_tablet: its field as theirs); saved before as tablet_backdrop_blur, mobile_backdrop_blur.
             $l['backdrop_blur'] = (int) round(self::number($raw['backdrop_blur'] ?? null, 0, 0, 100));
-            foreach (array('tablet_backdrop_blur', 'mobile_backdrop_blur') as $key) {
-                $value = $raw[$key] ?? null;
-                $l[$key] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
+            foreach (array('tablet', 'mobile') as $device) {
+                $value = $raw['backdrop_blur_'.$device] ?? $raw[$device.'_backdrop_blur'] ?? null;
+                $l['backdrop_blur_'.$device] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
             }
             // An overlay's Width, as its Height: %, px or vw.
             foreach (self::OVERLAY_WIDTHS as $device=>$keys) {
@@ -611,10 +654,19 @@ class WPBN_Settings {
             foreach (array('_tablet', '_mobile') as $suffix) { $l['button_size'.$suffix] = self::choice($raw['button_size'.$suffix] ?? null, array_keys(self::BUTTON_SIZES), null); }
             $l['button_color'] = self::color($raw['button_color'] ?? null, '#2271b1');
             $l['button_text_color'] = self::color($raw['button_text_color'] ?? null, '#ffffff');
+            // Its Icon (its Size and Gap: RESPONSIVE).
+            $l['button_icon_type'] = self::choice($raw['button_icon_type'] ?? null, array('none', 'icon', 'image'), 'none');
+            $l['button_icon'] = is_string($raw['button_icon'] ?? null) && preg_match('#^(solid|regular|brands)/[a-z0-9-]{1,80}$#', $raw['button_icon']) ? $raw['button_icon'] : '';
+            $l['button_icon_svg'] = WPBN_Icons::parse($raw['button_icon_svg'] ?? null) ? $raw['button_icon_svg'] : '';
+            $l['button_icon_image'] = is_scalar($raw['button_icon_image'] ?? null) ? absint($raw['button_icon_image']) : 0;
+            $l['button_icon_tint'] = !empty($raw['button_icon_tint']);
+            $l['button_icon_position'] = self::choice($raw['button_icon_position'] ?? null, array('left', 'right'), 'right');
             // Animation: its switch, type, delay, repeat and easing (its per-device values: RESPONSIVE, above).
             $l = WPBN_Animation::sanitize($raw, $l);
             $l = WPBN_Entrance::sanitize($raw, $l);
             $l['use_gradient'] = !empty($raw['use_gradient']);
+            $l['use_text_gradient'] = !empty($raw['use_text_gradient']);
+            $l['use_button_gradient'] = !empty($raw['use_button_gradient']);
             $l['gradient'] = WPBN_Gradient::sanitize($raw['gradient'] ?? null);
             // An image's point kept in view where its box crops it (object-position): one for every device.
             foreach (array('focus_x','focus_y') as $key) { $l[$key] = self::number($raw[$key] ?? null, 50, 0, 100); }

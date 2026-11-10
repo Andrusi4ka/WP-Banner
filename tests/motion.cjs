@@ -204,7 +204,8 @@ const server=http.createServer((req,res)=>{
         assert.equal(await page.locator('#wpbn-dev').getAttribute('aria-pressed'),'true');
         await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__size');
         const devInfo=await frame().evaluate(()=>{const r=document.querySelector('.wpbn-scene').getBoundingClientRect(),n=v=>Math.round(v*10)/10;return {size:document.querySelector('.wpbn-dev__size').textContent,scene:n(r.width)+' × '+n(r.height),names:[...document.querySelectorAll('.wpbn-dev__name')].map(e=>e.textContent),dims:document.querySelectorAll('.wpbn-dev__dimension').length};});
-        assert.ok(devInfo.size===devInfo.scene && devInfo.names.length===1 && /^Title · \d/.test(devInfo.names[0]) && devInfo.dims>0,'Developer mode: the scene size, the title box and distances ('+JSON.stringify(devInfo)+')');
+        // Readable since 2026-11-10: "Scene · W × H", each layer "number · name · W × H".
+        assert.ok(devInfo.size==='Scene · '+devInfo.scene && devInfo.names.length===1 && /^1 · Title 1 · \d/.test(devInfo.names[0]) && devInfo.dims>0,'Developer mode: the scene size, the title box and distances ('+JSON.stringify(devInfo)+')');
         await update();
         await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__name');
         await page.click('#wpbn-dev');
@@ -544,8 +545,10 @@ const server=http.createServer((req,res)=>{
         assert.ok((await overlay()).type==='overlay' && (await overlay()).color==='rgba(0,0,0,0.4)' && /^Overlay \d+$/.test((await overlay()).name),'A new overlay: a see-through black');
         assert.match(await page.locator('[data-select="'+overlayIndex+'"] small').textContent(),/^Overlay/,'Named in the layer list');
         assert.equal(await page.locator('[data-select="'+overlayIndex+'"] .wpbn-layer-thumb--overlay .wpbn-overlay-thumb').evaluate(el=>el.style.background),'rgba(0, 0, 0, 0.4)','Its thumbnail: its fill');
-        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Fill','Size','Effect','Entrance animation','Scroll animation'],'Content (its name), Fill, Size, Effect, Entrance animation, Scroll animation');
-        assert.ok(await page.locator('label[for="wpbn-f-use_move_y"], label[for="wpbn-f-use_zoom"]').count()===0 && await page.locator('#wpbn-f-use_scroll').count()===0 && await page.locator(POS).count()===1,'No travel or zoom; Opacity at the end; Position');
+        // Since 2026-11-10: Filters (its Blur and tones), a Loop animation and travel and zoom with the scroll.
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Fill','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation'],'Content (its name), Fill, Size, Effect, Filters, Entrance, Loop and Scroll animation');
+        assert.ok(await page.locator('#wpbn-f-move_y, #wpbn-f-zoom, #wpbn-f-end_opacity').count()===3 && await page.locator('#wpbn-f-use_scroll').count()===0 && await page.locator(POS).count()===1,'Travel, zoom and Opacity at the end; Position');
+        assert.ok(await page.locator('#wpbn-f-backdrop_blur, #wpbn-f-f_grayscale').count()===2 && await page.locator('#wpbn-f-anim_type option').allTextContents().then(t=>t.join()==='None,Zoom,Slide sideways,Slide up or down'),'Its Filters; its Loop animation without Fade');
         await update();
         const covers=async()=>frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {same:Math.abs(r.left-s.left)<1&&Math.abs(r.top-s.top)<1&&Math.abs(r.width-s.width)<1&&Math.abs(r.height-s.height)<1,bg:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundColor,image:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundImage,z:Number(getComputedStyle(el).zIndex)};});
         let shade=await covers();
@@ -620,8 +623,8 @@ const server=http.createServer((req,res)=>{
         assert.ok((await overlay()).container_width_tablet===600 && (await overlay()).container_width_mobile==null && (await overlay()).tablet_overlay_width===300 && (await overlay()).tablet_overlay_width_unit==='px' && (await overlay()).mobile_overlay_width_unit==null,'Their own on tablet');
         await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
         await page.locator('#wpbn-block-position .wpbn-card').screenshot({path:path.join(__dirname,'overlay-size.png')});
-        // Blur (per device, in Fill, for Color and Gradient alike): the layers under it blurred.
-        assert.ok(await page.locator('#wpbn-block-fill .wpbn-field--device-number #wpbn-f-backdrop_blur').count()===1 && await page.locator('#wpbn-f-backdrop_blur').inputValue()==='0','Blur in Fill, 0 to start with');
+        // Blur (per device, in Filters since 2026-11-10, as the other filters' fields): the layers under it blurred.
+        assert.ok(await page.locator('#wpbn-block-filters #wpbn-f-backdrop_blur').count()===1 && await page.locator('#wpbn-f-backdrop_blur').inputValue()==='0' && await page.locator('#wpbn-block-fill #wpbn-f-backdrop_blur').count()===0,'Blur in Filters, 0 to start with');
         await update();
         assert.equal(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'none','0: no blur');
         await page.fill('#wpbn-f-backdrop_blur','12');
@@ -631,8 +634,8 @@ const server=http.createServer((req,res)=>{
         await update();
         assert.equal(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).backdropFilter),'blur(12px)','On the site: the layers under it blurred');
         await page.locator('#wpbn-block-fill .wpbn-card').screenshot({path:path.join(__dirname,'overlay-fill.png')});
-        await page.click('.wpbn-field--device-number:has(#wpbn-f-backdrop_blur) [data-field-device="mobile"]');await page.fill('#wpbn-f-mobile_backdrop_blur','4');
-        assert.ok((await overlay()).mobile_backdrop_blur===4 && (await overlay()).tablet_backdrop_blur==null,'Its own on mobile');
+        await page.click('.wpbn-field:has(#wpbn-f-backdrop_blur) [data-field-device="mobile"]');await page.fill('#wpbn-f-backdrop_blur_mobile','4');
+        assert.ok((await overlay()).backdrop_blur_mobile===4 && (await overlay()).backdrop_blur_tablet==null,'Its own on mobile');
         // Its Shadow, in Fill: Inside only once on; Inside, a vignette in the preview.
         assert.equal(await page.locator('#wpbn-f-shadow_inset').count(),0,'Overlay Shadow off: no Inside');
         await page.click('label[for="wpbn-f-use_shadow"]');
@@ -640,7 +643,6 @@ const server=http.createServer((req,res)=>{
         assert.ok((await overlay()).use_shadow===true && (await overlay()).shadow_inset===true,'Overlay Shadow on, Inside');
         await update();
         assert.match(await frame().locator('.wpbn-layer--overlay .wpbn-overlay').evaluate(el=>getComputedStyle(el).boxShadow),/inset/,'In the preview: a shadow inside its edges');
-        await page.click('.wpbn-field--device-number [data-field-device="desktop"]');
         await page.click('.wpbn-field--height [data-field-device="desktop"]');
         await page.click('[data-row-action="delete"][data-index="'+overlayIndex+'"]');
         assert.equal((await data()).layers.some(l=>l.type==='overlay'),false,'Deleted');
@@ -716,7 +718,7 @@ const server=http.createServer((req,res)=>{
         const buttonIndex=(await data()).layers.length-1, buttonOf=async()=>(await data()).layers[buttonIndex];
         assert.ok((await buttonOf()).type==='button' && (await buttonOf()).button_text==='Learn more' && (await buttonOf()).container==='theme' && /^Button \d+$/.test((await buttonOf()).name),'A new button: Learn more, in the theme container');
         assert.ok(await page.locator('[data-select="'+buttonIndex+'"] .wpbn-layer-thumb--button').count()===1,'In the layer list: its icon');
-        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Button style','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards');
+        assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Button style','Icon','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards (Icon and Filters: 2026-11-10)');
         assert.ok(await page.locator('#wpbn-f-button_new_tab').isDisabled() && await page.locator('#wpbn-f-use_scale, #wpbn-f-font_size').count()===0,'Open in a new window greyed without a link; no Scale, no Font size');
         await page.fill('#wpbn-f-button_url','https://example.com/book');
         assert.ok(!(await page.locator('#wpbn-f-button_new_tab').isDisabled()),'With a link: Open in a new window');
@@ -733,6 +735,19 @@ const server=http.createServer((req,res)=>{
         await page.selectOption('#wpbn-f-button_size_mobile','small');
         assert.ok((await buttonOf()).button_style==='bordered' && (await buttonOf()).button_shape==='round' && (await buttonOf()).button_size==='large' && (await buttonOf()).button_size_mobile==='small' && (await buttonOf()).button_size_tablet==null && (await buttonOf()).button_new_tab===true,'Kept in the layer');
         await page.click('[data-field-device="desktop"]');
+        // Its Icon (2026-11-10): Font Awesome's, chosen in the picker (searched), in the text colour, right of the text.
+        await page.click('[data-block="icon"]');
+        await page.click('[data-choice="button_icon_type"][data-value="icon"]');
+        await page.click('[data-action="icon-pick"]');
+        await page.waitForSelector('#wpbn-icon-picker .wpbn-icon-picker__icon');
+        await page.fill('.wpbn-icon-picker__search','arrow right');
+        await page.click('#wpbn-icon-picker [data-icon][title^="Arrow Right ("]');
+        const chosenIcon=await buttonOf();
+        assert.ok(chosenIcon.button_icon==='solid/arrow-right' && /^\d+ \d+\|M/.test(chosenIcon.button_icon_svg) && !(await page.locator('#wpbn-icon-picker').evaluate(d=>d.open)),'An icon chosen; the picker closed ('+chosenIcon.button_icon+')');
+        assert.ok(await page.locator('#wpbn-block-icon .wpbn-icon-thumb svg').count()===1 && await page.locator('#wpbn-f-button_icon_size, #wpbn-f-button_icon_gap, [data-choice="button_icon_position"]').count()===4,'Shown, its Position, Size and Gap');
+        await update();
+        assert.ok(await frame().locator('.wpbn-layer--button .wpbn-button > .wpbn-button__icon:last-child svg').count()===1,'On the site: the icon after the text');
+        await page.click('[data-choice="button_icon_type"][data-value="none"]');
         await update();
         const btn=await frame().locator('.wpbn-layer--button a.wpbn-button').evaluate(el=>{const c=getComputedStyle(el);return {text:el.textContent,href:el.getAttribute('href'),target:el.target,rel:el.rel,radius:c.borderTopLeftRadius,bg:c.backgroundColor,border:c.borderTopWidth,h:el.getBoundingClientRect().height,font:c.fontSize,events:c.pointerEvents};});
         assert.ok(btn.text==='Book now' && btn.href==='https://example.com/book' && btn.target==='_blank' && /noopener/.test(btn.rel),'On the site: a link in a new window ('+JSON.stringify(btn)+')');

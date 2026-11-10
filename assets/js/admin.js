@@ -28,8 +28,9 @@
     const textual = l => l.type === 'text' || l.type === 'richtext' || l.type === 'button' || l.type === 'shortcode';
     // A button's Size: WoodMart's presets (WPBN_Settings::BUTTON_SIZES): side padding, height, font size (px).
     const BUTTON_SIZES = {'extra-small':['Extra Small', 10, 28, 11], small:['Small', 14, 36, 12], default:['Default', 20, 42, 13], large:['Large', 28, 48, 14], 'extra-large':['Extra Large', 40, 56, 16]};
-    // An overlay does not move (WPBN_Settings::effective()): only its Opacity at the end. Its Container, Position and Height are its own.
-    const OVERLAY_FIXED = {scale:100, opacity:100, move_x:0, move_y:0, zoom:0};
+    // An overlay has no Scale or Opacity (WPBN_Settings::effective()); since 2026-11-10 it travels and zooms with the scroll
+    // (an overlay smaller than the scene). Its Container, Position and Height are its own.
+    const OVERLAY_FIXED = {scale:100, opacity:100};
     // Placed as a title is: its Position also its own point there (0% flush left / top, 100% right / bottom), within its container.
     // An image layer with Fill the scene off (WPBN_Settings::object()): an object with its own Width and Height, placed as a title.
     const imageObject = l => l.type === 'image' && l.fill_scene === false;
@@ -116,7 +117,7 @@
         font_size:boot.layer.font_size, tablet_font_size:boot.layer.tablet_font_size, mobile_font_size:boot.layer.mobile_font_size,
         anim_from:boot.layer.anim_from, anim_to:boot.layer.anim_to, anim_duration:boot.layer.anim_duration, anim_delay:boot.layer.anim_delay, mouse:boot.layer.mouse,
         // Filters (an image layer's, a Shape object's) at rest, and a Shape object's Edge and frosted glass.
-        rotate:0, enter_distance:60, enter_scale:80, enter_duration:1, enter_delay:0, f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, stroke:0, glass_blur:12};
+        rotate:0, enter_distance:60, enter_scale:80, enter_duration:1, enter_delay:0, f_grayscale:0, f_blur:0, f_brightness:100, f_contrast:100, f_saturate:100, backdrop_blur:0, button_icon_size:16, button_icon_gap:8, stroke:0, glass_blur:12};
     // Is there something to reset? key: the stored key on this device; base: a per-device setting's name (null for a key of its own).
     function canReset(l, key, base) {
         if (base && key !== base) return l[key] != null;
@@ -213,8 +214,12 @@
         if (colorPicker.wpbnButton) colorPicker.wpbnButton.setAttribute('aria-expanded', 'false');
         colorPicker = null;
     }
-    // The eyedropper's icon: a pipette (stroke in the button's colour).
-    const EYEDROPPER = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 6.5l1.8-1.8a2.4 2.4 0 0 1 3.4 3.4l-1.8 1.8"/><path d="M12 5l7 7"/><path d="M15.5 8.5L7 17l-3 3 .5-3.5L13 8"/></svg>';
+    // The eyedropper's icon: a pipette (pipette.svg, in the button's colour; the viewBox cropped to the drawing).
+    const EYEDROPPER = '<svg viewBox="314 314 380 380" aria-hidden="true" focusable="false" fill="currentColor">'
+        + '<rect x="480.78" y="406.64" width="177.31" height="63.87" rx="31.93" ry="31.93" transform="translate(476.9 -274.19) rotate(45)"/>'
+        + '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-miterlimit="10" stroke-width="20" d="M621.5,373.23c7.35-7.35,19.25-7.35,26.6,0"/>'
+        + '<path d="M653.93,354.08c13.82,13.82,13.82,36.32,0,50.15l-194.31,194.31c-8.98,8.98-22.19,12.47-34.48,9.11l-11.21-3.06-57.7,57.7c-2.72,2.72-7.13,2.72-9.84,0-3.08-3.08-3.08-8.1,0-11.17l57.04-57.04-3.06-11.21c-3.37-12.29.13-25.5,9.11-34.48l194.31-194.31c13.82-13.82,36.32-13.82,50.15,0M668.07,339.94h0c-21.66-21.66-56.77-21.66-78.43,0l-194.31,194.31c-14.6,14.6-19.35,35.31-14.26,53.9l-48.82,48.82c-10.9,10.9-10.9,28.56,0,39.46h0c10.53,10.53,27.6,10.53,38.13,0l49.48-49.48c18.59,5.08,39.3.34,53.9-14.26l194.31-194.31c21.66-21.66,21.66-56.77,0-78.43h0Z"/>'
+        + '</svg>';
     function openPicker(button) {
         if (!window.Pickr) return;
         if (colorPicker && colorPicker.wpbnButton === button) return;
@@ -367,7 +372,7 @@
         const chosen = parseColor(g.stops[gradientChosen].color);
         return '<div class="wpbn-field wpbn-gradient">' + head('wpbn-f-gradient', 'Gradient colors', tip('Click the bar to add a color, drag a color along it, pick one to change or delete it.')) + '<div class="wpbn-gradient__selects">'
             // The gradient as the overlay shows it (its direction, or its middle): the bar below always runs left to right, as its points' positions do.
-            + '<span class="wpbn-gradient__preview" role="img" aria-label="Gradient preview" title="As the overlay shows it"><span class="wpbn-gradient__fill"></span></span>'
+            + '<span class="wpbn-gradient__preview" role="img" aria-label="Gradient preview" title="As the layer shows it"><span class="wpbn-gradient__fill"></span></span>'
             + '<select class="wpbn-gradient__type" id="wpbn-f-gradient" aria-label="Gradient type">' + options({linear:'Linear', circle:'Radial - Circle', ellipse:'Radial - Ellipse'}, g.type) + '</select>'
             + '<select class="wpbn-gradient__direction" aria-label="Starts at"' + (linear ? '' : ' hidden') + '>' + options(SIDES, linear ? g.where : 'left') + '</select>'
             + '<select class="wpbn-gradient__x" aria-label="Middle across"' + (linear ? ' hidden' : '') + '>' + options({center:'Center', left:'Left', right:'Right'}, at[0]) + '</select>'
@@ -695,9 +700,6 @@
         font: {keys:{desktop:'font_size', tablet:'tablet_font_size', mobile:'mobile_font_size'}, label:'Font size', unit:'px', min:8, max:{desktop:500, tablet:500, mobile:250}, step:1},
         spacing: {keys:{desktop:'letter_spacing', tablet:'tablet_letter_spacing', mobile:'mobile_letter_spacing'}, label:'Letter spacing', unit:'px', min:-20, max:{desktop:100, tablet:100, mobile:100}, step:0.1,
             tip:'Space added between the letters; negative brings them closer.'},
-        // An overlay's Blur: the layers under it blurred (backdrop-filter), per device.
-        blur: {keys:{desktop:'backdrop_blur', tablet:'tablet_backdrop_blur', mobile:'mobile_backdrop_blur'}, label:'Blur', unit:'px', min:0, max:{desktop:100, tablet:100, mobile:100}, step:1,
-            tip:'Blurs the layers under this one where it covers them, like frosted glass; 0: none. Works with a see-through color or gradient.'},
         // Container width (Custom, or Theme container in a theme without one), per device.
         cwidth: {keys:{desktop:'container_width', tablet:'container_width_tablet', mobile:'container_width_mobile'}, label:'Container width', unit:'px', min:320, max:{desktop:3000, tablet:3000, mobile:3000}, step:1,
             tip:'On a narrower screen it keeps 15px clear on each side. The icons choose the device. Tablet and mobile: empty follows the larger screen (shown in grey).'}
@@ -823,28 +825,32 @@
         const px = (key, label, min, max) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<span class="wpbn-number-unit"><input id="wpbn-f-' + key + '" data-key="' + key + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + escape(l[key]) + '"><span class="wpbn-number-unit__unit" aria-hidden="true">px</span></span></div>';
         return toggle + '<div class="wpbn-row wpbn-shadow">' + colorField('shadow_color', 'Color', {alpha:true, def:boot.layer.shadow_color})
             + px('shadow_x', 'X', -100, 100) + px('shadow_y', 'Y', -100, 100) + px('shadow_blur', 'Blur', 0, 200) + '</div>'
-            // An overlay's shadow can fall Inside its edges (a vignette).
-            + (l.type === 'overlay' ? check('shadow_inset', 'Inside') : '');
+            // An overlay's shadow can fall Inside its edges (a vignette); a button's (not an Underline's: no box) too.
+            + (l.type === 'overlay' || (l.type === 'button' && l.button_style !== 'underline') ? check('shadow_inset', 'Inside') : '');
     }
     function inlineFor(l, kind, d) { const key = INLINE[kind].keys[d]; return d === 'desktop' || l[key] != null ? l[key] : inlineFor(l, kind, UP[d]); }
     const fontFor = (l, d) => inlineFor(l, 'font', d);
     // One number for the device being edited, its unit after it (px for sizes); the device icons at the
     // right of its label, as the other per-device fields have them (a green dot where tablet or mobile has its own).
+    // o.slider [from, to]: a slider before it (it moves the value the device shows: on tablet / mobile, the larger screen's until moved).
     function deviceNumberField(l, kind) {
         const o = INLINE[kind], d = device(), key = o.keys[d], id = 'wpbn-f-' + key;
+        const slider = o.slider ? '<input type="range" data-inline-range="' + kind + '" min="' + o.slider[0] + '" max="' + o.slider[1] + '" step="' + o.step + '" value="' + escape(inlineFor(l, kind, d)) + '" aria-label="' + o.label + ' — ' + DEVICES[d][1] + '">' : '';
         return '<div class="wpbn-field wpbn-field--device-number"><div class="wpbn-field__head"><label for="' + id + '">' + o.label + '</label>' + (o.tip ? tip(o.tip) : '')
             + devices({desktop:!isStandard(l, o.keys.desktop), tablet:l[o.keys.tablet] != null, mobile:l[o.keys.mobile] != null}) + '</div>'
-            + '<span class="wpbn-number-unit"><input id="' + id + '" data-inline="' + kind + '" data-' + kind + '="' + d + '" type="number" min="' + o.min + '" max="' + o.max[d] + '" step="' + o.step + '"'
+            + (slider ? '<div class="wpbn-field__row">' + slider : '') + '<span class="wpbn-number-unit"><input id="' + id + '" data-inline="' + kind + '" data-' + kind + '="' + d + '" type="number" min="' + o.min + '" max="' + o.max[d] + '" step="' + o.step + '"'
             + ' value="' + (l[key] != null ? escape(l[key]) : '') + '" placeholder="' + escape(inlineFor(l, kind, d)) + '" aria-label="' + o.label + ' — ' + DEVICES[d][1] + '">'
-            + (o.unit ? '<span class="wpbn-number-unit__unit" aria-hidden="true">' + o.unit + '</span>' : '') + '</span></div>';
+            + (o.unit ? '<span class="wpbn-number-unit__unit" aria-hidden="true">' + o.unit + '</span>' : '') + '</span>' + (slider ? '</div>' : '') + '</div>';
     }
     /*
      * Animation (WPBN_Animation): motion of the layer's own, running by itself from the moment the page loads,
      * on top of its scroll motion. Its switch; on: its kind, where it starts and ends and how long a run takes
      * (per device), then its delay, repeat and easing. The kinds and their fields come from boot.animations.
-     * An overlay has none (it stays put, as with the scroll).
+     * An overlay (2026-11-10): Zoom and the slides only (OVERLAY_ANIMS; WPBN_Animation::active()).
      */
     const ANIM = boot.animations || null;
+    // An overlay's kinds: those that move its box. Not Fade: a fading box around it would cut its Filters off from the layers behind.
+    const OVERLAY_ANIMS = ['zoom', 'slide-x', 'slide-y'];
     // Follow the mouse (Motion): its switch; on, how far the layer moves with the pointer at the scene's edge. One value for every
     // device: only devices with a mouse have it. Layers in front moving further than those behind gives depth.
     // Follow the mouse: no switch (user's request, 2026-11-09): 0 does not move. Its help: the tip beside the section's title.
@@ -877,10 +883,13 @@
             + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : '')));
     }
     function animationCard(l) {
-        if (!ANIM || l.type === 'overlay') return '';
-        const kinds = Object.keys(ANIM.types), type = ANIM.types[l.anim_type] || ANIM.types[kinds[0]];
+        if (!ANIM) return '';
+        const types = l.type === 'overlay' ? Object.fromEntries(Object.entries(ANIM.types).filter(([k]) => OVERLAY_ANIMS.includes(k))) : ANIM.types;
+        const kinds = Object.keys(types), type = types[l.anim_type] || types[kinds[0]];
         // Its Type, None first (no switch: user's request, 2026-11-09), the help behind an "i" beside it.
-        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(ANIM.types).map(([k, t]) => [k, t.label])), 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
+        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), l.type === 'overlay'
+            ? 'Runs by itself, on top of the scroll animation: the overlay slowly zooming, or sliding to and fro. For an overlay smaller than the scene (Size); one that fills it would show its edges. How it comes in: Entrance animation.'
+            : 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
         // Reset takes the kind's own start and end.
         [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
         const min = l.type === 'image' && l.fill_scene && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
@@ -934,6 +943,98 @@
     function buttonChoice(l, key, label, list) {
         return '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<div class="wpbn-button-choices" role="group" aria-label="' + label + '">'
             + Object.entries(list).map(([value, name], i) => '<button type="button" class="wpbn-button-choice"' + (i ? '' : ' id="wpbn-f-' + key + '"') + ' data-choice="' + key + '" data-value="' + value + '" aria-pressed="' + (l[key] === value) + '"><span class="wpbn-button-choice__sample wpbn-button-choice__sample--' + value + '">' + name + '</span></button>').join('') + '</div></div>';
+    }
+    /*
+     * A button's Icon (user's request, 2026-11-10, as Woodmart's; WPBN_Icons): a block of its own. None, an icon from Font
+     * Awesome Free (the picker below) or an image; then where it is, its Size and its Gap from the text (per device).
+     */
+    const segmented = (l, key, label, list) => '<div class="wpbn-field">' + head('wpbn-f-' + key, label) + '<div class="wpbn-fill-choice" role="group" aria-label="' + label + '">'
+        + Object.entries(list).map(([value, name], i) => '<button type="button" class="wpbn-device-button"' + (i ? '' : ' id="wpbn-f-' + key + '"') + ' data-choice="' + key + '" data-value="' + value + '" aria-pressed="' + (l[key] === value) + '">' + name + '</button>').join('') + '</div></div>';
+    // A kept icon ("width height|path") as SVG; '' for none.
+    function iconSvg(value) {
+        const m = /^(\d+) (\d+)\|([MmZzLlHhVvCcSsQqTtAa0-9eE.,\s+-]+)$/.exec(String(value || ''));
+        return m ? '<svg viewBox="0 0 ' + m[1] + ' ' + m[2] + '" aria-hidden="true" focusable="false"><path fill="currentColor" d="' + m[3] + '"/></svg>' : '';
+    }
+    const ICON_STYLES = {s:'solid', r:'regular', b:'brands'};
+    const iconName = value => String(value || '').replace(/^[a-z]+\//, '').replace(/-/g, ' ');
+    function iconCard(l) {
+        const type = l.button_icon_type || 'none';
+        let html = segmented(Object.assign({}, l, {button_icon_type:type}), 'button_icon_type', 'Type', {none:'None', icon:'Icon', image:'Image'});
+        if (type === 'icon') {
+            const svg = iconSvg(l.button_icon_svg);
+            html += '<div class="wpbn-field"><div class="wpbn-field__head"><span class="wpbn-field__label">Icon</span></div><div class="wpbn-picker"><span class="wpbn-picker__thumb wpbn-icon-thumb">' + svg + '</span>'
+                + (svg ? '<p class="wpbn-picker__info"><span class="wpbn-picker__name">' + escape(iconName(l.button_icon)) + '</span><span class="wpbn-picker__size">' + escape(String(l.button_icon || '').split('/')[0]) + '</span></p>' : '')
+                + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="icon-pick">' + (svg ? 'Change' : 'Choose') + '</button></span></div>'
+                + note('Font Awesome Free. It takes the button\'s Text color.') + '</div>';
+        } else if (type === 'image') {
+            const url = images[l.button_icon_image];
+            html += '<div class="wpbn-field"><div class="wpbn-field__head"><span class="wpbn-field__label">Image</span></div><div class="wpbn-picker"><span class="wpbn-picker__thumb">' + (url ? '<img src="' + escape(url) + '" alt="">' : '') + '</span>'
+                + imageDetails(l.button_icon_image) + '<span class="wpbn-picker__actions"><button type="button" class="button" data-action="icon-image">' + (l.button_icon_image ? 'Change' : 'Choose') + '</button></span></div></div>'
+                + withTip(check('button_icon_tint', 'In the text color'), 'The image\'s shape in the button\'s Text color, e.g. a one-color SVG or PNG icon. Off: the image in its own colors.');
+        }
+        if (type !== 'none') {
+            html += segmented(Object.assign({}, l, {button_icon_position:l.button_icon_position || 'right'}), 'button_icon_position', 'Position', {left:'Left', right:'Right'})
+                + respRange('button_icon_size', 'Size (px)', {min:6, max:200, to:64, tip:'The icon\'s height; its width follows its proportions.'})
+                + respRange('button_icon_gap', 'Gap (px)', {min:0, max:100, to:40, tip:'Between the icon and the text.'});
+        }
+        return card('Icon', html);
+    }
+    // The picker: a dialog of the icons (the list loaded once, when it first opens), searched by name and words, by style.
+    let iconList = null, iconStyle = '', iconFor = null;
+    const ICON_LIMIT = 300;
+    function iconDialog() {
+        let d = document.getElementById('wpbn-icon-picker');
+        if (d) return d;
+        d = document.createElement('dialog');
+        d.id = 'wpbn-icon-picker'; d.className = 'wpbn-icon-picker'; d.setAttribute('aria-label', 'Choose an icon');
+        d.innerHTML = '<div class="wpbn-icon-picker__head"><input type="search" class="wpbn-icon-picker__search" placeholder="Search icons, e.g. arrow, cart, phone" aria-label="Search icons">'
+            + '<div class="wpbn-fill-choice wpbn-icon-picker__styles" role="group" aria-label="Style">' + [['', 'All'], ['s', 'Solid'], ['r', 'Regular'], ['b', 'Brands']].map(([v, t]) => '<button type="button" class="wpbn-device-button" data-icon-style="' + v + '" aria-pressed="' + (v === iconStyle) + '">' + t + '</button>').join('') + '</div>'
+            + '<button type="button" class="wpbn-icon-button wpbn-icon-picker__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
+            + '<div class="wpbn-icon-picker__grid" role="listbox" aria-label="Icons"></div><p class="wpbn-icon-picker__note"></p>';
+        document.body.append(d);
+        d.querySelector('.wpbn-icon-picker__search').addEventListener('input', drawIcons);
+        d.addEventListener('click', e => {
+            if (e.target === d || e.target.closest('.wpbn-icon-picker__close')) { d.close(); return; }
+            const style = e.target.closest('[data-icon-style]');
+            if (style) { iconStyle = style.dataset.iconStyle; d.querySelectorAll('[data-icon-style]').forEach(b => b.setAttribute('aria-pressed', String(b === style))); drawIcons(); return; }
+            const pick = e.target.closest('[data-icon]');
+            if (pick && iconFor) {
+                const [i, letter] = pick.dataset.icon.split(':'), icon = iconList.icons[Number(i)], svg = icon && icon[3][letter];
+                if (svg) { iconFor.button_icon = ICON_STYLES[letter] + '/' + icon[0]; iconFor.button_icon_svg = svg[0] + ' ' + svg[1] + '|' + svg[2]; }
+                d.close();
+                if (scene.layers.includes(iconFor)) { settings(); changed(); const again = $('settings').querySelector('[data-action="icon-pick"]'); if (again) again.focus(); }
+            }
+        });
+        return d;
+    }
+    function drawIcons() {
+        const d = iconDialog(), grid = d.querySelector('.wpbn-icon-picker__grid'), noteEl = d.querySelector('.wpbn-icon-picker__note');
+        if (!iconList) { grid.innerHTML = ''; noteEl.textContent = 'Loading the icons…'; return; }
+        const words = d.querySelector('.wpbn-icon-picker__search').value.toLowerCase().split(/\s+/).filter(Boolean);
+        const found = [];
+        iconList.icons.forEach((icon, i) => {
+            const text = (icon[0] + ' ' + icon[1] + ' ' + icon[2]).toLowerCase();
+            if (!words.every(w => text.includes(w))) return;
+            Object.keys(icon[3]).forEach(letter => { if (!iconStyle || iconStyle === letter) found.push([i, letter]); });
+        });
+        grid.innerHTML = found.slice(0, ICON_LIMIT).map(([i, letter]) => {
+            const icon = iconList.icons[i], svg = icon[3][letter], value = ICON_STYLES[letter] + '/' + icon[0], chosen = iconFor && iconFor.button_icon === value;
+            return '<button type="button" class="wpbn-icon-picker__icon' + (chosen ? ' is-chosen' : '') + '" role="option" aria-selected="' + chosen + '" data-icon="' + i + ':' + letter + '" title="' + escape(icon[1] + ' (' + ICON_STYLES[letter] + ')') + '">'
+                + iconSvg(svg[0] + ' ' + svg[1] + '|' + svg[2]) + '<span class="wpbn-icon-picker__label">' + escape(icon[1]) + '</span></button>';
+        }).join('');
+        noteEl.textContent = (found.length > ICON_LIMIT ? 'The first ' + ICON_LIMIT + ' of ' + found.length + ' icons: search to find others. ' : found.length ? '' : 'No icons found. ') + 'Font Awesome Free ' + iconList.version + '.';
+    }
+    function openIcons(l) {
+        iconFor = l;
+        const d = iconDialog();
+        d.querySelector('.wpbn-icon-picker__search').value = '';
+        drawIcons();
+        d.showModal();
+        d.querySelector('.wpbn-icon-picker__search').focus();
+        if (!iconList && boot.iconList) {
+            fetch(boot.iconList.url).then(r => r.json()).then(list => { iconList = list; drawIcons(); })
+                .catch(() => { d.querySelector('.wpbn-icon-picker__note').textContent = 'The icons could not be loaded. Reload the page and try again.'; });
+        }
     }
     // A help text behind an "i" icon, shown on a dark tooltip on hover and keyboard focus (as WP Swiper's).
     const tip = text => '<span class="wpbn-tip" tabindex="0" role="img" aria-label="' + escape(text) + '" data-tip="' + escape(text) + '"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span></span>';
@@ -1122,9 +1223,22 @@
     }
     // Behind its switch (as Scale): off, the switch alone; on, the slider per device. No tip (user's request, 2026-11-09).
     const rotateField = () => respRange('rotate', 'Rotation (°)', {min:-180, max:180, from:-180, to:180});
-    // Filters (an image layer's, a Shape object's): WPBN_Settings::FILTERS.
+    // Filters (an image layer's, a Shape object's): WPBN_Settings::FILTERS; per device since 2026-11-10 (user's request).
     const FILTER_FIELDS = [['f_grayscale', 'Black and white (%)', 0, 100], ['f_blur', 'Blur (px)', 0, 40], ['f_brightness', 'Brightness (%)', 0, 200], ['f_contrast', 'Contrast (%)', 0, 200], ['f_saturate', 'Saturation (%)', 0, 300]];
-    const filterFields = () => FILTER_FIELDS.map(([key, label, min, max]) => range(key, label, {min, max})).join('');
+    const filterFields = () => FILTER_FIELDS.map(([key, label, min, max]) => respRange(key, label, {min, max})).join('');
+    // An overlay's Filters (user's request, 2026-11-10, as an image's): of the layers under it, where it covers them
+    // (backdrop-filter). Its Blur per device, then the image's others.
+    const TONE_FIELDS = FILTER_FIELDS.filter(([key]) => key !== 'f_blur');
+    // Its Blur as the Filters' fields (user's request, 2026-11-10): the slider 0–50px, the number up to 100.
+    const overlayFilterFields = () => respRange('backdrop_blur', 'Blur (px)', {min:0, max:100, to:50,
+        tip:'Blurs the layers under this one where it covers them, like frosted glass; 0: none. Every filter here changes the layers under the overlay (not its own color); they show through a see-through color or gradient.'})
+        + TONE_FIELDS.map(([key, label, min, max]) => respRange(key, label, {min, max})).join('');
+    // Its backdrop-filter on a device (WPBN_Render), its Blur in px given; '' for none.
+    function backdropCss(l, blur, d) {
+        const parts = blur ? ['blur(' + blur + 'px)'] : [];
+        TONE_FIELDS.forEach(([key]) => { const v = Number(eff(l, key, d || 'desktop') ?? DEFAULTS[key]); if (v !== DEFAULTS[key]) parts.push(key.slice(2) + '(' + v + '%)'); });
+        return parts.join(' ');
+    }
     // What fills an object (WPBN_Shape::FILLS).
     const FILL_NAMES = {layer:'Photo', image:'Image', color:'Color', glass:'Glass', none:'None'};
     // A Shape layer's settings: its SVG and how it fits the scene; with an object chosen, that object's.
@@ -1173,7 +1287,7 @@
             ['scroll', 'Scroll animation', 'sort', scrollCard(o, range('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far the object moves by the end of the scroll; negative: to the left. What it shows stays in place.'})
                 + range('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'Negative: up.'})), scrolls(o), SCROLL_TIP]]);
     }
-    // An SVG chosen on this computer: sent to the server, which cleans it and keeps it in the media library.
+    // An SVG chosen on this computer: sent to the server, which cleans it and keeps it as the plugin's own record (WPBN_Shape: not in the media library).
     function uploadShape(l) {
         const input = document.createElement('input');
         input.type = 'file'; input.accept = '.svg,image/svg+xml';
@@ -1217,18 +1331,20 @@
         const pw = Math.max(1, Math.min(100, overlayWidth(l, d)) / 100 * sw), ph = Math.max(1, overlayHeight(l, d) / 100 * sh), ratio = pw / ph;
         // In % of the thumbnail (4:3), 86% of it at most on its long side.
         const w = ratio > 4 / 3 ? 86 : 86 * ratio * 3 / 4, h = ratio > 4 / 3 ? 86 * 4 / 3 / ratio : 86;
-        const k = 132 * w / 100 / pw, blur = inlineFor(l, 'blur', d);
+        const k = 132 * w / 100 / pw, blur = Number(eff(l, 'backdrop_blur', d)) || 0, backdrop = backdropCss(l, blur ? Math.max(1.5, blur * k) : 0);
         const shadow = l.use_shadow ? (l.shadow_inset ? 'inset ' : '') + l.shadow_x * k + 'px ' + l.shadow_y * k + 'px ' + l.shadow_blur * k + 'px ' + l.shadow_color : '';
         const style = 'left:' + (100 - w) / 2 + '%;top:' + (100 - h) / 2 + '%;width:' + w + '%;height:' + h + '%;background:' + overlayFill(l) + ';'
-            + (blur ? 'backdrop-filter:blur(' + Math.max(1.5, blur * k) + 'px);' : '') + (shadow ? 'box-shadow:' + shadow + ';' : '');
+            + (backdrop ? 'backdrop-filter:' + backdrop + ';' : '') + (shadow ? 'box-shadow:' + shadow + ';' : '');
         return '<span class="wpbn-layer-thumb wpbn-layer-thumb--overlay" aria-hidden="true"><span class="wpbn-overlay-thumb" style="' + escape(style) + '"></span></span>';
     }
     // Layers: tiles from the back one (1) to the front one, so a new layer, put in front, is the last tile, beside Add element
     // (user's request, 2026-11-09). Each tile selects its layer; its icons hide, place, copy or remove it; drag (or Alt + arrows) reorders.
     function list() {
+        devSync();
         const box = $('layers');
         box.replaceChildren();
-        if (!scene.layers.length) { box.innerHTML = '<p class="wpbn-empty">Add a background image, a title and a transparent front image.</p>'; return; }
+        // No layers yet: only Add element beside the strip, no hint (user's request, 2026-11-10).
+        if (!scene.layers.length) return;
         for (let i = 0; i < scene.layers.length; i++) {
             const l = scene.layers[i], name = escape(l.name || TYPE_NAMES[l.type] || 'Layer');
             // Not draggable: the browser's own image drag would stop the row's.
@@ -1521,9 +1637,7 @@
             else if (l.type === 'overlay') {
                 // Its fill: Color or Gradient (the buttons), then the chosen one's settings.
                 first += fillChoice(l) + (l.use_gradient ? gradientField(l)
-                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size: Size; its place: Position on its tile.'))
-                    // Blur, for Color and Gradient alike; then its Shadow (Inside: a vignette).
-                    + deviceNumberField(l, 'blur');
+                    : withTip(colorField('color', 'Color', {alpha:true, def:OVERLAY_COLOR}), 'Shades the layers below it in the list; those above it stay clear. Use a see-through color so they show through. Its size: Size; its place: Position on its tile.'));
             } else if (l.type === 'shortcode') {
                 first += withTip(textarea('shortcode', 'Shortcode'), 'Another plugin\'s shortcode, as on a page, e.g. [wp_swiper id="12"]. It shows in this layer\'s place (layers above it cover it) and can be clicked and swiped. Its height is its own. Press Update to see it in the preview.');
             } else if (l.type === 'button') {
@@ -1537,7 +1651,11 @@
                     + needs(buttonChoice(l, 'button_shape', 'Corners', {square:'Square', rounded:'Rounded', round:'Round'}), 'corners')
                     + withTip(respSelect('button_size', 'Size', sizes), 'Preset sizes: padding, height and font size together.')
                     + '<div class="wpbn-colors">' + withTip(colorField('button_color', 'Fill / border color', {alpha:true, def:'#2271b1'}), 'Filled: the button\'s color; Border and Underline: their line\'s.')
-                    + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>')]);
+                    + colorField('button_text_color', 'Text color', {alpha:true, def:'#ffffff'}) + '</div>'
+                    // Gradient (user's request, 2026-11-10): the fill, border or line in it.
+                    + withTip(check('use_button_gradient', 'Gradient'), 'Filled: the button\'s fill in a gradient; Border: its border; Underline: its line. The text keeps its Text color; the Fill / border color stays for browsers that cannot show it.')
+                    + (l.use_button_gradient ? gradientField(l) : ''))]);
+                cards.push(['icon', 'Icon', 'star-filled', iconCard(l), (l.button_icon_type || 'none') !== 'none']);
             } else if (l.type === 'richtext') {
                 // WordPress's editor, as WP Swiper's slide texts (startEditor() after the fields are drawn); a plain box without it.
                 first += withTip('<div class="wpbn-field wpbn-richtext">' + head(EDITOR_ID, 'Text') + '<textarea id="' + EDITOR_ID + '" data-key="content" rows="6">' + escape(l.content || '') + '</textarea></div>',
@@ -1560,6 +1678,9 @@
                     + '<div class="wpbn-row">' + select('text_transform', 'Case', {none:'Normal', uppercase:'UPPERCASE', lowercase:'lowercase', capitalize:'Capitalize'}) + select('font_style', 'Style', {normal:'Normal', italic:'Italic'}) + '</div>'
                     + '<div class="wpbn-colors">' + colorField('color', 'Color', {alpha:true, def:boot.layer.color})
                     + withTip(colorField('accent_color', 'Accent color', {alpha:true, def:'', fallback:boot.primary || l.color}), 'The words wrapped in <u></u> in the title. Default: the theme\'s primary color' + (boot.primary ? '' : ' (none here: the title\'s color)') + '.') + '</div>'
+                    // Gradient (user's request, 2026-11-10): the letters filled with it instead of the Color; the accent words keep theirs.
+                    + withTip(check('use_text_gradient', 'Gradient'), 'Fills the title\'s letters with a gradient instead of its Color. The accent words (<u></u>) keep the Accent color. The Color stays for browsers that cannot show it.')
+                    + (l.use_text_gradient ? gradientField(l) : '')
                     )]);
             }
             html = legend
@@ -1585,12 +1706,18 @@
                     // Effect (user's request, 2026-11-09): an image's Scale and Opacity, every layer's Rotation, a Shadow (an image's along its
                     // outline, a title's or a text's behind its letters, an overlay's around its box or Inside it).
                     ['effect', 'Effect', 'admin-customizer', card('Effect', (l.type !== 'image' ? '' : respRange('scale', 'Scale (%)', {min:10, max:300, to:200, tip:imageObject(l) ? 'The image\'s size within its box: 100% is as set by its Width and Height.' : eff(l, 'fit', d) === 'contain' ? 'The image\'s size: 100% is as tall (or wide) as the scene, 30% a third of it.' : '100%: the image just fills the scene; more enlarges it (its edges are cropped).'}) + respRange('opacity', 'Opacity (%)', {min:0, max:100}))
-                        + rotateField() + (['image', 'text', 'richtext', 'overlay'].includes(l.type) ? shadowField(l) : '') + borderField(l) + radiusField(l))],
-                    l.type === 'image' ? ['filters', 'Filters', 'image-filter', card('Filters', filterFields())] : null,
+                        + rotateField() + (['image', 'text', 'richtext', 'overlay', 'button'].includes(l.type) ? shadowField(l) : '') + borderField(l) + radiusField(l))],
+                    // A button's (2026-11-10): its Blur alone, of what is under it (frosted glass).
+                    ['image', 'overlay', 'button'].includes(l.type) ? ['filters', 'Filters', 'image-filter', card('Filters', l.type === 'image' ? filterFields() : l.type === 'overlay' ? overlayFilterFields(l)
+                        : respRange('backdrop_blur', 'Blur (px)', {min:0, max:100, to:50, tip:'Blurs what is under the button, like frosted glass; 0: none. Shows through a see-through fill: Border, Underline, or Filled with a see-through color.'}))] : null,
                     ['entrance', 'Entrance animation', 'migrate', entranceCard(l), !!l.use_enter],
                     ['loop', 'Loop animation', 'controls-repeat', animationCard(l), !!l.use_anim],
-                    // As the page scrolls (an overlay: only its Opacity at the end), with the mouse (not an overlay), coming in, running on.
-                    ['scroll', 'Scroll animation', 'sort', l.type === 'overlay' ? scrollCard(l, respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, tip:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out. It does not move.'}))
+                    // As the page scrolls (an overlay, 2026-11-10: its travel and zoom too, for one smaller than the scene), with the
+                    // mouse (not an overlay), coming in, running on.
+                    ['scroll', 'Scroll animation', 'sort', l.type === 'overlay' ? scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: to the left. For an overlay smaller than the scene: one that fills it would show its edges.'})
+                        + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: up.'})
+                        + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, tip:'Size added by the end of the scroll; negative shrinks it.'})
+                        + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, tip:'The overlay goes from full to this opacity as the page scrolls: 0 fades it out.'}))
                         : scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: to the left.'})
                         + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far it moves by the end of the scroll; negative: up.'})
                         + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, tip:'Size added by the end of the scroll; negative shrinks the layer.'})
@@ -1619,7 +1746,7 @@
         if (focusField) { const button = $('settings').querySelector('[data-field-device="' + value + '"]'); if (button) button.focus(); }
     }
     // The preview is redrawn only by Update; until then the button is lit (as WP Swiper's).
-    function changed() { sync(); $('refresh').classList.add('is-stale'); clearTimeout(historyTimer); historyTimer = setTimeout(remember, HISTORY_PAUSE); motionDots(); overlayTile(); }
+    function changed() { sync(); $('refresh').classList.add('is-stale'); clearTimeout(historyTimer); historyTimer = setTimeout(remember, HISTORY_PAUSE); motionDots(); overlayTile(); devSync(); }
     // An overlay's thumbnail follows its settings as they change (its tile's thumbnail only: the tiles are not drawn again).
     function overlayTile() {
         const l = selected >= 0 && scene.layers[selected], thumb = l && l.type === 'overlay' && $('layers').querySelector('[data-select="' + selected + '"] .wpbn-layer-thumb');
@@ -1681,6 +1808,12 @@
     });
     app.addEventListener('input', event => {
         const input = event.target;
+        // A per-device number's slider (deviceNumberField()): its number takes the value, and is handled as typed.
+        if (input.dataset.inlineRange) {
+            const number = input.closest('.wpbn-field').querySelector('[data-inline]');
+            if (number) { number.value = input.value; number.dispatchEvent(new Event('input', {bubbles:true})); }
+            return;
+        }
         // A Shape layer's object: its name (shown in the list under the layer).
         if (input.dataset.objectName !== undefined) {
             const o = selected >= 0 ? (scene.layers[selected].shape_objects || [])[selectedObject] : null;
@@ -1694,6 +1827,8 @@
             else return;
             // The green dots: tablet / mobile with a value of their own.
             input.closest('.wpbn-field').querySelectorAll('[data-field-device]').forEach(b => b.classList.toggle('has-value', b.dataset.fieldDevice === 'desktop' ? !isStandard(l, INLINE[kind].keys.desktop) : l[INLINE[kind].keys[b.dataset.fieldDevice]] != null));
+            const slider = input.closest('.wpbn-field').querySelector('[data-inline-range]');
+            if (slider && document.activeElement !== slider) slider.value = inlineFor(l, kind, d);
             refreshFontSample();
             changed(); return;
         }
@@ -1895,6 +2030,17 @@
             switch (button.dataset.action) {
             case 'position': openPosition(l, button); return;
             case 'shape-upload': uploadShape(l); return;
+            // A button's Icon: Font Awesome's (the picker), or an image of its own.
+            case 'icon-pick': openIcons(l); return;
+            case 'icon-image': {
+                const media = wp.media({title:'Choose the icon\'s image', library:{type:'image'}, multiple:false});
+                media.on('select', () => {
+                    const image = media.state().get('selection').first().toJSON();
+                    l.button_icon_image = image.id; images[image.id] = (image.sizes && image.sizes.medium || image).url;
+                    imageInfo[image.id] = {name:image.filename || '', width:image.width || 0, height:image.height || 0, size:image.filesizeHumanReadable || ''};
+                    if (scene.layers.includes(l)) { settings(); changed(); }
+                }); media.open(); return;
+            }
             // A Shape object's own image (Fill: Image).
             case 'object-image': {
                 const o = (l.shape_objects || [])[selectedObject];
@@ -2092,17 +2238,31 @@
             win.document.body.classList.toggle('wpbn-black',dark);
             win.document.body.style.background=dark?'#121212':'';
             if (win.wpbnPreviewProgress) win.wpbnPreviewProgress(Number($('progress').value)/100);
-            if (win.wpbnDev) win.wpbnDev(dev);
+            if (win.wpbnDev) win.wpbnDev(dev, devInfo());
         } catch (error) { /* Frame navigation is in progress. */ }
+    }
+    // What Developer mode labels (preview-dev.js): the layer chosen, each layer's name, and the chosen one's Position on the
+    // device shown (a placed layer's: a photo filling the scene has none).
+    function devInfo() {
+        const layers = {}, d = device();
+        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && anchored(l)) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
+        return {selected, layers};
+    }
+    // Developer mode told of the layer chosen and of names and places changed (its boxes follow at once, without an Update).
+    function devSync() {
+        if (!dev) return;
+        try { const win = $('frame').contentWindow; if (win.wpbnDev) win.wpbnDev(true, devInfo()); } catch (error) { /* Frame navigation is in progress. */ }
     }
     // A screen size of one's own per device (the fields above the preview). Typed sizes apply with
     // Update, as the other preview changes; empty fields: the device's usual size and drawing.
     // A size of one's own is shown in a plain frame: the device drawings have fixed proportions.
+    // For this visit only (user's request, 2026-11-10): the editor always opens with the usual screens (until then they were
+    // kept in the browser, wpbn-preview-sizes, removed here once).
     // TODO: once the plugin is done, offer screen presets, each with a drawing of its own.
     const SCREENS = {desktop:[1280,721], tablet:[820,1101], mobile:[390,844]};
     const SIZE_LIMITS = {w:[240,3840], h:[240,2160]};
     const draftSizes = {}, sizes = {};
-    try { Object.assign(sizes, JSON.parse(localStorage.getItem('wpbn-preview-sizes') || '{}')); Object.assign(draftSizes, sizes); } catch (error) { /* No storage: usual sizes. */ }
+    try { localStorage.removeItem('wpbn-preview-sizes'); } catch (error) { /* No storage: nothing kept. */ }
     // Which device's values a width shows (frontend.js's breakpoints).
     const valuesFor = w => w <= 767 ? 'mobile' : w <= 1024 ? 'tablet' : 'desktop';
     // What was typed is kept as typed ([width or null, height or null]); an empty one is the device's usual value.
@@ -2126,7 +2286,6 @@
     ['res-w', 'res-h'].forEach(id => { $(id).addEventListener('input', sizeInput); $(id).addEventListener('change', () => { sizeInput(); sizeFields(); }); });
     function applySizes() {
         Object.keys(sizes).forEach(d => delete sizes[d]); Object.assign(sizes, draftSizes);
-        try { localStorage.setItem('wpbn-preview-sizes', JSON.stringify(sizes)); } catch (error) { /* Kept for this visit only. */ }
     }
     function resize() {
         const device=$('device').value;
@@ -2234,6 +2393,17 @@
             alert(boot.tooLarge);
         }
     });
+    /*
+     * Leaving with unsaved changes (user's request, 2026-11-10), as Woodmart's Theme settings and Header builder do: the
+     * browser's own question (beforeunload) on any way out (a link, closing the tab, reloading). Unsaved: the scene and its
+     * title as they were when the page opened against now, so undoing back to them is no change. Not when the form is sent.
+     */
+    const titleInput=document.getElementById('title');
+    const pageState=()=>JSON.stringify(scene)+'\u0000'+(titleInput ? titleInput.value : '');
+    let savedState='', sending=false;
+    const unsaved=()=>!sending && savedState!=='' && pageState()!==savedState;
+    document.getElementById('post').addEventListener('submit',e=>{if(!e.defaultPrevented)sending=true;});
+    addEventListener('beforeunload',e=>{if(unsaved()){e.preventDefault();e.returnValue='';}});
     // Position. An image layer: the point of the photo kept in view where its box crops it
     // (object-position), the whole photo shown, as WP Swiper's Image position; one for every
     // device, the frames show each device's crop. A text layer: where it stands on the device
@@ -2271,7 +2441,8 @@
     positionModal.innerHTML='<div class="wpbn-modal__backdrop"></div><div class="wpbn-modal__box"><div class="wpbn-modal__head"><h2 class="wpbn-modal__title" id="wpbn-position-title"><span class="wpbn-modal__what">Position</span> <span class="wpbn-modal__layer"></span></h2><button type="button" class="wpbn-modal__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
         +'<div class="wpbn-modal__body"><p class="description wpbn-position-help"></p>'
         +'<div class="wpbn-focus"><div class="wpbn-focus__main"><div class="wpbn-focus__stage" tabindex="0" role="slider" aria-label="Layer position" aria-valuemin="0" aria-valuemax="100"><img class="wpbn-focus__image" alt="" draggable="false"><div class="wpbn-position-canvas"></div><span class="wpbn-focus__point" aria-hidden="true"></span></div></div>'
-        +'<div class="wpbn-focus__frames" aria-hidden="true">'+Object.entries(DEVICES).map(([d,[icon,name]])=>'<figure class="wpbn-focus__device" data-device="'+d+'"><span class="wpbn-focus__frame"><span class="wpbn-position-canvas"></span></span><figcaption><span class="dashicons dashicons-'+icon+'"></span>'+name+'</figcaption></figure>').join('')+'</div></div>'
+        // The devices' frames: buttons that switch the window to that device (user's request, 2026-11-10); an image's point is one for all, they only show it.
+        +'<div class="wpbn-focus__frames" role="group" aria-label="Device">'+Object.entries(DEVICES).map(([d,[icon,name]])=>'<button type="button" class="wpbn-focus__device" data-device="'+d+'" aria-pressed="false" title="Position on '+name+'"><span class="wpbn-focus__frame"><span class="wpbn-position-canvas"></span></span><span class="wpbn-focus__caption"><span class="dashicons dashicons-'+icon+'" aria-hidden="true"></span>'+name+'</span></button>').join('')+'</div></div>'
         // Its X and Y: shown as it is dragged, and typed (user's request, 2026-11-09); Enter applies.
         +'<p class="wpbn-focus__value">'+[['x','X','Horizontal position'],['y','Y','Vertical position']].map(([k,name,full])=>'<span class="wpbn-axis"><label class="wpbn-axis__name" for="wpbn-pos-'+k+'" title="'+full+' (%)">'+name+'</label><input type="number" id="wpbn-pos-'+k+'" min="0" max="100" step="0.1" inputmode="decimal"><span class="wpbn-axis__unit" aria-hidden="true">%</span></span>').join('')+'</p><p class="wpbn-position-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span class="wpbn-position-warning__text"></span></p></div>'
         +'<div class="wpbn-modal__foot"><button type="button" class="button-link wpbn-focus__reset">Reset to centre</button><button type="button" class="button wpbn-modal__cancel">Cancel</button><button type="button" class="button button-primary wpbn-modal__apply">Apply</button></div></div>';
@@ -2279,7 +2450,8 @@
     const focusStage=positionModal.querySelector('.wpbn-focus__stage');
     const focusPoint=positionModal.querySelector('.wpbn-focus__point');
     let positionLayer=null, positionDraft=null, positionReturn=null, dragging=null;
-    const canvasDevice=canvas=>canvas.parentElement===focusStage ? $('device').value : canvas.closest('.wpbn-focus__device').dataset.device;
+    // The big stage: the device the window is set to (positionDevice); a frame: its own.
+    const canvasDevice=canvas=>canvas.parentElement===focusStage ? positionDevice : canvas.closest('.wpbn-focus__device').dataset.device;
     // A title's X and Width (shares of its container) as shares of the scene, on a device; and back.
     const boxOf=(d,layer)=>{const w=sceneWidth(d), c=container(w,layer,d);return c ? {left:c.left/w*100, width:c.width/w*100} : {left:0, width:100};};
     const inScene=(layer,d,x)=>boxOf(d,layer).left+x*boxOf(d,layer).width/100;
@@ -2290,11 +2462,34 @@
     const focusImage=positionModal.querySelector('.wpbn-focus__image');
     // The layer as it would be with the draft applied: an image's point in view, or the text's place on the device being edited.
     let positionDevice='desktop';
+    // Each device's place as changed in the window ({device: [x, y]}; the one shown: positionDraft) and where it was when shown
+    // (positionStart): a device not changed keeps its value (or the larger screen's it takes).
+    let positionDrafts={}, positionStart=null;
     // An image layer with its photo: the point in view. Without a photo there is nothing to crop: placed as text is.
     // positionKind: 'place' (an image object's box: where it stands) or 'focus' (the point of the photo in view).
     let positionKind='focus';
     const focusMode=()=>!!positionLayer && positionLayer.type==='image' && !!images[positionLayer.image] && positionKind!=='place';
-    const withDraft=()=>Object.assign({},positionLayer,focusMode() ? {focus_x:positionDraft[0],focus_y:positionDraft[1]} : {[dkey('x',positionDevice)]:positionDraft[0],[dkey('y',positionDevice)]:positionDraft[1]});
+    const placeDrafts=()=>{const all=Object.assign({},positionDrafts);if(positionDraft[0]!==positionStart[0]||positionDraft[1]!==positionStart[1]||all[positionDevice])all[positionDevice]=positionDraft.slice();return all;};
+    const withDraft=()=>{
+        if(focusMode())return Object.assign({},positionLayer,{focus_x:positionDraft[0],focus_y:positionDraft[1]});
+        const out=Object.assign({},positionLayer), all=placeDrafts();
+        Object.keys(DEVICES).forEach(d=>{if(all[d]){out[dkey('x',d)]=all[d][0];out[dkey('y',d)]=all[d][1];}});
+        return out;
+    };
+    // Switched to a device: its place (as the drafts so far make it) on the stage and in the fields.
+    function positionSwitch(d) {
+        if(focusMode() || d===positionDevice)return;
+        positionDrafts=placeDrafts();
+        positionDevice=d;
+        const layer=withDraft();
+        positionDraft=[eff(layer,'x',d),eff(layer,'y',d)];positionStart=positionDraft.slice();
+        positionModal.querySelector('.wpbn-modal__layer').textContent=positionLayer.name+' · '+DEVICES[d][1];
+        positionDevices();drawPositionScenes();
+    }
+    function positionDevices() {
+        const image=focusMode();
+        positionModal.querySelectorAll('.wpbn-focus__device').forEach(b=>{const on=!image && b.dataset.device===positionDevice;b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));b.disabled=image;});
+    }
     // The layer's box in scene pixels at a scroll progress (0 start, 1 end), as frontend.css draws it.
     function layerBox(layer, d, progress) {
         const w=sceneWidth(d), h=sceneHeight(d), s=eff(layer,'scale',d)/100;
@@ -2335,7 +2530,7 @@
     }
     function showPosition() {
         const [x,y]=positionDraft, layer=withDraft();
-        focusPoint.style.left=(focusMode() ? x : inScene(positionLayer,$('device').value,x))+'%';focusPoint.style.top=y+'%';
+        focusPoint.style.left=(focusMode() ? x : inScene(positionLayer,positionDevice,x))+'%';focusPoint.style.top=y+'%';
         // The fields: the one being typed in is left as it is.
         [x,y].forEach((value,i)=>{const input=positionInputs[i];if(document.activeElement!==input)input.value=value;});
         focusStage.setAttribute('aria-valuenow',x);focusStage.setAttribute('aria-valuetext','Horizontal '+x+'%, vertical '+y+'%');
@@ -2357,7 +2552,7 @@
             focusStage.style.aspectRatio=ratio ? String(ratio) : '';
             focusStage.style.width=ratio ? 'min(100%, calc(min(60vh, 560px) * '+ratio+'))' : '';
         }else{
-            const mainDevice=$('device').value, mainWidth=sceneWidth(mainDevice), mainHeight=sceneHeight(mainDevice), ratio=mainWidth/mainHeight;
+            const mainDevice=positionDevice, mainWidth=sceneWidth(mainDevice), mainHeight=sceneHeight(mainDevice), ratio=mainWidth/mainHeight;
             focusStage.style.aspectRatio=mainWidth+'/'+mainHeight;
             focusStage.style.width='min(100%, calc(min(60vh, 560px) * '+ratio+'))';
         }
@@ -2395,9 +2590,9 @@
                 if(layer.type==='button'){const p=BUTTON_SIZES[v('button_size')]||BUTTON_SIZES.default,k=width/baseWidth,style=layer.button_style,line=layer.button_color;
                     Object.assign(item.style,{display:'flex',alignItems:'center',justifyContent:'center',boxSizing:'border-box',padding:'0 '+p[1]*k+'px',minHeight:p[2]*k+'px',fontSize:p[3]*k+'px',fontWeight:'600',textTransform:'uppercase',whiteSpace:'nowrap',color:layer.button_text_color,
                         background:style==='filled'?line:'transparent',border:style==='underline'?'0':Math.max(1,2*k)+'px solid '+line,borderBottom:Math.max(1,(style==='underline'?3:2)*k)+'px solid '+line,borderRadius:style==='underline'?'0':{square:'0',rounded:5*k+'px',round:35*k+'px'}[layer.button_shape]});
-                    item.textContent=layer.button_text;canvas.append(item);return;}
+                    {const g=layer.use_button_gradient&&gradientCss(layer.gradient);if(g){if(style==='filled')Object.assign(item.style,{background:g,borderColor:'transparent'});else item.style.borderImage=g+' 1';}}item.textContent=layer.button_text;canvas.append(item);return;}
                 // An overlay: the whole scene in its fill.
-                if(layer.type==='overlay'){const blur=inlineFor(layer,'blur',device)*width/baseWidth;Object.assign(item.style,{backdropFilter:blur ? 'blur('+blur+'px)' : '',width:overlayWidth(layer,device)+'%',height:overlayHeight(layer,device)+'%',background:overlayFill(layer)});canvas.append(item);return;}
+                if(layer.type==='overlay'){const blur=(Number(eff(layer,'backdrop_blur',device))||0)*width/baseWidth;Object.assign(item.style,{backdropFilter:backdropCss(layer, blur, device),width:overlayWidth(layer,device)+'%',height:overlayHeight(layer,device)+'%',background:overlayFill(layer)});canvas.append(item);return;}
                 if(layer.type==='image') {
                     // An image object: its own box (Width, Height; Auto: the image's proportions); else the whole scene's height.
                     if(imageObject(layer))Object.assign(item.style,{width:overlayWidth(layer,device)+'%',height:imageObjectHeight(layer,device)+'%'});
@@ -2418,6 +2613,7 @@
         positionDevice=device();positionLayer=layer;positionReturn=button;
         const image=focusMode();
         positionDraft=image ? [layer.focus_x,layer.focus_y] : [eff(layer,'x',positionDevice),eff(layer,'y',positionDevice)];
+        positionDrafts={};positionStart=positionDraft.slice();positionDevices();
         positionModal.classList.toggle('is-focus',image);
         focusImage.src=image && images[layer.image] ? images[layer.image] : '';
         positionModal.querySelector('.wpbn-modal__what').textContent=image ? 'Image position' : 'Position';
@@ -2433,7 +2629,7 @@
     function closePosition(apply) {
         if(!positionLayer)return;
         if(apply && focusMode()){positionLayer.focus_x=positionDraft[0];positionLayer.focus_y=positionDraft[1];settings();changed();}
-        else if(apply){positionLayer[dkey('x',positionDevice)]=positionDraft[0];positionLayer[dkey('y',positionDevice)]=positionDraft[1];settings();changed();}
+        else if(apply){const all=placeDrafts();Object.keys(all).forEach(d=>{positionLayer[dkey('x',d)]=all[d][0];positionLayer[dkey('y',d)]=all[d][1];});if(Object.keys(all).length){settings();changed();}}
         positionModal.hidden=true;document.body.classList.remove('wpbn-modal-open');dragging=null;positionLayer=null;
         const button=positionReturn && positionReturn.isConnected?positionReturn:positionReturn && positionReturn.dataset.rowAction?$('layers').querySelector('[data-row-action="position"][data-index="'+positionReturn.dataset.index+'"]'):$('settings').querySelector('[data-action="position"]');
         if(button)button.focus();
@@ -2447,7 +2643,7 @@
     }
     function positionAt(event){
         const r=focusStage.getBoundingClientRect();if(!r.width || !r.height)return;
-        const d=$('device').value, text=!focusMode(), share=text ? boxOf(d,positionLayer).width/100 : 1;
+        const d=positionDevice, text=!focusMode(), share=text ? boxOf(d,positionLayer).width/100 : 1;
         const title=text && anchored(positionLayer) && dragging && dragging.size;
         // The room a title moves in: its container (its height: the scene) less its own size. Larger than that (a slider
         // taller than the scene): less than none, so it follows the pointer the other way round in its values (0% shows its
@@ -2478,6 +2674,7 @@
         if(!steps[event.key])return;event.preventDefault();const by=event.shiftKey?10:1;
         positionDraft=positionDraft.map((value,i)=>percent(value+steps[event.key][i]*by));showPosition();
     });
+    positionModal.querySelectorAll('.wpbn-focus__device').forEach(b=>b.addEventListener('click',()=>positionSwitch(b.dataset.device)));
     positionModal.querySelector('.wpbn-modal__apply').onclick=()=>closePosition(true);
     positionModal.querySelector('.wpbn-modal__cancel').onclick=()=>closePosition(false);
     positionModal.querySelector('.wpbn-modal__close').onclick=()=>closePosition(false);
@@ -2504,4 +2701,6 @@
     let lastStageWidth=0;
     new ResizeObserver(()=>{const w=focusStage.getBoundingClientRect().width;if(positionLayer && Math.abs(w-lastStageWidth)>.5){lastStageWidth=w;drawPositionScenes();}}).observe(focusStage);
     list();settings();resize();preview();
+    // The state to compare with when leaving, once the editor has drawn it (settings() may fill in defaults).
+    savedState=pageState();
 }());

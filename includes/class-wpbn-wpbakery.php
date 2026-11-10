@@ -18,9 +18,9 @@ class WPBN_WPBakery {
     }
 
     public static function map() {
-        // Not an element at all for those who are not administrators. Pages
+        // Not an element at all for those without the WPBakery element right (WP Banner → Settings). Pages
         // still show the scenes: WPBakery keeps the shortcode's own handler.
-        if (!current_user_can('manage_options')) { return; }
+        if (!WPBN_Access::can('wpbakery')) { return; }
         if (function_exists('vc_add_shortcode_param')) {
             vc_add_shortcode_param(self::EDIT_PARAM, array(__CLASS__, 'edit_param'), WPBN_URL.'assets/js/wpbakery.js?ver='.rawurlencode(wpbn_asset('assets/js/wpbakery.js')));
         }
@@ -133,7 +133,7 @@ class WPBN_WPBakery {
     // The Scene list again, for wpbakery.js, to administrators (with the nonce edit_param() gave).
     public static function ajax_scenes() {
         check_ajax_referer(self::LIST_ACTION);
-        if (!current_user_can('manage_options')) { wp_send_json_error(null, 403); }
+        if (!WPBN_Access::can('wpbakery')) { wp_send_json_error(null, 403); }
         wp_send_json_success(self::scenes());
     }
 }

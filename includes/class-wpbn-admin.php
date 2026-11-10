@@ -51,7 +51,7 @@ class WPBN_Admin {
         $info = array();
         foreach ($s['layers'] as $l) {
             // A Shape layer's objects' own images too.
-            foreach (array_merge(array($l['image'], $l['image_tablet'], $l['image_mobile']), array_column($l['shape_objects'], 'image')) as $image) {
+            foreach (array_merge(array($l['image'], $l['image_tablet'], $l['image_mobile'], $l['button_icon_image']), array_column($l['shape_objects'], 'image')) as $image) {
                 if ($image && !isset($images[$image])) { $images[$image] = wp_get_attachment_image_url($image,'large'); $info[$image] = self::image_info($image); }
             }
         }
@@ -61,7 +61,9 @@ class WPBN_Admin {
             // The Font list (Woodmart's fonts, with each one's weights); null without Woodmart: a text field.
             'fonts'=>WPBN_Fonts::groups(), 'fontFaces'=>WPBN_Fonts::faces(),
             // The theme's container for Container: Theme container (null: none, the scene's own width is used).
-            'themeContainer'=>WPBN_Container::theme());
+            'themeContainer'=>WPBN_Container::theme(),
+            // The buttons' icons (WPBN_Icons): the list's version and address, read when the picker first opens.
+            'iconList'=>WPBN_Icons::boot());
         // Classes the other scenes are placed by: two scenes with one class would both go into its blocks.
         $boot['classes'] = array();
         foreach (get_posts(array('post_type'=>'wpbn_scene', 'post_status'=>array('publish','draft','pending','private','future'), 'numberposts'=>200, 'exclude'=>array($post->ID))) as $other) {
@@ -126,7 +128,7 @@ class WPBN_Admin {
         echo '<div id="wpbn-preview-stage"><div id="wpbn-device-shell"><iframe id="wpbn-frame" name="wpbn_preview_frame" title="'.esc_attr__('Banner preview','wp-banner').'" sandbox="allow-scripts allow-same-origin"></iframe></div></div><div class="wpbn-scrub"><button type="button" class="button" id="wpbn-play" aria-pressed="false" aria-label="'.$play.'" title="'.$play.'"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span></button><label for="wpbn-progress">'.esc_html__('Scroll simulation','wp-banner').'</label><input type="range" id="wpbn-progress" min="0" max="100" step="0.1" value="0"></div></div></div></div>';
     }
     public static function save($id) {
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE || wp_is_post_revision($id) || !current_user_can('manage_options') || !current_user_can('edit_post',$id)) { return; }
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE || wp_is_post_revision($id) || !WPBN_Access::can('edit') || !current_user_can('edit_post',$id)) { return; }
         if (!isset($_POST['wpbn_nonce']) || !is_string($_POST['wpbn_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['wpbn_nonce'])), 'wpbn_save')) { return; }
         if (!isset($_POST['wpbn_data']) || !is_string($_POST['wpbn_data'])) { return; }
         // The size as sent (unslashed: WordPress's slashes would count every quote twice).
@@ -175,7 +177,7 @@ class WPBN_Admin {
     public static function preview() {
         check_ajax_referer('wpbn_preview', 'nonce');
         $id = isset($_POST['post_id']) && is_scalar($_POST['post_id']) ? absint($_POST['post_id']) : 0;
-        if (!current_user_can('manage_options') || !current_user_can('edit_post',$id) || get_post_type($id)!=='wpbn_scene') { wp_die('Forbidden', '', array('response'=>403)); }
+        if (!WPBN_Access::can('edit') || !current_user_can('edit_post',$id) || get_post_type($id)!=='wpbn_scene') { wp_die('Forbidden', '', array('response'=>403)); }
         if (!isset($_POST['scene']) || !is_string($_POST['scene']) || strlen($_POST['scene'])>200000) { wp_die('Invalid scene', '', array('response'=>400)); }
         $s = WPBN_Settings::sanitize(json_decode(wp_unslash($_POST['scene']),true));
         // A Shortcode layer: the plugins' styles and scripts it loads, as on a page. Their assets are registered as on a

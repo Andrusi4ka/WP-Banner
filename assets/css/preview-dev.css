@@ -1,10 +1,11 @@
-/* Developer mode of the editor's preview (preview-dev.js; its frame only): over the scene, clipped by it, never clicked. */
-.wpbn-dev{position:absolute;inset:0;z-index:2147483000;overflow:hidden;pointer-events:none;font:600 11px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+/* Developer mode of the editor's preview (preview-dev.js; its frame only): over the scene, clipped by it, never clicked.
+   --k: how much the editor shrinks the frame (preview-dev.js shrink()), so the labels read at about 12px and the lines at 1–2px. */
+.wpbn-dev{--k:1;position:absolute;inset:0;z-index:2147483000;overflow:hidden;pointer-events:none;font:600 calc(12px * var(--k))/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:.01em}
 .wpbn-dev>div{position:absolute;box-sizing:border-box}
 /* The scene's box. */
-.wpbn-dev__scene{outline:1px dashed #2271b1;outline-offset:-1px}
+.wpbn-dev__scene{outline:calc(1px * var(--k)) dashed #2271b1;outline-offset:calc(-1px * var(--k))}
 /* A layer's box, in its kind's colour (--c); its label in the same colour. */
-.wpbn-dev__box{outline:2px solid var(--c);outline-offset:-2px}
+.wpbn-dev__box{outline:calc(2px * var(--k)) solid var(--c);outline-offset:calc(-2px * var(--k))}
 .wpbn-dev__box--image,.wpbn-dev__name--image{--c:#00a32a}
 .wpbn-dev__box--text,.wpbn-dev__name--text,.wpbn-dev__box--richtext,.wpbn-dev__name--richtext{--c:#2271b1}
 .wpbn-dev__box--button,.wpbn-dev__name--button{--c:#d63638}
@@ -12,11 +13,19 @@
 .wpbn-dev__box--overlay,.wpbn-dev__name--overlay{--c:#8a2be2}
 .wpbn-dev__box--shape,.wpbn-dev__name--shape{--c:#135e96}
 .wpbn-dev__box--overlay{outline-style:dashed}
-.wpbn-dev__label{position:absolute;z-index:1;padding:1px 4px;border-radius:3px;background:rgba(29,35,39,.85);color:#fff;white-space:nowrap}
+.wpbn-dev__label{position:absolute;z-index:1;padding:calc(2px * var(--k)) calc(6px * var(--k));border-radius:calc(4px * var(--k));background:rgba(29,35,39,.88);color:#fff;white-space:nowrap;box-shadow:0 calc(1px * var(--k)) calc(3px * var(--k)) rgba(0,0,0,.35)}
 .wpbn-dev__name{background:var(--c)}
+/* A layer chosen in the editor: its box bolder, with a soft tint; the others' boxes and labels faded. */
+.wpbn-dev--chosen .wpbn-dev__box:not(.wpbn-dev__box--chosen),.wpbn-dev--chosen .wpbn-dev__name:not(.wpbn-dev__name--chosen){opacity:.35}
+.wpbn-dev__box--chosen{outline-width:calc(3px * var(--k));outline-offset:calc(-3px * var(--k));background:color-mix(in srgb,var(--c) 10%,transparent)}
+.wpbn-dev__name--chosen{z-index:2}
 /* From a placed layer (a title, a text, a button…) to the scene's edges: a dashed line, the distance on it. */
-.wpbn-dev__line--across{border-top:1px dashed #b26200}
-.wpbn-dev__line--down{border-left:1px dashed #b26200}
+.wpbn-dev__line--across{border-top:calc(1px * var(--k)) dashed #b26200}
+.wpbn-dev__line--down{border-left:calc(1px * var(--k)) dashed #b26200}
 .wpbn-dev__dimension{transform:translate(-50%,-50%);background:#b26200}
+/* The chosen layer's container: its edges, its width at its foot. The probe measures it (never seen). */
+.wpbn-dev__probe{top:0;left:0;height:0;visibility:hidden}
+.wpbn-dev__container{border-left:calc(1px * var(--k)) dashed #d63638;border-right:calc(1px * var(--k)) dashed #d63638;background:rgba(214,54,56,.04)}
+.wpbn-dev__container-size{transform:translate(-50%,-100%);background:#d63638}
 /* The scene's size, at its top in the middle. */
 .wpbn-dev__size{transform:translateX(-50%);background:#2271b1}

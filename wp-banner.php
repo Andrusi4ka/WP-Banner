@@ -23,6 +23,7 @@ define('WPBN_DIR', plugin_dir_path(__FILE__));
 define('WPBN_URL', plugin_dir_url(__FILE__));
 // An asset's version: the plugin's plus the file's time, so browsers fetch it again when it changes.
 function wpbn_asset($file) { $time = @filemtime(WPBN_DIR . $file); return $time ? WPBN_VERSION . '.' . $time : WPBN_VERSION; }
+require_once WPBN_DIR . 'includes/class-wpbn-access.php';
 require_once WPBN_DIR . 'includes/class-wpbn-settings.php';
 require_once WPBN_DIR . 'includes/class-wpbn-gradient.php';
 require_once WPBN_DIR . 'includes/class-wpbn-animation.php';
@@ -37,19 +38,24 @@ require_once WPBN_DIR . 'includes/class-wpbn-wpbakery.php';
 require_once WPBN_DIR . 'includes/class-wpbn-tools.php';
 require_once WPBN_DIR . 'includes/class-wpbn-block.php';
 require_once WPBN_DIR . 'includes/class-wpbn-shape.php';
+require_once WPBN_DIR . 'includes/class-wpbn-icons.php';
 add_action('init', function () {
     load_plugin_textdomain('wp-banner', false, dirname(plugin_basename(__FILE__)) . '/languages');
     register_post_type('wpbn_scene', array(
-        'labels' => array('name'=>'WP Banner', 'singular_name'=>__('Scene','wp-banner'), 'add_new_item'=>__('Add scene','wp-banner'), 'edit_item'=>__('Edit scene','wp-banner')),
+        'labels' => array('name'=>'WP Banner', 'singular_name'=>__('Scene','wp-banner'), 'all_items'=>__('All scenes','wp-banner'), 'add_new_item'=>__('Add scene','wp-banner'), 'edit_item'=>__('Edit scene','wp-banner')),
         'public'=>false, 'show_ui'=>true, 'show_in_rest'=>false, 'supports'=>array('title', 'revisions'),
         'menu_icon'=>'dashicons-images-alt2', 'map_meta_cap'=>true,
-        'capabilities'=>array_fill_keys(array('edit_posts','edit_others_posts','edit_private_posts','edit_published_posts','publish_posts','read_private_posts','delete_posts','delete_others_posts','delete_private_posts','delete_published_posts','create_posts'), 'manage_options'),
+        // The plugin's own capabilities (WP Banner → Settings, per role; WPBN_Access), as WP Swiper's: administrators always.
+        'capabilities'=>array_merge(
+            array_fill_keys(array('edit_posts','edit_others_posts','edit_private_posts','edit_published_posts','read_private_posts'), WPBN_Access::EDIT),
+            array_fill_keys(array('create_posts','publish_posts'), WPBN_Access::CREATE),
+            array_fill_keys(array('delete_posts','delete_others_posts','delete_private_posts','delete_published_posts'), WPBN_Access::DELETE)),
     ));
     // The scene's settings kept with each revision (WordPress 6.4+ revisions post meta), so an earlier version can be
     // restored under Revisions in the Publish box; a revision is made when only the settings changed too.
     if (function_exists('wp_post_revision_meta_keys')) {
         register_post_meta('wpbn_scene', WPBN_Settings::META, array('type'=>'object', 'single'=>true, 'revisions_enabled'=>true, 'show_in_rest'=>false,
-            'auth_callback'=>function () { return current_user_can('manage_options'); }));
+            'auth_callback'=>function () { return WPBN_Access::can('edit'); }));
     }
 });
 // The last 30 versions of a scene.
@@ -98,6 +104,7 @@ function wpbn_rename_from_old_names() {
     add_option('wpbn_renamed', 1);
 }
 add_action('init', 'wpbn_rename_from_old_names', 1);
+WPBN_Access::init();
 WPBN_Render::init();
 WPBN_Admin::init();
 WPBN_Whats_New::init();
@@ -105,3 +112,4 @@ WPBN_WPBakery::init();
 WPBN_Tools::init();
 WPBN_Block::init();
 WPBN_Shape::init();
+WPBN_Icons::init();
