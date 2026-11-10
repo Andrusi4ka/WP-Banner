@@ -325,13 +325,14 @@ class WPBN_Settings {
         if ($l['type'] === 'overlay') {
             foreach (array('scale'=>100, 'opacity'=>100) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         }
-        // A Shape layer: the whole scene, in place (its objects move on their own: WPBN_Shape); no Animation or fade
-        // (the copies of the layers in its objects would no longer line up with them, frosted glass would show nothing).
+        // A Shape layer: the whole scene, in place, never moved itself (the copies of the layers in its objects would no longer
+        // line up with them, frosted glass would show nothing). Its animations, travel, zoom, fade and mouse (2026-11-10, user's
+        // request) move, size and fade its objects' windows all at once instead (WPBN_Shape::layer_entrance(), layer_loop(); frontend.css).
         if ($l['type'] === 'shape') {
             // Its Position: the drawing's place with a Custom size (WPBN_Shape::fit_css()); the layer itself stays in place.
             $l['shape_place'] = array('x'=>self::resolved($l, 'x'), 'y'=>self::resolved($l, 'y'));
-            foreach (array('x'=>50, 'y'=>50, 'scale'=>100, 'opacity'=>100, 'rotate'=>0, 'move_x'=>0, 'move_y'=>0, 'zoom'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
-            $l['container'] = 'full'; $l['use_anim'] = false; $l['use_enter'] = false; $l['use_end_opacity'] = false; $l['use_mouse'] = false;
+            foreach (array('x'=>50, 'y'=>50, 'scale'=>100, 'opacity'=>100, 'rotate'=>0) as $key=>$value) { $l[$key] = $value; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
+            $l['container'] = 'full';
         }
         foreach (self::OPTIONAL as $key=>$o) {
             list($flag, $off, $image_only) = $o;
@@ -679,6 +680,8 @@ class WPBN_Settings {
             // Animation: its switch, type, delay, repeat and easing (its per-device values: RESPONSIVE, above).
             $l = WPBN_Animation::sanitize($raw, $l);
             $l = WPBN_Entrance::sanitize($raw, $l);
+            // A Shape layer's Entrance: its objects' kinds (WPBN_Shape::ENTER: Reveal, no flips or edges).
+            if ($l['type'] === 'shape') { $l['enter_type'] = is_string($raw['enter_type'] ?? null) && isset(WPBN_Shape::ENTER[$raw['enter_type']]) ? $raw['enter_type'] : 'fade'; }
             $l['use_gradient'] = !empty($raw['use_gradient']);
             $l['use_text_gradient'] = !empty($raw['use_text_gradient']);
             $l['use_button_gradient'] = !empty($raw['use_button_gradient']);

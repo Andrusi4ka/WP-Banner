@@ -9,6 +9,10 @@
  * the labels and lines are drawn larger by as much (--k) and read at about 12px whatever the scale. The layer chosen in the
  * editor (info.selected) stands out, the others dimmed; only its distances are drawn, with its Position, and its container's
  * edges (Theme / Custom: what its X and Width are shares of). Nothing chosen: every placed layer's distances, as before.
+ *
+ * A Shape layer (user's request, 2026-11-10): the layer covers the scene, so its drawing's box is drawn instead (its area as
+ * fitted on this device: WPBN_Shape::fit_data() and area() in its data-motion, as frontend.js boxes()), with its size; with a
+ * Custom size it is placed, so its distances and Position too.
  */
 (function () {
     'use strict';
@@ -18,6 +22,24 @@
     // Placed in the scene by their Position: their distances to its edges are shown.
     const PLACED = ['text', 'richtext', 'button', 'shortcode'];
     const round = v => Math.round(v * 10) / 10;
+    const device = () => innerWidth <= 767 ? 2 : innerWidth <= 1024 ? 1 : 0;
+    function motionOf(el) { try { return JSON.parse(el.dataset.motion || '{}'); } catch (error) { return {}; } }
+    // A Shape layer's drawing on the screen (as frontend.js boxes()): {rect, custom}; null without its area.
+    function drawing(el) {
+        const m = motionOf(el), vb = (m.area || []).map(Number), fit = (m.fit || [])[device()] || ['cover'], r = el.getBoundingClientRect(), W = r.width, H = r.height;
+        if (vb.length !== 4 || !vb[2] || !vb[3] || !W || !H) return null;
+        let w, h, x, y;
+        if (fit[0] === 'custom') {
+            const ratio = vb[2] / vb[3], by = fit[5] === 'width', size = fit[4] === '%' ? fit[3] / 100 * (by ? W : H) : fit[3];
+            w = by ? size : size * ratio; h = by ? size / ratio : size; x = fit[1] / 100 * W - w / 2; y = fit[2] / 100 * H - h / 2;
+        } else {
+            let sx = W / vb[2], sy = H / vb[3];
+            if (fit[0] === 'cover') sx = sy = Math.max(sx, sy);
+            else if (fit[0] === 'contain') sx = sy = Math.min(sx, sy);
+            w = vb[2] * sx; h = vb[3] * sy; x = (W - w) / 2; y = (H - h) / 2;
+        }
+        return {rect:{left:r.left + x, top:r.top + y, width:w, height:h, right:r.left + x + w, bottom:r.top + y + h}, custom:fit[0] === 'custom'};
+    }
 
     function kindOf(layer) {
         for (const name of layer.classList) {
@@ -75,7 +97,10 @@
         // Front first, as the editor's tiles (the markup has the back one first).
         const items = [...scene.querySelectorAll(':scope > .wpbn-layer')].reverse()
             .filter(el => el.getClientRects().length)
-            .map(el => ({el, index:indexOf(el), kind:kindOf(el), object:el.classList.contains('wpbn-layer--object'), box:within(shown(el).getBoundingClientRect(), origin)}));
+            .map(function (el) {
+                const kind = kindOf(el), shape = kind === 'shape' ? drawing(el) : null;
+                return {el, index:indexOf(el), kind, object:el.classList.contains('wpbn-layer--object') || !!(shape && shape.custom), box:within(shape ? shape.rect : shown(el).getBoundingClientRect(), origin)};
+            });
         const chosen = items.find(i => i.index === info.selected) || null;
         // Nothing moved since the last frame (nor the scale, the layer chosen, the names): the boxes drawn stand.
         const key = [W, H, round(k), JSON.stringify(info)].concat(items.map(i => [i.box.left, i.box.top, i.box.width, i.box.height].map(round).join(','))).join(';');

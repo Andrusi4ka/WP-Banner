@@ -205,7 +205,7 @@ class WPBN_Render {
         // an overlay (it does not move) or a layer in a container does not.
         $motion['fill'] = !WPBN_Settings::fills($l) || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
         // Follow the mouse (px; frontend.js, devices with a mouse): not an overlay.
-        $motion['mouse'] = !empty($l['use_mouse']) && !in_array($l['type'], array('overlay', 'shape'), true) ? (float) $l['mouse'] : 0;
+        $motion['mouse'] = !empty($l['use_mouse']) && $l['type'] !== 'overlay' ? (float) $l['mouse'] : 0;
         // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
         $motion['slack'] = WPBN_Entrance::slack($l, WPBN_Animation::slack($l));
         $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
@@ -351,6 +351,9 @@ class WPBN_Render {
             $css .= WPBN_Shape::fit_css($l);
             // How it is fitted, for frontend.js (boxes()).
             $motion['fit'] = WPBN_Shape::fit_data($l);
+            // Its drawing's area [x, y, w, h] (trimmed or not), for the preview's Dev mode (preview-dev.js).
+            $shape_meta = WPBN_Shape::meta($l['shape']);
+            if ($shape_meta) { $motion['area'] = WPBN_Shape::area($l, $shape_meta); }
             $inner = WPBN_Shape::inner($s, $l, $context, $state);
         } else {
             // An image object: its Height per device (frontend.css; Auto: as tall as the image at its width).
@@ -370,7 +373,8 @@ class WPBN_Render {
         }
         // An image's border is on its picture, an overlay's on its box (both inside the wrappers): theirs stay on the layer.
         $framed = !in_array($l['type'], array('image', 'overlay'), true);
-        $anim = $inner !== '' && WPBN_Animation::active($l);
+        // A Shape layer's: around its objects (WPBN_Shape::inner()).
+        $anim = $inner !== '' && WPBN_Animation::active($l) && $l['type'] !== 'shape';
         $enter = $inner !== '' && WPBN_Entrance::active($l) && $l['type'] !== 'overlay';
         if (!$framed || (!$anim && !$enter)) { $classes .= $box; $box = ''; }
         // Animation (WPBN_Animation): the content in a box of its own that it moves, so it adds up with the scroll motion on the layer.

@@ -145,10 +145,13 @@
     // A per-device slider and number. On tablet / mobile an empty number takes the larger screen's value (its placeholder).
     function respRange(base, label, o) {
         const l = current(), d = device(), key = dkey(base, d), own = l[key], value = escape(eff(l, base, d)), id = 'wpbn-f-' + key;
-        // o.note: a help text under it; o.tip: behind an "i" beside its label.
+        // o.note: a help text under it; o.tip: behind an "i" beside its label; o.unit: [key, units], its unit picked right after
+        // the number (as a Radius corner's: one above the other), for every device.
+        const number = '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + value + '" aria-label="' + label + '"' + (d === 'desktop' ? '' : ' data-inherit="' + base + '"') + '>';
         const html = '<div class="wpbn-field" data-base="' + base + '">' + head(id, label, devices(ownValues(l, base))) + '<div class="wpbn-field__row">'
             + '<input type="range" data-range-for="' + key + '" min="' + (o.from ?? o.min) + '" max="' + (o.to ?? o.max) + '" step="' + (o.step || 1) + '" value="' + value + '" aria-label="' + label + '">'
-            + '<input id="' + id + '" data-key="' + key + '" type="number" min="' + o.min + '" max="' + o.max + '" step="' + (o.step || 1) + '" value="' + (own == null ? '' : escape(own)) + '" placeholder="' + value + '" aria-label="' + label + '"' + (d === 'desktop' ? '' : ' data-inherit="' + base + '"') + '>'
+            + (o.unit ? '<span class="wpbn-number-pick">' + number + '<span class="wpbn-unit-pick" role="group" aria-label="' + label + ' unit">'
+                + o.unit[1].map(u => '<button type="button" data-choice="' + o.unit[0] + '" data-value="' + u + '" aria-pressed="' + (l[o.unit[0]] === u) + '">' + u + '</button>').join('') + '</span></span>' : number)
             + resetButton(l, key, base, label) + '</div>' + note(o.note) + '</div>';
         return o.tip ? withTip(html, o.tip) : html;
     }
@@ -882,10 +885,11 @@
         return withTip('<div class="wpbn-field">' + head(id, 'Type') + '<select id="' + id + '" data-anim-kind="' + which + '">'
             + Object.entries(Object.assign({none:'None'}, types)).map(([v, t]) => '<option value="' + v + '"' + (v === value ? ' selected' : '') + '>' + escape(t) + '</option>').join('') + '</select></div>', help);
     }
-    // obj: a Shape object's (its own kinds: WPBN_Shape::ENTER).
+    // obj: a Shape object's (its own kinds: WPBN_Shape::ENTER); a whole Shape layer has them too (2026-11-10).
     function entranceCard(l, obj) {
-        if (!ENTER || l.type === 'shape') return '';
+        if (!ENTER) return '';
         const toggle = obj ? kindSelect('enter', l, ENTER.objectTypes || {}, 'How the object comes in, once, as the page loads or once the banner is in view: fading in, its window sliding over what it shows, uncovered from a side (Reveal) or growing into place. On glass its blur and tint come in.')
+            : l.type === 'shape' ? kindSelect('enter', l, ENTER.objectTypes || {}, 'How all its objects come in together, once, as the page loads or once the banner is in view: fading in, their windows sliding over what they show, the drawing uncovered from a side (Reveal) or growing into place. What they show stays in place; glass keeps its blur. Each object\'s own Entrance animation adds to it.')
             : kindSelect('enter', l, ENTER.types, 'How the layer comes into the banner, once: fading in, sliding in or zooming into place, as the page loads or once the banner is in view. Then the Loop animation, if any, runs on.');
         const starts = ANIM ? ANIM.starts : {load:'On load', visible:'In view'};
         // Its fields always active (user's request, 2026-11-09): with None they do nothing, their values kept.
@@ -902,7 +906,9 @@
         const types = l.type === 'overlay' ? Object.fromEntries(Object.entries(ANIM.types).filter(([k]) => OVERLAY_ANIMS.includes(k))) : ANIM.types;
         const kinds = Object.keys(types), type = types[l.anim_type] || types[kinds[0]];
         // Its Type, None first (no switch: user's request, 2026-11-09), the help behind an "i" beside it.
-        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), obj
+        const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), !obj && l.type === 'shape'
+            ? 'Runs by itself, on top of the scroll animation, for all its objects together: their windows drifting to and fro over what they show (Slide), growing and shrinking (Zoom) or fading in and out (Fade). What they show stays in place. Each object\'s own Loop animation adds to it.'
+            : obj
             ? 'Runs by itself, after its Entrance animation: the window drifting to and fro over what it shows (Slide), the object slowly growing and shrinking (Zoom) or fading in and out (Fade; on glass its blur and tint). Give each object its own Delay to set them moving one after another.'
             : l.type === 'overlay'
             ? 'Runs by itself, on top of the scroll animation: the overlay slowly zooming, or sliding to and fro. For an overlay smaller than the scene (Size); one that fills it would show its edges. How it comes in: Entrance animation.'
@@ -1340,17 +1346,23 @@
         const svg = card('Shape', nameField() + withTip(shapeField(l).replace('<div class="wpbn-field">', '<div class="wpbn-field"><div class="wpbn-field__head"><label>SVG</label></div>'), 'Draw the objects in Illustrator, Figma or Inkscape and export as SVG: filled shapes, text turned into outlines, no embedded pictures. Groups count as one object; name them in the Layers panel to find them here.'));
         if (!o) {
             return legend + blocks([['content', 'Shape', 'art', svg
-                + '<p class="description wpbn-after-cards">Choose an object (in the drawing on the left or under the layer\'s tile) to set what fills it, its border, shadow and motion. The layer itself stays in place.</p>'],
+                + '<p class="description wpbn-after-cards">Choose an object (in the drawing on the left or under the layer\'s tile) to set what fills it, its border, shadow and motion.</p>'],
                 // Fit (2026-11-10, user's request): Trim empty space; a Custom size, by its height or width, at its Position.
                 ['fit', 'Fit', 'editor-contract', shapes[l.shape] ? card('Fit', withTip(check('shape_trim', 'Trim empty space'), 'The drawing cut to its objects: the empty space around them in the SVG left out (room kept for a Border outside them).')
                     + withTip(respSelect('shape_fit', 'Fit in the scene', {cover:'Cover', contain:'Contain', stretch:'Stretch', custom:'Custom size'}),
-                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Custom size: as large as you set, where you put it (Position). Choose a device to give it its own.')
+                    'Cover: the drawing fills the scene, its edges cropped where the scene is narrower or wider. Contain: all of it shows, inside the scene. Stretch: as wide and tall as the scene, out of its proportions. Custom size: as large as you set, where you put it with the Position icon on its tile in the preview. Choose a device to give it its own.')
                     + (shapeCustom(l) ? segmented(l, 'shape_size_by', 'Size by', {height:'Height', width:'Width'})
-                        + respRange('shape_size', (l.shape_size_by === 'width' ? 'Width' : 'Height') + ' (' + l.shape_size_unit + ')', {min:1, max:l.shape_size_unit === '%' ? 300 : 5000, to:l.shape_size_unit === '%' ? 100 : 1500,
-                            tip:'The other side follows the drawing\'s proportions. % is of the scene\'s ' + (l.shape_size_by === 'width' ? 'width' : 'height') + '. Used on the devices set to Custom size.'})
-                        + segmented(l, 'shape_size_unit', 'Unit', {px:'px', '%':'%'})
-                        + '<div class="wpbn-field">' + head('wpbn-f-shape-position', 'Position') + '<p><button type="button" class="button" id="wpbn-f-shape-position" data-action="position" data-kind="place">' + escape(positionTip(l)) + '</button></p>'
-                        + note('Drag the drawing to where it stands, per device. Its objects stay windows: a photo seen through them does not move with it.') + '</div>' : '')) : '']]);
+                        + respRange('shape_size', l.shape_size_by === 'width' ? 'Width' : 'Height', {min:1, max:l.shape_size_unit === '%' ? 300 : 5000, to:l.shape_size_unit === '%' ? 100 : 1500, unit:['shape_size_unit', ['px', '%']],
+                            tip:'The other side follows the drawing\'s proportions. % is of the scene\'s ' + (l.shape_size_by === 'width' ? 'width' : 'height') + '. Used on the devices set to Custom size.'}) : '')) : ''],
+                // The whole Shape's motion (2026-11-10, user's request), in the layers' order: all its objects' windows at once
+                // (what they show stays in place: WPBN_Shape::layer_entrance(), layer_loop(); frontend.css).
+                ['entrance', 'Entrance animation', 'migrate', entranceCard(l), !!l.use_enter],
+                ['loop', 'Loop animation', 'controls-repeat', animationCard(l), !!l.use_anim],
+                ['scroll', 'Scroll animation', 'sort', scrollCard(l, respRange('move_x', 'Horizontal travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far all its objects move by the end of the scroll; negative: to the left. What they show stays in place.'})
+                    + respRange('move_y', 'Vertical travel (px)', {min:-1000, max:1000, from:-400, to:400, tip:'How far they move by the end of the scroll; negative: up.'})
+                    + respRange('zoom', 'Zoom (%)', {min:-90, max:300, from:-50, to:100, tip:'Size added to the drawing by the end of the scroll, around its middle; negative shrinks it. What its objects show keeps its size.'})
+                    + respRange('end_opacity', 'Opacity at the end (%)', {min:0, max:100, tip:'Its objects go from full to this opacity as the page scrolls: 0 fades them out.'})), scrolls(l), SCROLL_TIP],
+                ['mouse', 'Follow the mouse', 'move', card('Follow the mouse', mouseField(l)), Number(l.mouse) !== 0, MOUSE_TIP]]);
         }
         let fill = '';
         if (o.fill === 'layer') {
@@ -2111,7 +2123,12 @@
         // A button's Background or Corners.
         if (button.dataset.choice) {
             const l = current();
-            if (l[button.dataset.choice] !== button.dataset.value) { l[button.dataset.choice] = button.dataset.value; settings(); changed(); }
+            if (l[button.dataset.choice] !== button.dataset.value) {
+                l[button.dataset.choice] = button.dataset.value;
+                // A Shape's size in %: at most 300 (as WPBN_Settings).
+                if (button.dataset.choice === 'shape_size_unit' && button.dataset.value === '%') Object.keys(DEVICES).forEach(dv => { const k = dkey('shape_size', dv); if (l[k] != null) l[k] = Math.min(300, l[k]); });
+                settings(); changed();
+            }
             const again = $('settings').querySelector('[data-choice="' + button.dataset.choice + '"][data-value="' + button.dataset.value + '"]'); if (again) again.focus();
             return;
         }
@@ -2364,7 +2381,7 @@
     // device shown (a placed layer's: a photo filling the scene has none).
     function devInfo() {
         const layers = {}, d = device();
-        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && anchored(l)) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
+        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && (anchored(l) || (l.type === 'shape' && eff(l, 'shape_fit', d) === 'custom'))) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
         return {selected, layers};
     }
     // Developer mode told of the layer chosen and of names and places changed (its boxes follow at once, without an Update).

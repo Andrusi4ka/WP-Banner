@@ -1101,11 +1101,33 @@ const server=http.createServer((req,res)=>{
         // Fit (2026-11-10): Custom size shows its Size and Position, and a Position button on its tile.
         await sh.click('[data-select="1"]');await sh.click('#wpbn-menu [data-block="fit"]');
         assert.equal(await sh.locator('[data-row-action="position"][data-index="1"]').count(),0,'No Position for a Shape layer fitted to the scene');
+        // The whole Shape's motion (2026-11-10): its blocks in the layers' order; its Entrance the objects' kinds.
+        assert.deepEqual(await sh.locator('#wpbn-menu [data-block]').evaluateAll(b=>b.map(x=>x.dataset.block)),['content','fit','entrance','loop','scroll','mouse'],'A Shape layer\'s blocks: its motion in the layers\' order');
+        await sh.click('#wpbn-menu [data-block="entrance"]');
+        assert.ok((await sh.locator('#wpbn-f-enter_type option').allTextContents()).includes('Reveal from the left'),'Its Entrance: the objects\' kinds');
+        await sh.selectOption('#wpbn-f-enter_type','reveal-left');
+        sd=await shData();
+        assert.ok(sd.layers[1].use_enter && sd.layers[1].enter_type==='reveal-left','Saved on the layer');
+        await sh.selectOption('#wpbn-f-enter_type','none');
+        await sh.click('#wpbn-menu [data-block="fit"]');
         await sh.selectOption('#wpbn-f-shape_fit','custom');
         assert.ok(await sh.locator('#wpbn-f-shape_size').count()===1 && await sh.locator('[data-row-action="position"][data-index="1"]').count()===1,'Custom size: its Size, a Position button');
-        await sh.click('#wpbn-f-shape-position');
+        // Its unit picked right after the number, before its reset; % keeps the size within 300.
+        assert.equal(await sh.locator('.wpbn-field[data-base="shape_size"] .wpbn-number-pick + .wpbn-reset').count(),1,'px / % between the number and its reset');
+        await sh.fill('#wpbn-f-shape_size','900');await sh.press('#wpbn-f-shape_size','Tab');
+        await sh.click('.wpbn-number-pick [data-choice="shape_size_unit"][data-value="%"]');
+        assert.ok(await sh.inputValue('#wpbn-f-shape_size')==='300' && await sh.getAttribute('.wpbn-number-pick [data-value="%"]','aria-pressed')==='true','In %: at most 300');
+        await sh.click('.wpbn-number-pick [data-choice="shape_size_unit"][data-value="px"]');
+        assert.equal(await sh.locator('#wpbn-f-shape-position').count(),0,'Placed only with the icon on its tile');
+        await sh.click('[data-row-action="position"][data-index="1"]');
         assert.equal(await sh.locator('.wpbn-focus__stage .wpbn-position-shape svg').count(),1,'Placed in the Position window, drawn at its size');
         await sh.click('.wpbn-modal--position .wpbn-modal__cancel');
+        // Dev mode (2026-11-10): the drawing's box, not the scene's; at a Custom size its distances and Position too.
+        await sh.click('#wpbn-refresh');await sh.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        await sh.click('#wpbn-dev');await sh.frameLocator('#wpbn-frame').locator('.wpbn-dev__name--shape').waitFor();
+        const shDev=await sh.frameLocator('#wpbn-frame').locator('.wpbn-scene').evaluate(s=>({name:s.querySelector('.wpbn-dev__name--shape').textContent,dims:s.querySelectorAll('.wpbn-dev__dimension').length}));
+        assert.ok(/ · 300 × 300 · X 50% · Y 50%$/.test(shDev.name) && shDev.dims===4,'Dev mode: the Shape drawing at its size, its distances ('+JSON.stringify(shDev)+')');
+        await sh.click('#wpbn-dev');
         await sh.selectOption('#wpbn-f-shape_fit','cover');
         await sh.click('#wpbn-refresh');await sh.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         const shFrame=sh.frameLocator('#wpbn-frame');

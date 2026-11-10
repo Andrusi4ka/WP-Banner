@@ -351,14 +351,15 @@ class WPBN_Shape {
      * so they stay where the drawing has them and a copy of a layer inside lines up with that layer. Its travel moves
      * the mask (the window), not what is seen through it (frontend.js --wpbn-ox, --wpbn-oy).
      */
-    const MASK_SIZES = array('cover'=>'cover', 'contain'=>'contain', 'stretch'=>'100% 100%');
     /*
-     * The layer's Fit per device as CSS variables (frontend.css): the masks' size (--wpbn-ms, -t, -m) and, with a Custom size
-     * on some device, their place (--wpbn-px, --wpbn-py: the drawing's top left corner, its middle at the layer's Position;
-     * cqw / cqh: shares of the layer, the scene). data-fit: the same for frontend.js boxes().
+     * The layer's Fit per device as CSS variables (frontend.css): the drawing's box in the scene, as lengths, so the whole
+     * Shape's Zoom can scale it (2026-11-10): its width and height (--wpbn-dw, --wpbn-dh) and its top left corner (--wpbn-dl,
+     * --wpbn-dt), each with -t, -m. cqw / cqh: shares of the layer, the scene. Cover / Contain: as large as the scene's larger
+     * / smaller side needs, centred; Stretch: the scene; Custom size: its own, its middle at the layer's Position.
+     * fit_data(): the same for frontend.js boxes().
      */
     public static function fit_css($l) {
-        $css = ''; $place = ''; $custom = false;
+        $css = '';
         $meta = self::meta($l['shape']);
         $area = $meta ? self::area($l, $meta) : array(0, 0, 1, 1);
         $ratio = $area[2] / $area[3];
@@ -366,16 +367,23 @@ class WPBN_Shape {
         $where = $l['shape_place'] ?? array('x'=>array('desktop'=>50, 'tablet'=>50, 'mobile'=>50), 'y'=>array('desktop'=>50, 'tablet'=>50, 'mobile'=>50));
         foreach (WPBN_Settings::resolved($l, 'shape_fit') as $device=>$fit) {
             $suffix = WPBN_Render::SUFFIX[$device];
-            if ($fit !== 'custom') { $css .= '--wpbn-ms'.$suffix.':'.(self::MASK_SIZES[$fit] ?? 'cover').';'; $place .= '--wpbn-px'.$suffix.':50%;--wpbn-py'.$suffix.':50%;'; continue; }
-            $custom = true;
-            $size = (float) $sizes[$device];
-            // [width, height] as numbers in one unit: px, or cqw / cqh (% of the scene's width or height).
-            if ($l['shape_size_by'] === 'width') { $unit = $l['shape_size_unit'] === '%' ? 'cqw' : 'px'; $wh = array($size, $size / $ratio); }
-            else { $unit = $l['shape_size_unit'] === '%' ? 'cqh' : 'px'; $wh = array($size * $ratio, $size); }
-            $css .= '--wpbn-ms'.$suffix.':'.self::n($wh[0]).$unit.' '.self::n($wh[1]).$unit.';';
-            $place .= '--wpbn-px'.$suffix.':calc('.self::n($where['x'][$device]).'cqw - '.self::n($wh[0] / 2).$unit.');--wpbn-py'.$suffix.':calc('.self::n($where['y'][$device]).'cqh - '.self::n($wh[1] / 2).$unit.');';
+            if ($fit === 'custom') {
+                $size = (float) $sizes[$device];
+                // [width, height] as numbers in one unit: px, or cqw / cqh (% of the scene's width or height).
+                if ($l['shape_size_by'] === 'width') { $unit = $l['shape_size_unit'] === '%' ? 'cqw' : 'px'; $wh = array($size, $size / $ratio); }
+                else { $unit = $l['shape_size_unit'] === '%' ? 'cqh' : 'px'; $wh = array($size * $ratio, $size); }
+                $box = array(self::n($wh[0]).$unit, self::n($wh[1]).$unit,
+                    'calc('.self::n($where['x'][$device]).'cqw - '.self::n($wh[0] / 2).$unit.')', 'calc('.self::n($where['y'][$device]).'cqh - '.self::n($wh[1] / 2).$unit.')');
+            } elseif ($fit === 'stretch') {
+                $box = array('100cqw', '100cqh', '0px', '0px');
+            } else {
+                $f = $fit === 'contain' ? 'min' : 'max';
+                $w = $f.'(100cqw, '.self::n(100 * $ratio).'cqh)'; $h = $f.'(100cqh, '.self::n(100 / $ratio).'cqw)';
+                $box = array($w, $h, 'calc((100cqw - '.$w.') / 2)', 'calc((100cqh - '.$h.') / 2)');
+            }
+            foreach (array('dw', 'dh', 'dl', 'dt') as $i=>$name) { $css .= '--wpbn-'.$name.$suffix.':'.$box[$i].';'; }
         }
-        return $css.($custom ? $place : '');
+        return $css;
     }
     // How the drawing is fitted per device, for frontend.js: [fit, x, y, size, unit, by] each.
     public static function fit_data($l) {
@@ -430,6 +438,8 @@ class WPBN_Shape {
             if ($o['hidden'] || !isset($markup[$o['key']])) { continue; }
             $content = '';
             $clip = '';
+            // A colour or gradient: on the box inside, as a picture is (moved back as the window moves, so it stays in place).
+            $paint = '';
             $filters = array_intersect_key($o, array_flip(WPBN_Settings::filter_keys()));
             if ($o['fill'] === 'layer' && isset($sources[$o['source']])) {
                 // The layer as it is drawn (its place, size, motion), with the object's filters instead of its own, its
@@ -447,12 +457,13 @@ class WPBN_Shape {
                 }
             } elseif ($o['fill'] === 'color') {
                 $gradient = $o['use_gradient'] ? WPBN_Gradient::css($o['gradient']) : '';
-                $clip .= 'background:'.($gradient !== '' ? $gradient : $o['color']).';';
+                $paint = 'background:'.($gradient !== '' ? $gradient : $o['color']).';';
             } elseif ($o['fill'] === 'glass') {
                 // Its blur and tint as variables too: its animations bring them in (frontend.css wpbn-oe-glass, wpbn-ol-glass).
                 $clip .= 'background:'.$o['glass_color'].';-webkit-backdrop-filter:blur('.$o['glass_blur'].'px);backdrop-filter:blur('.$o['glass_blur'].'px);--wpbn-gb:'.$o['glass_blur'].'px;--wpbn-gc:'.$o['glass_color'].';';
             }
-            if ($o['opacity'] < 100) { $clip .= 'opacity:'.($o['opacity'] / 100).';'; }
+            // Its Opacity: with the whole Shape's fades, on its fill itself (frontend.css; glass keeps its blur).
+            if ($o['opacity'] < 100) { $clip .= '--wpbn-oo:'.($o['opacity'] / 100).';'; }
             // Its shape per device (a rectangle's Radius) as its mask, and its Border: a box of its colour masked by the line,
             // sized and moved as the fill's (on glass too: no filter around it).
             $fills = array(); $lines = array();
@@ -477,11 +488,47 @@ class WPBN_Shape {
             $item .= $enter_css;
             // Its box for frontend.js (boxes()): where a Reveal or a Zoom plays.
             $attrs = $o['box'] && ($boxed || ($loop_class !== '' && $o['anim_type'] === 'zoom')) ? ' data-box="'.esc_attr(implode(' ', $o['box'])).'" data-vb="'.esc_attr(implode(' ', array_map('floatval', $meta['viewbox']))).'"' : '';
-            $inner = '<div class="wpbn-shape-clip'.($o['invert'] ? ' wpbn-shape-clip--invert' : '').'"'.($clip !== '' ? ' style="'.esc_attr($clip).'"' : '').'>'.$content.'</div>'.$border;
+            // What it shows in a box of its own (.wpbn-shape-fill: frontend.css moves it back as the window moves).
+            $fill = $content !== '' || $paint !== '' ? '<div class="wpbn-shape-fill"'.($paint !== '' ? ' style="'.esc_attr($paint).'"' : '').'>'.$content.'</div>' : '';
+            $inner = '<div class="wpbn-shape-clip'.($o['invert'] ? ' wpbn-shape-clip--invert' : '').'"'.($clip !== '' ? ' style="'.esc_attr($clip).'"' : '').'>'.$fill.'</div>'.$border;
             if ($loop_class !== '') { $inner = '<div class="'.$loop_class.'" style="'.esc_attr($loop_css).'">'.$inner.'</div>'; }
             $html .= '<div class="wpbn-shape-item'.$enter_class.'" style="'.esc_attr($item).'"'.$move.$attrs.'>'.$inner.'</div>';
         }
+        // The whole Shape's Loop animation around its objects, its Entrance animation around that.
+        foreach (array(self::layer_loop($l), self::layer_entrance($l)) as $wrap) {
+            if ($wrap[0] !== '') { $html = '<div class="'.esc_attr($wrap[0]).'"'.($wrap[1] !== '' ? ' style="'.esc_attr($wrap[1]).'"' : '').'>'.$html.'</div>'; }
+        }
         return $html;
+    }
+    /*
+     * The whole Shape's Entrance animation (2026-11-10, user's request): its objects' kinds (ENTER) and the layer's enter_*
+     * settings, on a box around all its objects (.wpbn-shape-in) that moves nothing itself: it animates values its objects'
+     * masks and fills read (frontend.css --wpbn-sea opacity, --wpbn-sex / -sey the windows' offset, --wpbn-sez their scale,
+     * --wpbn-sev a Reveal across the drawing's box). So what is seen through them stays in place and glass keeps its blur.
+     * [class, css]; none without one.
+     */
+    public static function layer_entrance($l) {
+        if (empty($l['use_enter']) || !isset(self::ENTER[$l['enter_type']])) { return array('', ''); }
+        list($kind, $side) = self::ENTER[$l['enter_type']];
+        $css = 'animation-duration:'.$l['enter_duration'].'s;'.($l['enter_delay'] > 0 ? 'animation-delay:'.$l['enter_delay'].'s;' : '').($l['enter_easing'] !== 'ease-out' ? 'animation-timing-function:'.$l['enter_easing'].';' : '');
+        if ($side) { $css .= '--wpbn-sx0:'.($side[0] * $l['enter_distance']).'px;--wpbn-sy0:'.($side[1] * $l['enter_distance']).'px;'; }
+        if ($kind === 'zoom') { $css .= '--wpbn-ss0:'.round($l['enter_scale'] / 100, 3).';'; }
+        $name = strpos($kind, 'reveal') === 0 ? 'reveal wpbn-shape-in--'.$kind : $kind;
+        return array('wpbn-shape-in wpbn-shape-in--'.$name.($l['enter_start'] === 'visible' ? ' wpbn-shape-in--visible' : ''), $css);
+    }
+    /*
+     * The whole Shape's Loop animation (2026-11-10, user's request): a layer's (WPBN_Animation::wrapper(), its values per
+     * device), on a box around all its objects (.wpbn-shape-all) that animates values they read: Zoom their windows' scale
+     * around a point of the drawing (Direction: --wpbn-fx0, -fy0), Fade their fills' opacity, Slide their windows' offset.
+     */
+    public static function layer_loop($l) {
+        if (!WPBN_Animation::active($l)) { return array('', ''); }
+        list($class, $css) = WPBN_Animation::wrapper($l);
+        $css = preg_replace('/transform-origin:[^;]*;/', '', $css);
+        if ($l['anim_type'] === 'zoom' && isset(self::ORIGIN_POINTS[$l['anim_origin']]) && $l['anim_origin'] !== 'center') {
+            $css .= '--wpbn-fx0:'.self::ORIGIN_POINTS[$l['anim_origin']][0].';--wpbn-fy0:'.self::ORIGIN_POINTS[$l['anim_origin']][1].';';
+        }
+        return array('wpbn-shape-all '.$class, $css);
     }
 
     /**
