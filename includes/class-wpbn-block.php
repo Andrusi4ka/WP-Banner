@@ -7,6 +7,8 @@
 defined('ABSPATH') || exit;
 class WPBN_Block {
     const NAME = 'wp-banner/scene';
+    // A note above the block in the editor (a scene not published, or gone).
+    const NOTE = '<p class="wpbn-block-note" style="margin:0 0 8px;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;font-size:13px">%s</p>';
 
     public static function init() {
         add_action('init', array(__CLASS__, 'register'));
@@ -25,15 +27,19 @@ class WPBN_Block {
             'icon'=>'images-alt2',
             'keywords'=>array('banner', 'parallax', 'hero'),
             'attributes'=>array('id'=>array('type'=>'number', 'default'=>0)),
-            'supports'=>array('html'=>false, 'align'=>array('wide', 'full')),
+            // In the inserter only for those who may put scenes on pages (WP Banner → Settings, the same right as the WPBakery
+            // element's; review of 2026-11-11). Blocks already on a page show their scene to everyone, as the shortcode does.
+            'supports'=>array('html'=>false, 'align'=>array('wide', 'full'), 'inserter'=>WPBN_Access::can('wpbakery')),
             'editor_script'=>'wpbn-block',
             'editor_style'=>'wpbn-frontend',
             'render_callback'=>array(__CLASS__, 'render'),
         ));
         // The scenes to choose from, and where to make and edit them.
         add_action('enqueue_block_editor_assets', function () {
-            $scenes = class_exists('WPBN_WPBakery') ? WPBN_WPBakery::scenes() : array();
+            $allowed = WPBN_Access::can('wpbakery');
+            $scenes = $allowed && class_exists('WPBN_WPBakery') ? WPBN_WPBakery::scenes() : array();
             wp_add_inline_script('wpbn-block', 'window.wpbnBlock='.wp_json_encode(array(
+                'allowed'=>$allowed,
                 'scenes'=>$scenes,
                 'edit'=>WPBN_Access::can('edit') ? admin_url('post.php?action=edit&post=') : '',
                 'add'=>WPBN_Access::can('create') ? admin_url('post-new.php?post_type=wpbn_scene') : '',
@@ -50,10 +56,10 @@ class WPBN_Block {
         // one deleted, that word alone. The site shows neither.
         if ($html === '' && self::editing()) {
             if (get_post_type($id) !== 'wpbn_scene' || get_post_status($id) === 'trash') {
-                return '<p class="wpbn-block-note" style="margin:0 0 8px;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;font-size:13px">'.esc_html__('This scene no longer exists. Choose another one.', 'wp-banner').'</p>';
+                return sprintf(self::NOTE, esc_html__('This scene no longer exists. Choose another one.', 'wp-banner'));
             }
             if (current_user_can('edit_post', $id)) {
-                $html = '<p class="wpbn-block-note" style="margin:0 0 8px;padding:8px 12px;border-left:4px solid #dba617;background:#fcf9e8;color:#1d2327;font-size:13px">'.esc_html__('This scene is not published: it shows here, not on the site.', 'wp-banner').'</p>'.WPBN_Render::scene($id);
+                $html = sprintf(self::NOTE, esc_html__('This scene is not published: it shows here, not on the site.', 'wp-banner')).WPBN_Render::scene($id);
             }
         }
         $align = isset($attributes['align']) && in_array($attributes['align'], array('wide', 'full'), true) ? ' align'.$attributes['align'] : '';

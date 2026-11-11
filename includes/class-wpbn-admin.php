@@ -68,7 +68,7 @@ class WPBN_Admin {
             'iconList'=>WPBN_Icons::boot());
         // Classes the other scenes are placed by: two scenes with one class would both go into its blocks.
         $boot['classes'] = array();
-        foreach (get_posts(array('post_type'=>'wpbn_scene', 'post_status'=>array('publish','draft','pending','private','future'), 'numberposts'=>200, 'exclude'=>array($post->ID))) as $other) {
+        foreach (get_posts(array('post_type'=>'wpbn_scene', 'post_status'=>array('publish','draft','pending','private','future'), 'numberposts'=>-1, 'exclude'=>array($post->ID))) as $other) {
             $class = WPBN_Settings::placed_class($other->ID);
             if ($class !== '') { $boot['classes'][$class] = $other->post_title !== '' ? $other->post_title : '#'.$other->ID; }
         }

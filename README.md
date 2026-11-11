@@ -14,6 +14,10 @@ Activate the plugin, open **WP Banner → Add scene**, and add image and title l
 
 **Animation** (per layer except overlays, behind a switch): motion of its own that runs by itself, on top of the scroll motion: Zoom (with its Direction: the point it grows from), Fade, Slide sideways or up and down; its start, end and duration per device, Starts (On load, or In view: once the banner is on the screen), Repeat (Back & forth, Loop, Once), Easing and Delay. The content is wrapped in `.wpbn-anim`, which the CSS keyframes move; animations pause while the banner is off the screen. An image filling the scene zooms from 100% at least and grows enough that a slide never shows its edges.
 
+**Entrance animation** (per layer): how it comes in, once, as the page loads or once the banner is in view: fade, slides, zoom, from the banner's edge, flips, a turn; its duration, delay and easing.
+
+**Text animation** (titles): the letters (or words) come in one after another, once: Letters fade in, Scatter, Unfold, Pop or Drop, in an order of your choice (left to right, right to left, from the middle, from both ends, random), with their duration, interval, delay, easing, blur and distance. Our own CSS (no GSAP); the server splits the text; screen readers get the title whole; it works with the title's Gradient and accent words.
+
 **Editing.** Undo and Redo beside Update (Ctrl + Z, Ctrl + Shift + Z / Ctrl + Y) for the changes since the page opened. A scene's settings are kept with its revisions (WordPress 6.4+): an earlier version can be restored under Revisions. Settings too large to save are not sent, and a notice says so.
 
 **Per device.** Position, scale, opacity, motion, image fit and image have a value per device: desktop always has one; tablet and mobile follow the larger screen (mobile → tablet → desktop) until they get their own (a green dot on the device icon). Clearing a tablet / mobile number, or its reset button, makes it follow again; on desktop the reset button restores the default. Breakpoints: mobile up to 767px, tablet up to 1024px.
@@ -27,11 +31,14 @@ Activate the plugin, open **WP Banner → Add scene**, and add image and title l
 - `includes/class-wpbn-admin.php`: editor, saving, authenticated preview.
 - `includes/class-wpbn-render.php`: shortcode and markup.
 - `includes/class-wpbn-wpbakery.php`, `assets/js/wpbakery.js`: the WPBakery element (scene list, Edit / Add scene).
-- `assets/js/admin.js`, `assets/css/admin.css`: layer editor and device previews.
+- `assets/js/admin.js`, `assets/css/admin.css`: layer editor and device previews; `assets/js/admin-color.js`: its colours, colour picker and gradients (loaded before it).
 - `assets/js/frontend.js`, `assets/css/frontend.css`: rendering and scroll motion.
 - `includes/class-wpbn-whats-new.php`, `assets/js/whats-new.js`, `assets/css/whats-new.css`: the "What's new" window after an update, from the Changelog in `readme.txt`.
 - `includes/class-wpbn-animation.php`: a layer's Animation (kinds, values per device, the wrapper's class and CSS variables); its keyframes in `frontend.css`.
-- `includes/class-wpbn-tools.php`: Duplicate, Export and Import.
+- `includes/class-wpbn-entrance.php`: a layer's Entrance animation; `includes/class-wpbn-text-animation.php`: a title's Text animation (its kinds, the text split into pieces); their keyframes in `frontend.css`.
+- `includes/class-wpbn-shape.php`: Shape layers (an SVG checked and rebuilt from its shapes only, UTF-8 only; its objects as masks).
+- `includes/class-wpbn-access.php`: WP Banner → Settings: what each role may do (edit, add and clone, delete, put scenes on pages with the WPBakery element or the block); `includes/class-wpbn-icons.php`: the buttons' icons (Font Awesome Free).
+- `includes/class-wpbn-tools.php`: Duplicate (Export and Import were removed).
 - `includes/class-wpbn-block.php`, `assets/js/block.js`: the WP Banner block (plain JavaScript, no build step; rendered by the server).
 - `uninstall.php`: deleting the plugin under Plugins removes its scenes, settings and stored state; images stay in the media library.
 - `includes/class-wpbn-palette.php`, `assets/vendor/pickr`: the colour fields, as WP Swiper's: Pickr (MIT) with opacity and a palette of the theme's colours (Woodmart's, theme.json), black, white and greys.
@@ -40,9 +47,9 @@ Activate the plugin, open **WP Banner → Add scene**, and add image and title l
 - `includes/class-wpbn-fonts.php`: a title's Font with Woodmart: its fonts as its own WPBakery elements list them (theme fonts as its CSS variables, custom, Adobe, system, Google), each with its weights; a Google font is loaded where the banner is (Woodmart's `enqueue_inline_fonts()`). Under Font and Weight, a sample of the title's text in them, updated at once. Without Woodmart, Font is a text field.
 - `vendor/plugin-update-checker`: updates from GitHub releases, "View details" and "Check for updates" under the plugin (MIT).
 
-Scenes use the private `wpbn_scene` post type and `_wpbn_scene` post meta. Only administrators can edit or preview scenes. Only published scenes render publicly. Deactivation preserves scenes; deleting the plugin removes them.
+Scenes use the private `wpbn_scene` post type and `_wpbn_scene` post meta. Administrators can do everything; other roles only what WP Banner → Settings gives them. Only published scenes render publicly. Deactivation preserves scenes; deleting the plugin removes them.
 
-Development checks: `npm install` once, then `npm test` runs both `tests/settings.php` (also run on every push by `.github/workflows/tests.yml`) and the browser tests `tests/motion.cjs` (local: `playwright-core` drives the Chrome already installed; set `PHP_BIN` / `BROWSER_BIN` if PHP or Chrome are elsewhere) and `tests/engines.cjs` (the banner in Chromium, Firefox and WebKit; run `npx playwright-core install firefox webkit` once, an engine not installed is skipped). They use isolated stubs and do not access the WordPress database.
+Development checks: `npm install` once, then `npm test` runs `tests/settings.php` (also run on every push by `.github/workflows/tests.yml`), the browser tests `tests/motion.cjs` (local: `playwright-core` drives the Chrome already installed; set `PHP_BIN` / `BROWSER_BIN` if PHP or Chrome are elsewhere) and `tests/engines.cjs` (the banner in Chromium, Firefox and WebKit; run `npx playwright-core install firefox webkit` once, an engine not installed is skipped). They use isolated stubs and do not access the WordPress database.
 
 ## Releases
 

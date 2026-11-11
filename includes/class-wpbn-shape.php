@@ -37,18 +37,23 @@ class WPBN_Shape {
         add_action('init', array(__CLASS__, 'migrate'), 20);
         add_action('wp_ajax_'.self::AJAX, array(__CLASS__, 'upload'));
         // Shapes no scene uses any more: removed when a scene is saved or deleted.
-        add_action('save_post_wpbn_scene', array(__CLASS__, 'cleanup'), 20);
-        add_action('after_delete_post', function ($id, $post) { if ($post && $post->post_type === 'wpbn_scene') { self::cleanup(); } }, 10, 2);
+        // Not cleanup() itself: the hook passes the post's id, which would count as $force.
+        add_action('save_post_wpbn_scene', function () { self::cleanup(); }, 20);
+        add_action('after_delete_post', function ($id, $post) { if ($post && $post->post_type === 'wpbn_scene') { self::cleanup(true); } }, 10, 2);
     }
 
     /*
      * Each upload is a shape of its own (one uploaded again is a new one): those no scene nor revision of a scene uses are
-     * removed. Not before a day has passed (one just uploaded in an editor not saved yet is kept). Found by their id in the
-     * scenes' saved settings (serialized: "shape";i:<id>;).
+     * removed. Not before a week has passed (one just uploaded in an editor left open without saving is kept; a day until the
+     * review of 2026-11-11). Found by their id in the scenes' saved settings (serialized: "shape";i:<id>;), one query per
+     * shape: so at most once an hour (THROTTLE), not on every save; a scene deleted for good always looks.
      */
-    const KEEP = DAY_IN_SECONDS;
-    public static function cleanup() {
+    const KEEP = WEEK_IN_SECONDS;
+    const THROTTLE = 'wpbn_shape_cleanup';
+    public static function cleanup($force = false) {
         global $wpdb;
+        if (!$force && get_transient(self::THROTTLE)) { return; }
+        set_transient(self::THROTTLE, 1, HOUR_IN_SECONDS);
         $old = get_posts(array('post_type'=>self::POST_TYPE, 'post_status'=>'any', 'fields'=>'ids', 'numberposts'=>-1, 'date_query'=>array(array('before'=>gmdate('Y-m-d H:i:s', time() - self::KEEP), 'column'=>'post_date_gmt'))));
         foreach ($old as $id) {
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.SlowDBQuery -- is the shape used by any scene or revision.
@@ -163,7 +168,7 @@ class WPBN_Shape {
             + WPBN_Settings::filters(array());
     }
     private static function num($value, $fallback, $min, $max) {
-        return is_scalar($value) && is_numeric($value) ? round(max($min, min($max, (float) $value)), 1) : $fallback;
+        return WPBN_Settings::clamp($value, $fallback, $min, $max, 1);
     }
     /*
      * An object's Entrance animation (2026-11-10, user's request): kind => [its keyframes (frontend.css .wpbn-oenter--…),
@@ -562,12 +567,20 @@ class WPBN_Shape {
     public static function parse($source, $exported = false) {
         if (!class_exists('DOMDocument')) { return new WP_Error('wpbn_shape', __('This server cannot read SVG files (PHP\'s DOM extension is missing).', 'wp-banner')); }
         $source = (string) $source;
+        // UTF-8 only (a UTF-8 byte order mark dropped): in UTF-16 or UTF-32 the DOCTYPE below would not be seen (its letters
+        // have NUL bytes between them; review of 2026-11-11: such a file got through and its entities were expanded).
+        if (strncmp($source, "\xEF\xBB\xBF", 3) === 0) { $source = substr($source, 3); }
+        if (strpos($source, "\0") !== false || !preg_match('//u', $source) || preg_match('/<\?xml[^>]*encoding\s*=\s*["\'](?!utf-?8["\'])/i', $source)) {
+            return new WP_Error('wpbn_shape', __('This SVG is not saved as UTF-8. Export it again as UTF-8.', 'wp-banner'));
+        }
         if (preg_match('/<!DOCTYPE|<!ENTITY/i', $source)) { return new WP_Error('wpbn_shape', __('This SVG has a DOCTYPE, which is not accepted. Export it again without one.', 'wp-banner')); }
         $doc = new DOMDocument();
         $errors = libxml_use_internal_errors(true);
         $loaded = $doc->loadXML($source, LIBXML_NONET | LIBXML_COMPACT);
         libxml_clear_errors();
         libxml_use_internal_errors($errors);
+        // And whatever got past that: a document with a DOCTYPE is refused once it is read too.
+        if ($loaded && $doc->doctype !== null) { return new WP_Error('wpbn_shape', __('This SVG has a DOCTYPE, which is not accepted. Export it again without one.', 'wp-banner')); }
         $root = $loaded ? $doc->documentElement : null;
         if (!$root || $root->localName !== 'svg') { return new WP_Error('wpbn_shape', __('This is not an SVG file.', 'wp-banner')); }
         $viewbox = self::viewbox($root);

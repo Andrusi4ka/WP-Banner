@@ -44,13 +44,13 @@ class WPBN_Text_Animation {
     }
 
     private static function num($value, $fallback, $range, $digits = 1) {
-        return is_scalar($value) && is_numeric($value) ? round(max($range[0], min($range[1], (float) $value)), $digits) : $fallback;
+        return WPBN_Settings::clamp($value, $fallback, $range[0], $range[1], $digits);
     }
 
     // Its settings, checked.
     public static function sanitize($raw, $l) {
         $d = self::defaults();
-        $pick = function ($key, $list) use ($raw, $d) { return is_string($raw[$key] ?? null) && in_array($raw[$key], $list, true) ? $raw[$key] : $d[$key]; };
+        $pick = function ($key, $list) use ($raw, $d) { return WPBN_Settings::pick($raw[$key] ?? null, $list, $d[$key]); };
         $l['use_text_anim'] = !empty($raw['use_text_anim']);
         $l['text_anim_type'] = $pick('text_anim_type', array_keys(self::KINDS));
         $l['text_anim_start'] = $pick('text_anim_start', WPBN_Animation::STARTS);

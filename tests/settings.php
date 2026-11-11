@@ -4,6 +4,11 @@ define('ABSPATH', __DIR__);
 define('WPBN_URL', '/');
 define('WPBN_DIR', dirname(__DIR__).'/');
 define('DAY_IN_SECONDS', 86400);
+define('HOUR_IN_SECONDS', 3600);
+define('WEEK_IN_SECONDS', 604800);
+// Transients in memory (WPBN_Shape::cleanup()'s hourly mark).
+function get_transient($k) { return $GLOBALS['wpbn_test_transients'][$k] ?? false; }
+function set_transient($k, $v, $t = 0) { $GLOBALS['wpbn_test_transients'][$k] = $v; return true; }
 function sanitize_text_field($s) { return trim(preg_replace('/[\r\n\t ]+/', ' ', strip_tags($s))); }
 function sanitize_textarea_field($s) { return trim(strip_tags($s)); }
 function sanitize_hex_color($s) { return preg_match('/^#(?:[a-f0-9]{3}|[a-f0-9]{6})$/i', $s) ? $s : null; }
@@ -692,8 +697,22 @@ class WPBN_Test_DB { public $postmeta='wp_postmeta'; public $used=array(); publi
     public function prepare($q, ...$a) { return array($q, $a); } public function get_var($p) { foreach ($this->used as $id) { if (strpos($p[1][1], 's:5:"shape";i:'.$id.';') !== false) { return '1'; } } return null; } }
 $GLOBALS['wpdb']=new WPBN_Test_DB(); $GLOBALS['wpdb']->used=array(901); $GLOBALS['wpbn_test_posts']=array(900, 901, 9012); $GLOBALS['wpbn_test_deleted']=array();
 function wp_delete_post($id, $force=false) { $GLOBALS['wpbn_test_deleted'][]=$id; }
-WPBN_Shape::cleanup(); unset($GLOBALS['wpbn_test_posts']);
+WPBN_Shape::cleanup();
 check($GLOBALS['wpbn_test_deleted']===array(900, 9012),'Shapes no scene uses removed; the one used kept (id 901, not mistaken for 9012)');
+// Once an hour at most (a query per shape: not on every save); a scene deleted for good looks again at once.
+$GLOBALS['wpbn_test_deleted']=array(); WPBN_Shape::cleanup();
+$throttled=$GLOBALS['wpbn_test_deleted']===array(); WPBN_Shape::cleanup(true); unset($GLOBALS['wpbn_test_posts']);
+check($throttled && $GLOBALS['wpbn_test_deleted']===array(900, 9012) && WPBN_Shape::KEEP===WEEK_IN_SECONDS,'Shape cleanup: once an hour, at once when forced; unused shapes kept a week');
+// The one clamp and pick every class uses (2026-11-11 review: four copies before).
+check(WPBN_Settings::clamp('12.345',0,0,10)==10 && WPBN_Settings::clamp('-5',0,0,10)==0 && WPBN_Settings::clamp('3.456',0,0,10,1)===3.5 && WPBN_Settings::clamp('x',7,0,10,1)===7 && WPBN_Settings::clamp(array(1),null,0,10)===null
+    && WPBN_Settings::pick('a',array('a','b'),'b')==='a' && WPBN_Settings::pick(1,array('1'),'z')==='z','clamp(): within its range, rounded, a fallback for what is not a number; pick(): strict');
+// A Shortcode layer: this plugin's own shortcodes out, also one put back together from pieces (2026-11-11 review).
+check(WPBN_Settings::shortcode('[wp_bann[wp_banner]er id="1"] [demo a="1"] [WP_BANNER_MOTION id=2]')==='[demo a="1"]','Shortcode layer: own shortcodes removed, also nested ones');
+// SVGs only in UTF-8 (2026-11-11 review: a UTF-16 one got past the DOCTYPE check and its entities were expanded); a UTF-8 BOM is fine.
+$svg16='<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE svg [<!ENTITY w "9">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><rect width="&w;" height="9"/></svg>';
+check(is_wp_error(WPBN_Shape::parse("\xFF\xFE".mb_convert_encoding($svg16,'UTF-16LE','UTF-8'))) && is_wp_error(WPBN_Shape::parse("\xFE\xFF".mb_convert_encoding($svg16,'UTF-16BE','UTF-8')))
+    && is_wp_error(WPBN_Shape::parse('<?xml version="1.0" encoding="ISO-8859-1"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><rect width="9" height="9"/></svg>'))
+    && !is_wp_error(WPBN_Shape::parse("\xEF\xBB\xBF".'<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 9"><rect width="9" height="9"/></svg>')),'Shape: UTF-8 only (UTF-16 and other encodings refused, a BOM fine)');
 echo "Settings and rendering checks passed.\n";
 
 // Release: one version everywhere, the author, and a Changelog "What's new" can read.

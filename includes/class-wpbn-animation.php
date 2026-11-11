@@ -68,15 +68,14 @@ class WPBN_Animation {
 
     // The rest, checked (the per-device ones are, with the others, in WPBN_Settings::sanitize()).
     public static function sanitize($raw, $l) {
-        $pick = function ($key, $allowed, $fallback) use ($raw) { return in_array($raw[$key] ?? null, $allowed, true) ? $raw[$key] : $fallback; };
+        $pick = function ($key, $allowed, $fallback) use ($raw) { return WPBN_Settings::pick($raw[$key] ?? null, $allowed, $fallback); };
         $l['use_anim'] = !empty($raw['use_anim']);
         $l['anim_type'] = $pick('anim_type', array_keys(self::types()), 'zoom');
         $l['anim_start'] = $pick('anim_start', self::STARTS, 'load');
         $l['anim_repeat'] = $pick('anim_repeat', self::REPEATS, 'alternate');
         $l['anim_easing'] = $pick('anim_easing', self::EASINGS, 'ease-in-out');
         $l['anim_origin'] = $pick('anim_origin', array_keys(self::ORIGINS), 'center');
-        $delay = $raw['anim_delay'] ?? 0;
-        $l['anim_delay'] = is_scalar($delay) && is_numeric($delay) ? round(max(self::DELAY[0], min(self::DELAY[1], (float) $delay)), 1) : 0;
+        $l['anim_delay'] = WPBN_Settings::clamp($raw['anim_delay'] ?? 0, 0, self::DELAY[0], self::DELAY[1], 1);
         return $l;
     }
 

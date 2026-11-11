@@ -44,7 +44,7 @@ class WPBN_Access {
             'edit'=>array(self::EDIT, __('Edit scenes', 'wp-banner'), __('WP Banner in the menu: open any scene, change it and its preview.', 'wp-banner')),
             'create'=>array(self::CREATE, __('Add and clone', 'wp-banner'), __('New scenes and copies of them (Duplicate). With Edit scenes only.', 'wp-banner')),
             'delete'=>array(self::DELETE, __('Delete', 'wp-banner'), __('Scenes to the Trash and for good. With Edit scenes only.', 'wp-banner')),
-            'wpbakery'=>array(self::WPBAKERY, __('WPBakery element', 'wp-banner'), __('Put a scene on a page with the WPBakery element (the scenes to choose from). With Edit scenes only. Pages show the scenes to everyone anyway.', 'wp-banner')),
+            'wpbakery'=>array(self::WPBAKERY, __('WPBakery element', 'wp-banner'), __('Put a scene on a page with the WPBakery element or the WP Banner block (the scenes to choose from). With Edit scenes only. Pages show the scenes to everyone anyway.', 'wp-banner')),
         );
     }
 

@@ -291,10 +291,11 @@
         if (seen) seen.observe(s.el); else s.el.classList.add('wpbn-scene--seen');
         if (!('ResizeObserver' in window)) return;
         // Placed by class: sized again whenever the block changes size.
-        if (s.fill) { new ResizeObserver(function () { size(s); schedule(); }).observe(s.el.parentElement); return; }
+        // Kept on the scene (s.resize) so wpbnRefresh() lets it go with the scene.
+        if (s.fill) { s.resize = new ResizeObserver(function () { size(s); schedule(); }); s.resize.observe(s.el.parentElement); return; }
         if (!s.el.dataset.auto) return;
         const box = fillBox(s), row = box.parentElement || box, outer = s.el;
-        const observer = new ResizeObserver(function () { size(s); schedule(); });
+        const observer = s.resize = new ResizeObserver(function () { size(s); schedule(); });
         observer.observe(row);
         const add = node => { if (!node.contains(outer) && !outer.contains(node)) observer.observe(node); };
         row.querySelectorAll('.wpb_wrapper, .vc_column-inner > *').forEach(add);
@@ -311,6 +312,7 @@
             if (scenes[i].el.isConnected) continue;
             if (near) near.unobserve(scenes[i].el);
             if (seen) seen.unobserve(scenes[i].el);
+            if (scenes[i].resize) scenes[i].resize.disconnect();
             scenes.splice(i, 1);
         }
         place(); bind(); sizeAll(); schedule();
@@ -333,6 +335,8 @@
     addEventListener('resize', changed);
     if (reduced.addEventListener) reduced.addEventListener('change', changed);
     addEventListener('load', changed);
+    // A web font that comes after the page has loaded moves the letters: measured again (a title's Gradient per letter, pieces()).
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', changed);
     place();
     bind();
     tick();

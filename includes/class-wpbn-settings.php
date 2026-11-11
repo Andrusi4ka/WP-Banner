@@ -103,7 +103,10 @@ class WPBN_Settings {
     // A Shortcode layer's text: as a post's (wp_kses_post), without this plugin's own shortcodes (a banner in itself).
     const OWN_SHORTCODES = '/\[\/?(wp_banner|wp_banner_motion|wp_layer_motion)\b[^\]]*\]/i';
     public static function shortcode($text) {
-        return trim(substr(preg_replace(self::OWN_SHORTCODES, '', wp_kses_post((string) $text)), 0, 5000));
+        $text = wp_kses_post((string) $text);
+        // Until none is left: one taken out of another must not leave a whole one ("[wp_bann[wp_banner]er id=1]").
+        do { $before = $text; $text = preg_replace(self::OWN_SHORTCODES, '', $text); } while ($text !== $before);
+        return trim(substr($text, 0, 5000));
     }
     // A button's Background, Corners and Size (WoodMart's size presets, as WP Top Info Bar's: padding, height, font size).
     const BUTTON_STYLES = array('filled', 'bordered', 'underline');
@@ -175,7 +178,7 @@ class WPBN_Settings {
             $out[$key] = round(self::number($raw[$key] ?? null, $f[2], $f[0], $f[1]), 1);
             foreach (array('_tablet', '_mobile') as $suffix) {
                 $value = $raw[$key.$suffix] ?? null;
-                $out[$key.$suffix] = $value === null || $value === '' ? null : round(self::number($value, $f[2], $f[0], $f[1]), 1);
+                $out[$key.$suffix] = self::device_number($value, $f[2], $f[0], $f[1], 1);
             }
         }
         return $out;
@@ -373,8 +376,29 @@ class WPBN_Settings {
         $tablet = $l['image_tablet'] ?: $l['image'];
         return array('desktop'=>$l['image'], 'tablet'=>$tablet, 'mobile'=>$l['image_mobile'] ?: $tablet);
     }
+    /*
+     * A number within [min, max], rounded to $digits (null: as it is); $fallback for anything that is not one. The one
+     * clamp every class uses (WPBN_Entrance, WPBN_Text_Animation, WPBN_Animation, WPBN_Shape; review of 2026-11-11).
+     */
+    public static function clamp($value, $fallback, $min, $max, $digits = null) {
+        if (!is_scalar($value) || !is_numeric($value)) { return $fallback; }
+        $number = max($min, min($max, (float) $value));
+        return $digits === null ? $number : round($number, $digits);
+    }
+    // A value from the allowed list (strictly), else $fallback.
+    public static function pick($value, $allowed, $fallback) {
+        return in_array($value, $allowed, true) ? $value : $fallback;
+    }
     private static function number($value, $fallback, $min, $max) {
-        return is_scalar($value) && is_numeric($value) ? max($min, min($max, (float)$value)) : $fallback;
+        return self::clamp($value, $fallback, $min, $max);
+    }
+    // A tablet or mobile value: null when empty (it follows the larger screen), else a number in its range: $round 'int'
+    // a whole one, a number of digits rounded so, null as it is. Not a number: $fallback (rounded the same).
+    private static function device_number($value, $fallback, $min, $max, $round = null) {
+        if ($value === null || $value === '') { return null; }
+        $number = self::number($value, $fallback, $min, $max);
+        if ($number === null || $round === null) { return $number; }
+        return $round === 'int' ? (int) round($number) : round($number, $round);
     }
     // A color as the color fields keep it (admin.js colorField()): "#rrggbb", or "rgba(r,g,b,a)" below full
     // opacity (a fully opaque one as "#rrggbb"). "#rgb" is widened; anything else: the fallback.
@@ -436,7 +460,7 @@ class WPBN_Settings {
         return (string) $text === '' ? '' : $html;
     }
     private static function choice($value, $allowed, $fallback) {
-        return in_array($value, $allowed, true) ? $value : $fallback;
+        return self::pick($value, $allowed, $fallback);
     }
     public static function sanitize($input) {
         $input = is_array($input) ? $input : array();
@@ -477,7 +501,7 @@ class WPBN_Settings {
             // Tablet and mobile: empty follows the larger screen (scenes saved before tablets had a size of their own too).
             foreach (array('tablet_font_size'=>500, 'mobile_font_size'=>250) as $key=>$max) {
                 $value = $raw[$key] ?? null;
-                $l[$key] = $value === null || $value === '' ? null : self::number($value, null, 8, $max);
+                $l[$key] = self::device_number($value, null, 8, $max);
             }
             // Titles saved as div or p (before text layers became titles): h2.
             $l['tag'] = self::choice($raw['tag'] ?? null, self::TAGS, 'h2');
@@ -490,7 +514,7 @@ class WPBN_Settings {
             $l['letter_spacing'] = round(self::number($raw['letter_spacing'] ?? null, 0, -20, 100), 1);
             foreach (array('tablet_letter_spacing', 'mobile_letter_spacing') as $key) {
                 $value = $raw[$key] ?? null;
-                $l[$key] = $value === null || $value === '' ? null : round(self::number($value, 0, -20, 100), 1);
+                $l[$key] = self::device_number($value, 0, -20, 100, 1);
             }
             $l['text_transform'] = self::choice($raw['text_transform'] ?? null, self::CASES, 'none');
             $l['font_style'] = self::choice($raw['font_style'] ?? null, array('normal', 'italic'), 'normal');
@@ -507,7 +531,7 @@ class WPBN_Settings {
                 $l[$key] = (int) round(self::number($raw[$key] ?? null, 0, 0, self::PADDING_MAX[$unit]));
                 foreach (array('_tablet', '_mobile') as $suffix) {
                     $value = $raw[$key.$suffix] ?? null;
-                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, self::PADDING_MAX[$unit]));
+                    $l[$key.$suffix] = self::device_number($value, 0, 0, self::PADDING_MAX[$unit], 'int');
                 }
             }
             // Its switch (2026-11-09); a layer saved before it: on where some side, on some device, has a space.
@@ -521,7 +545,7 @@ class WPBN_Settings {
                 $l[$key] = (int) round(self::number($raw[$key] ?? null, 12, 0, self::RADIUS_MAX[$unit]));
                 foreach (array('_tablet', '_mobile') as $suffix) {
                     $value = $raw[$key.$suffix] ?? null;
-                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, self::RADIUS_MAX[$unit]));
+                    $l[$key.$suffix] = self::device_number($value, 0, 0, self::RADIUS_MAX[$unit], 'int');
                 }
             }
             foreach (self::BORDER_SIDES as $side) {
@@ -529,7 +553,7 @@ class WPBN_Settings {
                 $l[$key] = (int) round(self::number($raw[$key] ?? null, 2, 0, 100));
                 foreach (array('_tablet', '_mobile') as $suffix) {
                     $value = $raw[$key.$suffix] ?? null;
-                    $l[$key.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
+                    $l[$key.$suffix] = self::device_number($value, 0, 0, 100, 'int');
                 }
             }
             $l['shadow_inset'] = !empty($raw['shadow_inset']);
@@ -541,7 +565,7 @@ class WPBN_Settings {
                 $l[$key] = self::number($raw[$key] ?? null, $l[$key], $range[0], $range[1]);
                 foreach (array('_tablet','_mobile') as $suffix) {
                     $value = $raw[$key.$suffix] ?? null;
-                    $l[$key.$suffix] = $value === null || $value === '' ? null : self::number($value, null, $range[0], $range[1]);
+                    $l[$key.$suffix] = self::device_number($value, null, $range[0], $range[1]);
                 }
             }
             // Scenes saved before the switches: on where a device has a value other than the one at rest.
@@ -603,7 +627,7 @@ class WPBN_Settings {
             // Its own on tablet / mobile; empty follows the larger screen.
             foreach (array('_tablet', '_mobile') as $suffix) {
                 $value = $raw['container_width'.$suffix] ?? null;
-                $l['container_width'.$suffix] = $value === null || $value === '' ? null : (int) round(self::number($value, 1200, 320, 3000));
+                $l['container_width'.$suffix] = self::device_number($value, 1200, 320, 3000, 'int');
             }
             // A Shape layer: its SVG and its objects (only the file's own: WPBN_Shape::objects()).
             if ($l['type'] === 'shape') {
@@ -644,7 +668,7 @@ class WPBN_Settings {
             $l['backdrop_blur'] = (int) round(self::number($raw['backdrop_blur'] ?? null, 0, 0, 100));
             foreach (array('tablet', 'mobile') as $device) {
                 $value = $raw['backdrop_blur_'.$device] ?? $raw[$device.'_backdrop_blur'] ?? null;
-                $l['backdrop_blur_'.$device] = $value === null || $value === '' ? null : (int) round(self::number($value, 0, 0, 100));
+                $l['backdrop_blur_'.$device] = self::device_number($value, 0, 0, 100, 'int');
             }
             // An overlay's Width, as its Height: %, px or vw.
             foreach (self::OVERLAY_WIDTHS as $device=>$keys) {

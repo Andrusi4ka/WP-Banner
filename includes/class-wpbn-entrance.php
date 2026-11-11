@@ -32,7 +32,7 @@ class WPBN_Entrance {
     }
 
     private static function num($value, $fallback, $range) {
-        return is_scalar($value) && is_numeric($value) ? round(max($range[0], min($range[1], (float) $value)), 1) : $fallback;
+        return WPBN_Settings::clamp($value, $fallback, $range[0], $range[1], 1);
     }
 
     // Its settings, checked.

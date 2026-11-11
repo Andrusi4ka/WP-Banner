@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.3.0
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,11 +57,19 @@ Deleting the plugin under Plugins removes its scenes and settings; the images st
 
 == Changelog ==
 
+= 1.0.0 =
+* Text animation for titles: the letters (or words) come in one after another, once — fading in, scattered from random heights, unfolding from their middle line, popping in or dropping from above — in the order you choose (left to right, right to left, from the middle, from both ends, random), with their duration, the interval between them, a delay, easing and blur. Works with the title's gradient and accent words; screen readers read the title whole; smooth in Chrome, Firefox and Safari.
+* Buttons: a place of their own on tablets and phones.
+* The Position window shows the scene as the site draws it, the layer being placed on top.
+* Shape layers: Cover and Contain at a position of your choice.
+* The preview keeps the screen size you typed for each scene (a new scene starts with the usual ones), uses the theme's text font (buttons no longer show in the browser's serif), and Update no longer shows a title whole before its entrance runs again.
+* Safer: Shape SVGs only in UTF-8 (a DOCTYPE is refused however the file is encoded); the WP Banner block follows the WPBakery element right in WP Banner → Settings; a change in Woodmart's fonts can no longer stop the editor or the page.
+* Tidier: unused shapes are removed after a week, at most once an hour; web fonts that arrive late are measured again; the editor checks every scene for a class already in use.
+
 = 0.3.0 =
 * Shape layers: an SVG's objects as windows onto a photo layer, an image, a colour or gradient, or frosted glass; a border along their outline, rounded corners for rectangles, a shadow, invert, opacity and filters; entrance, loop and scroll animation for each object and for the whole Shape; the drawing fitted per device (cover, contain, stretch, or a size and place of your own), its empty space trimmed if wanted.
 * A new editor, as WP Swiper's: the layers as tiles across the top, a menu of each layer's blocks, the preview beside them.
 * Entrance animation for each layer: fade, slide, zoom, from the banner's edge, flips and a turn.
-* Text animation for titles: letters or words one after another (fade, scatter, unfold, pop, drop), in any order.
 * Layer names, rotation, padding, border and rounded corners; shadows for images, overlays, buttons and shortcodes.
 * Filters per device: black and white, blur, brightness, contrast and saturation, for images, Shape objects, overlays (of what is under them) and shortcodes.
 * Gradients for titles and buttons; icons for buttons (Font Awesome Free, or an image of your own); an eyedropper in the colour window where the browser has one.

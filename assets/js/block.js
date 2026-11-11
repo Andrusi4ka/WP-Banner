@@ -11,10 +11,12 @@
     const {SelectControl, Placeholder, PanelBody, Button} = wp.components;
     const {InspectorControls, useBlockProps} = wp.blockEditor;
     const ServerSideRender = wp.serverSideRender;
-    const data = window.wpbnBlock || {scenes: [], edit: '', add: ''};
+    const data = window.wpbnBlock || {allowed: false, scenes: [], edit: '', add: ''};
     const options = [{value: 0, label: __('— Select scene —', 'wp-banner')}].concat(data.scenes.map(scene => ({value: scene.id, label: scene.label})));
 
     function choose(props) {
+        // Without the right to put scenes on pages (WP Banner → Settings): no list, a word on why.
+        if (!data.allowed) return el('p', null, __('Your role cannot choose WP Banner scenes (WP Banner → Settings).', 'wp-banner'));
         return el(SelectControl, {label: __('Scene', 'wp-banner'), value: props.attributes.id, options,
             onChange: value => props.setAttributes({id: Number(value) || 0}), __nextHasNoMarginBottom: true});
     }
@@ -33,8 +35,8 @@
             const sidebar = el(InspectorControls, null, el(PanelBody, {title: __('Scene', 'wp-banner')}, choose(props), links(id)));
             if (!id) {
                 return el('div', blockProps, sidebar, el(Placeholder, {icon: 'images-alt2', label: __('WP Banner', 'wp-banner'),
-                    instructions: data.scenes.length ? __('Choose the scene to show.', 'wp-banner') : __('No published scenes yet: make one under WP Banner.', 'wp-banner')},
-                    el('div', {style: {width: '100%'}}, data.scenes.length ? choose(props) : null, links(0))));
+                    instructions: !data.allowed || data.scenes.length ? __('Choose the scene to show.', 'wp-banner') : __('No published scenes yet: make one under WP Banner.', 'wp-banner')},
+                    el('div', {style: {width: '100%'}}, !data.allowed || data.scenes.length ? choose(props) : null, links(0))));
             }
             return el('div', blockProps, sidebar, el(ServerSideRender, {block: 'wp-banner/scene', attributes: {id}}));
         },
