@@ -104,10 +104,12 @@ class WPBN_Fonts {
     }
     // The theme's font variables as the site has them, for the editor's preview (it has none of the theme's
     // styles); titles without a font of their own take the title font there too, as headings do on the site, Text the text font.
+    // The page itself the text font, as Woodmart's body (2026-11-11, user's report: a Button, which takes the page's font,
+    // showed in the browser's serif in the preview); shortcodes take it from there too.
     public static function theme_css() {
         $vars = '';
         foreach (self::faces() as $value=>$face) { $vars .= substr($value, 4, -1).':'.$face['css'].';'; }
-        return $vars === '' ? '' : ':root{'.$vars.'}.wpbn-scene .wpbn-layer--text>*{font-family:var(--wd-title-font)}.wpbn-scene .wpbn-layer--richtext{font-family:var(--wd-text-font)}';
+        return $vars === '' ? '' : ':root{'.$vars.'}body{font-family:var(--wd-text-font)}.wpbn-scene .wpbn-layer--text>*{font-family:var(--wd-title-font)}.wpbn-scene .wpbn-layer--richtext{font-family:var(--wd-text-font)}';
     }
     // The theme's fonts as the browser gets them, by their variable: [css: the family, google: the Google font
     // to load ('' none)]. For the preview page and the editor's font sample (which have none of the theme's styles).

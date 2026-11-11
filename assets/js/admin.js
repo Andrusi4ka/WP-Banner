@@ -2265,6 +2265,18 @@
     const SIZE_LIMITS = {w:[240,3840], h:[240,2160]};
     const draftSizes = {}, sizes = {};
     try { localStorage.removeItem('wpbn-preview-sizes'); } catch (error) { /* No storage: nothing kept. */ }
+    // Kept across a save (user's request, 2026-11-11): Update / Publish reloads the page, and the sizes typed go with it,
+    // once (this tab, this scene, sent at most KEEP_FOR ago), so opening the editor anew still shows the usual screens.
+    const KEEP_KEY = 'wpbn-preview-sizes-' + boot.postId, KEEP_FOR = 10 * 60 * 1000;
+    try {
+        const kept = JSON.parse(sessionStorage.getItem(KEEP_KEY) || 'null');
+        sessionStorage.removeItem(KEEP_KEY);
+        const ok = (v, [min, max]) => v === null || (Number.isInteger(v) && v >= min && v <= max);
+        if (kept && typeof kept.at === 'number' && Date.now() - kept.at < KEEP_FOR && kept.sizes && typeof kept.sizes === 'object') Object.keys(SCREENS).forEach(d => {
+            const s = kept.sizes[d];
+            if (Array.isArray(s) && s.length === 2 && ok(s[0], SIZE_LIMITS.w) && ok(s[1], SIZE_LIMITS.h) && (s[0] !== null || s[1] !== null)) { draftSizes[d] = [s[0], s[1]]; sizes[d] = [s[0], s[1]]; }
+        });
+    } catch (error) { /* No storage, or not ours: the usual screens. */ }
     // Which device's values a width shows (frontend.js's breakpoints).
     const valuesFor = w => w <= 767 ? 'mobile' : w <= 1024 ? 'tablet' : 'desktop';
     // What was typed is kept as typed ([width or null, height or null]); an empty one is the device's usual value.
@@ -2405,6 +2417,11 @@
     let savedState='', sending=false;
     const unsaved=()=>!sending && savedState!=='' && pageState()!==savedState;
     document.getElementById('post').addEventListener('submit',e=>{if(!e.defaultPrevented)sending=true;});
+    // The preview's own sizes into the page the save opens (KEEP_KEY above); none: nothing kept.
+    document.getElementById('post').addEventListener('submit',e=>{
+        if(e.defaultPrevented)return;
+        try{if(Object.keys(draftSizes).length)sessionStorage.setItem(KEEP_KEY,JSON.stringify({at:Date.now(),sizes:draftSizes}));else sessionStorage.removeItem(KEEP_KEY);}catch(error){/* No storage: the usual screens. */}
+    });
     addEventListener('beforeunload',e=>{if(unsaved()){e.preventDefault();e.returnValue='';}});
     // Position. An image layer: the point of the photo kept in view where its box crops it
     // (object-position), the whole photo shown, as WP Swiper's Image position; one for every

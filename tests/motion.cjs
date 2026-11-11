@@ -750,7 +750,8 @@ const server=http.createServer((req,res)=>{
         assert.ok(await frame().locator('.wpbn-layer--button .wpbn-button > .wpbn-button__icon:last-child svg').count()===1,'On the site: the icon after the text');
         await page.click('[data-choice="button_icon_type"][data-value="none"]');
         await update();
-        const btn=await frame().locator('.wpbn-layer--button a.wpbn-button').evaluate(el=>{const c=getComputedStyle(el);return {text:el.textContent,href:el.getAttribute('href'),target:el.target,rel:el.rel,radius:c.borderTopLeftRadius,bg:c.backgroundColor,border:c.borderTopWidth,h:el.getBoundingClientRect().height,font:c.fontSize,events:c.pointerEvents};});
+        const btn=await frame().locator('.wpbn-layer--button a.wpbn-button').evaluate(el=>{const c=getComputedStyle(el);return {text:el.textContent,href:el.getAttribute('href'),target:el.target,rel:el.rel,radius:c.borderTopLeftRadius,bg:c.backgroundColor,border:c.borderTopWidth,h:el.getBoundingClientRect().height,font:c.fontSize,family:c.fontFamily,events:c.pointerEvents};});
+        assert.equal(btn.family,'-apple-system, sans-serif','The button in the page\'s font: the theme\'s text font, as on the site');
         assert.ok(btn.text==='Book now' && btn.href==='https://example.com/book' && btn.target==='_blank' && /noopener/.test(btn.rel),'On the site: a link in a new window ('+JSON.stringify(btn)+')');
         await page.locator('#wpbn-settings').screenshot({path:path.join(__dirname,'button.png')});await page.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'button-preview.png')});
         assert.ok(btn.radius==='35px' && btn.bg==='rgba(0, 0, 0, 0)' && btn.border==='2px' && btn.h>=48 && btn.font==='14px' && btn.events==='auto','Round, a border, Large, clickable ('+JSON.stringify(btn)+')');
@@ -1164,6 +1165,25 @@ const server=http.createServer((req,res)=>{
         const top0=await coverAt(0), top100=await coverAt(100);
         assert.ok(top0.height>top0.H+10 && Math.abs(top0.top)<1 && Math.abs(top100.top-(top100.H-top100.height))<1 && (await shData()).layers[1].y===100,'Cover: Y 0% its top edge at the scene\'s, 100% its bottom ('+JSON.stringify([top0,top100])+')');
         await sh.close();
+        // The preview's own size across a save (2026-11-11): the form sent, the page it opens has it; once only, so a
+        // reload (or opening the editor anew) shows the usual screen again. In a tab of its own (sessionStorage is the tab's).
+        const ks=await browser.newPage({viewport:{width:1600,height:1000}});
+        ks.on('pageerror',e=>errors.push(e.message));
+        const ksReady=async()=>{await ks.waitForFunction(()=>document.querySelector('#wpbn-frame') && document.querySelector('#wpbn-frame').dataset.state==='done');};
+        const ksWidth=()=>ks.locator('#wpbn-frame').evaluate(f=>f.contentWindow.innerWidth);
+        await ks.goto('http://127.0.0.1:'+server.address().port);await ksReady();
+        await ks.fill('#wpbn-res-w','1000');await ks.fill('#wpbn-res-h','700');
+        await ks.evaluate(()=>document.getElementById('post').dispatchEvent(new Event('submit',{cancelable:true})));
+        await ks.reload();await ksReady();
+        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ks.locator('#wpbn-res-h').inputValue(),await ksWidth()],['1000','700',1000],'Saved: the preview keeps its own size');
+        await ks.reload();await ksReady();
+        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ksWidth()],['',1280],'Opened again without a save: the usual screen');
+        // A save that is not sent (too large: the submit prevented) keeps nothing.
+        await ks.fill('#wpbn-res-w','900');
+        await ks.evaluate(()=>{const f=document.getElementById('post');f.addEventListener('submit',e=>e.preventDefault(),{once:true,capture:true});f.dispatchEvent(new Event('submit',{cancelable:true}));});
+        await ks.reload();await ksReady();
+        assert.equal(await ks.locator('#wpbn-res-w').inputValue(),'','A save not sent: the usual screen');
+        await ks.close();
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');
     } finally {if(browser)await browser.close();server.close();}

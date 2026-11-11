@@ -344,6 +344,7 @@ check($txt['type']==='richtext' && $txt['content']==='<p>Hello <em>there</em></p
 $txtHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($txt))));
 check(strpos($txtHtml,'class="wpbn-layer wpbn-layer--richtext"')!==false && strpos($txtHtml,'><p>Hello <em>there</em></p></div>')!==false && strpos($txtHtml,'--wpbn-font:18px;')!==false && strpos($txtHtml,'color:#222222;')!==false && strpos($txtHtml,'text-shadow:0px 2px 10px rgba(0,0,0,0.5);')!==false && strpos($txtHtml,'--wpbn-anx:1;')!==false,'Rendered: its HTML, size, colour, shadow, placed as a title');
 check(strpos(WPBN_Admin::theme_css(),'.wpbn-layer--richtext{font-family:var(--wd-text-font)}')!==false,'The preview: Text in the theme\'s text font');
+check(strpos(WPBN_Admin::theme_css(),'body{font-family:var(--wd-text-font)}')!==false,'The preview page in the theme\'s text font, as Woodmart\'s body (a Button takes it)');
 check(count(WPBN_Palette::tinymce_map())===2*count(WPBN_Palette::colors()) && WPBN_Palette::tinymce_map()[1]===WPBN_Palette::colors()[0]['name'] && strpos(WPBN_Palette::tinymce_map()[0],'#')===false,'The editor\'s Text color palette: the plugin\'s');
 // An image layer: Fill the scene (on by default, and for layers saved before); off: an object with its Width and Height (Auto).
 $img=$lay(array('type'=>'image','image'=>3));
