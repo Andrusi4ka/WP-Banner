@@ -42,7 +42,7 @@ Activate the plugin, open **WP Banner → Add scene**, and add image and title l
 
 Scenes use the private `wpbn_scene` post type and `_wpbn_scene` post meta. Only administrators can edit or preview scenes. Only published scenes render publicly. Deactivation preserves scenes; deleting the plugin removes them.
 
-Development checks: `npm install` once, then `npm test` runs both `tests/settings.php` (also run on every push by `.github/workflows/tests.yml`) and the browser tests `tests/motion.cjs` (local: `playwright-core` drives the Chrome already installed; set `PHP_BIN` / `BROWSER_BIN` if PHP or Chrome are elsewhere). They use isolated stubs and do not access the WordPress database.
+Development checks: `npm install` once, then `npm test` runs both `tests/settings.php` (also run on every push by `.github/workflows/tests.yml`) and the browser tests `tests/motion.cjs` (local: `playwright-core` drives the Chrome already installed; set `PHP_BIN` / `BROWSER_BIN` if PHP or Chrome are elsewhere) and `tests/engines.cjs` (the banner in Chromium, Firefox and WebKit; run `npx playwright-core install firefox webkit` once, an engine not installed is skipped). They use isolated stubs and do not access the WordPress database.
 
 ## Releases
 

@@ -90,6 +90,8 @@ function get_option($name, $default=false) { return $name === 'xts-woodmart-opti
 // The fonts: Woodmart's options, its system fonts and its Google fonts (a few), and the <link> it prints
 // for a Google font, once a page (WPBN_Fonts).
 function woodmart_get_opt($name) {
+    // A theme update that changed its internal API (WPBN_Fonts::guarded()).
+    if (!empty($GLOBALS['wpbn_woodmart_broken'])) { throw new Error('woodmart_get_opt() changed'); }
     $opts = array('primary-font'=>array(array('font-family'=>'Playfair Display')), 'text-font'=>array(array('font-family'=>'System font stack')),
         'secondary-font'=>array(array('font-family'=>'var(--wd-text-font)')), 'multi_custom_fonts'=>array('{{index}}'=>array('font-name'=>''), array('font-name'=>'Brand Sans')), 'typekit_fonts'=>'');
     return $opts[$name] ?? '';
@@ -99,7 +101,7 @@ eval('namespace XTS\Admin\Modules\Options\Google_Fonts; class Google_Fonts {
     public static $all_google_fonts = array();
     private static $loaded = array();
     public static function get_instance() { return new self(); }
-    public function enqueue_inline_fonts($fonts, $id) { foreach ($fonts as $f) { $key = $f["font-family"]."@".$f["font-weight"].$f["font-style"]; if (isset(self::$loaded[$key])) { continue; } self::$loaded[$key] = true; echo "<link rel=\"stylesheet\" id=\"xts-google-fonts-inline-".$id."-css\" href=\"https://fonts.googleapis.com/css2?family=".str_replace(" ", "+", $f["font-family"]).($f["font-style"] === "italic" ? ":ital,wght@1," : ":wght@").$f["font-weight"]."\">"; } }
+    public function enqueue_inline_fonts($fonts, $id) { if (!empty($GLOBALS["wpbn_woodmart_broken"])) { ob_start(); echo "half"; throw new \Error("enqueue_inline_fonts() changed"); } foreach ($fonts as $f) { $key = $f["font-family"]."@".$f["font-weight"].$f["font-style"]; if (isset(self::$loaded[$key])) { continue; } self::$loaded[$key] = true; echo "<link rel=\"stylesheet\" id=\"xts-google-fonts-inline-".$id."-css\" href=\"https://fonts.googleapis.com/css2?family=".str_replace(" ", "+", $f["font-family"]).($f["font-style"] === "italic" ? ":ital,wght@1," : ":wght@").$f["font-weight"]."\">"; } }
 }');
 $variants = function ($ids) { return array('variants'=>array_map(function ($id) { return array('id'=>$id); }, $ids)); };
 XTS\Admin\Modules\Options\Google_Fonts\Google_Fonts::$all_google_fonts = array('Playfair Display'=>$variants(array('400','700','900','400italic')), 'Exo 2'=>$variants(array('100','300','500')), 'Roboto'=>$variants(array('300','400','700')));
@@ -109,7 +111,7 @@ require_once __DIR__.'/../includes/class-wpbn-admin.php';
 if (($argv[1] ?? '')==='--editor') {
     echo '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/vendor/pickr/classic.min.css"><link rel="stylesheet" href="/assets/css/admin.css"><style id="wpbn-test-all-blocks">.wpbn-block[hidden]{display:block!important}</style><style>body{font:13px Arial;margin:20px}.button{padding:6px;cursor:pointer}input,select{padding:5px;box-sizing:border-box}</style></head><body><form id="post"><div id="wpbn-editor"><div class="inside">';
     WPBN_Admin::editor((object)array('ID'=>7));
-    echo '</div></div></form><script src="/assets/vendor/pickr/pickr.min.js"></script><script src="/assets/js/admin.js"></script></body></html>'; exit;
+    echo '</div></div></form><script src="/assets/vendor/pickr/pickr.min.js"></script><script src="/assets/js/admin-color.js"></script><script src="/assets/js/admin.js"></script></body></html>'; exit;
 }
 if (($argv[1] ?? '')==='--preview') {
     $s=WPBN_Settings::sanitize(json_decode(stream_get_contents(STDIN),true));
@@ -257,6 +259,12 @@ check($fonts['groups'][0][1][2][1]==='Secondary font · System font stack' && $f
 check($fonts['groups'][1][1]===array(array('Brand Sans','Brand Sans','123456789')),'Custom fonts (the template row left out)');
 check($fonts['google']===array('Playfair Display'=>'479','Exo 2'=>'135','Roboto'=>'347'),'Google fonts with their upright weights');
 check(strpos(WPBN_Fonts::theme_css(),'--wd-title-font:"Playfair Display";--wd-text-font:-apple-system,sans-serif;--wd-alternative-font:-apple-system,sans-serif;')!==false,'The preview page gets the theme\'s fonts');
+// Woodmart's internal API changed by a theme update (it throws): no fatal error, the editor's text field, no font links.
+$GLOBALS['wpbn_woodmart_broken']=true;
+$obLevel=ob_get_level();
+check(WPBN_Fonts::groups()===null && WPBN_Fonts::faces()===array() && WPBN_Fonts::theme_css()==='' && WPBN_Fonts::resolve('var(--wd-title-font)')==='','A changed Woodmart API: no font list, no theme fonts');
+check(WPBN_Fonts::link('Exo 2',300,5)==='' && ob_get_level()===$obLevel,'A changed Woodmart API: no font link, no output buffer left open');
+$GLOBALS['wpbn_woodmart_broken']=false;
 foreach (array('var(--wd-title-font)'=>'var(--wd-title-font)', 'var(--wd-other)'=>'var--wd-other', 'Exo 2'=>'Exo 2', '"Playfair Display", serif'=>'"Playfair Display", serif', 'a;b:url(x)'=>'aburlx') as $in=>$out) {
     check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','font_family'=>$in))))['layers'][0]['font_family']===$out,'Font '.$in.' kept as '.$out);
 }

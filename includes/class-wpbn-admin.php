@@ -42,7 +42,9 @@ class WPBN_Admin {
         wp_enqueue_style('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/classic.min.css', array(), '1.9.1');
         wp_enqueue_script('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/pickr.min.js', array(), '1.9.1', true);
         wp_enqueue_style('wpbn-admin', WPBN_URL.'assets/css/admin.css', array('wpbn-pickr'), wpbn_asset('assets/css/admin.css'));
-        wp_enqueue_script('wpbn-admin', WPBN_URL.'assets/js/admin.js', array('wpbn-pickr'), wpbn_asset('assets/js/admin.js'), true);
+        // The editor's colours and gradients (WPBN_Color), apart from admin.js; admin.js takes them by name.
+        wp_enqueue_script('wpbn-admin-color', WPBN_URL.'assets/js/admin-color.js', array('wpbn-pickr'), wpbn_asset('assets/js/admin-color.js'), true);
+        wp_enqueue_script('wpbn-admin', WPBN_URL.'assets/js/admin.js', array('wpbn-pickr', 'wpbn-admin-color'), wpbn_asset('assets/js/admin.js'), true);
     }
     public static function editor($post) {
         wp_nonce_field('wpbn_save', 'wpbn_nonce');

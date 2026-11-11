@@ -17,6 +17,14 @@ class WPBN_Fonts {
     public static function available() {
         return function_exists('woodmart_get_opt') && (bool) self::google();
     }
+    /*
+     * Woodmart's fonts are its internal API (woodmart_get_opt(), Google_Fonts), not a public one: a theme
+     * update that changes it must not stop the page or the editor. What reads it runs here; anything thrown
+     * gives $fallback (the editor then keeps a text field, the page the theme's own fonts).
+     */
+    private static function guarded($read, $fallback) {
+        try { return $read(); } catch (Throwable $e) { return $fallback; }
+    }
     // Woodmart's Google fonts: family => {variants, subsets}.
     private static function google() {
         $class = self::GOOGLE;
@@ -24,7 +32,7 @@ class WPBN_Fonts {
     }
     // A theme font's option as Woodmart keeps it: its family ('' none), maybe a variable of another.
     private static function option_family($option) {
-        $value = woodmart_get_opt($option);
+        $value = self::guarded(function () use ($option) { return woodmart_get_opt($option); }, '');
         return is_array($value) && isset($value[0]['font-family']) && is_scalar($value[0]['font-family']) ? trim((string) $value[0]['font-family']) : '';
     }
     // A family as the browser gets it: a theme variable followed to the font it stands for ('' unknown).
@@ -54,7 +62,9 @@ class WPBN_Fonts {
      * Google fonts as name => weights (the value is the name). Null without Woodmart.
      */
     public static function groups() {
-        if (!self::available()) { return null; }
+        return self::available() ? self::guarded(array(__CLASS__, 'read_groups'), null) : null;
+    }
+    private static function read_groups() {
         $groups = array();
         $theme = array();
         foreach (self::THEME as $option=>$t) {
@@ -102,7 +112,9 @@ class WPBN_Fonts {
     // The theme's fonts as the browser gets them, by their variable: [css: the family, google: the Google font
     // to load ('' none)]. For the preview page and the editor's font sample (which have none of the theme's styles).
     public static function faces() {
-        if (!self::available()) { return array(); }
+        return self::available() ? self::guarded(array(__CLASS__, 'read_faces'), array()) : array();
+    }
+    private static function read_faces() {
         $standard = function_exists('woodmart_get_config') ? woodmart_get_config('standard-fonts') : array();
         $google = self::google();
         $faces = array();
@@ -120,10 +132,18 @@ class WPBN_Fonts {
         $family = self::resolve($family);
         $google = self::google();
         if ($family === '' || !isset($google[$family])) { return ''; }
-        $instance = call_user_func(array(self::GOOGLE, 'get_instance'));
-        if (!is_object($instance) || !method_exists($instance, 'enqueue_inline_fonts')) { return ''; }
+        if (!is_callable(array(self::GOOGLE, 'get_instance'))) { return ''; }
+        $level = ob_get_level();
         ob_start();
-        $instance->enqueue_inline_fonts(array(array('font-family'=>$family, 'font-weight'=>(string) $weight, 'font-style'=>$style)), absint($id));
-        return (string) ob_get_clean();
+        $printed = self::guarded(function () use ($family, $weight, $id, $style) {
+            $instance = call_user_func(array(self::GOOGLE, 'get_instance'));
+            if (!is_object($instance) || !method_exists($instance, 'enqueue_inline_fonts')) { return false; }
+            $instance->enqueue_inline_fonts(array(array('font-family'=>$family, 'font-weight'=>(string) $weight, 'font-style'=>$style)), absint($id));
+            return true;
+        }, false);
+        // Whatever it left open when it threw is closed again: the page's own output is not swallowed.
+        while (ob_get_level() > $level + 1) { ob_end_clean(); }
+        $html = (string) ob_get_clean();
+        return $printed ? $html : '';
     }
 }
