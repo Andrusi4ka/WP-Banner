@@ -287,6 +287,8 @@ class WPBN_Settings {
             + WPBN_Animation::defaults()
             // Entrance animation (WPBN_Entrance): how it comes in, once; off by default.
             + WPBN_Entrance::defaults()
+            // Text animation (WPBN_Text_Animation, a title's): its letters or words coming in one after another; off by default.
+            + WPBN_Text_Animation::defaults()
             // Filters: at rest (none); tablet and mobile follow the larger screen.
             + self::filters(array());
         foreach (array_merge(array_keys(self::RESPONSIVE), array('fit')) as $key) { $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
@@ -680,6 +682,7 @@ class WPBN_Settings {
             // Animation: its switch, type, delay, repeat and easing (its per-device values: RESPONSIVE, above).
             $l = WPBN_Animation::sanitize($raw, $l);
             $l = WPBN_Entrance::sanitize($raw, $l);
+            $l = WPBN_Text_Animation::sanitize($raw, $l);
             // A Shape layer's Entrance: its objects' kinds (WPBN_Shape::ENTER: Reveal, no flips or edges).
             if ($l['type'] === 'shape') { $l['enter_type'] = is_string($raw['enter_type'] ?? null) && isset(WPBN_Shape::ENTER[$raw['enter_type']]) ? $raw['enter_type'] : 'fade'; }
             $l['use_gradient'] = !empty($raw['use_gradient']);

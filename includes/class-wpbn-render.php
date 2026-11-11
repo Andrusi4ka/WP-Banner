@@ -357,11 +357,18 @@ class WPBN_Render {
                 .($l['text_transform'] !== 'none' ? 'text-transform:'.$l['text_transform'].';' : '')
                 .($l['font_style'] === 'italic' ? 'font-style:italic;' : '')
                 .(WPBN_Settings::shadow($l) !== '' && $gradient === '' ? 'text-shadow:'.WPBN_Settings::shadow($l).';' : '');
-            $text = self::title_html($l['text']);
+            // Its Text animation (WPBN_Text_Animation): the letters or words as pieces that come in one after another.
+            list($ta_class, $ta_css) = WPBN_Text_Animation::active($l) ? WPBN_Text_Animation::wrapper($l) : array('', '');
+            $split = $ta_class !== '' ? WPBN_Text_Animation::split($l['text'], $l) : '';
+            if ($split === '') { $ta_class = $ta_css = ''; }
+            $text = $split !== '' ? $split : self::title_html($l['text']);
             $tag = $l['tag'];
-            $tag_css = ($l['font_family'] !== '' ? 'font-family:'.WPBN_Fonts::css($l['font_family']).';' : '')
+            // With its Gradient, each piece paints it (frontend.css, frontend.js pieces()).
+            if ($ta_css !== '' && $gradient !== '') { $ta_css .= '--wpbn-tg:'.$gradient.';'; }
+            $tag_css = $ta_css.($l['font_family'] !== '' ? 'font-family:'.WPBN_Fonts::css($l['font_family']).';' : '')
                 .($gradient !== '' ? 'background-image:'.$gradient.';'.(WPBN_Settings::shadow($l) !== '' ? 'filter:drop-shadow('.WPBN_Settings::shadow($l).');' : '') : '');
-            $inner = '<'.$tag.($gradient !== '' ? ' class="wpbn-text-gradient"' : '').($tag_css !== '' ? ' style="'.esc_attr($tag_css).'"' : '').'>'.$text.'</'.$tag.'>';
+            $tag_class = trim(($gradient !== '' ? 'wpbn-text-gradient ' : '').$ta_class);
+            $inner = '<'.$tag.($tag_class !== '' ? ' class="'.esc_attr($tag_class).'"' : '').($tag_css !== '' ? ' style="'.esc_attr($tag_css).'"' : '').'>'.$text.'</'.$tag.'>';
             // A Google font (Woodmart's list) loaded here, at its weight; empty: the theme's heading font (its weight may not be loaded yet).
             $links .= WPBN_Fonts::link($l['font_family'] !== '' ? $l['font_family'] : 'var(--wd-title-font)', $l['font_weight'], $context['id'] ?? 0, $l['font_style'] === 'italic' ? 'italic' : '');
         } elseif ($l['type'] === 'shape') {

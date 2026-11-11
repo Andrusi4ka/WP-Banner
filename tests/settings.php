@@ -70,6 +70,7 @@ require_once __DIR__.'/../includes/class-wpbn-settings.php';
 require_once __DIR__.'/../includes/class-wpbn-gradient.php';
 require_once __DIR__.'/../includes/class-wpbn-animation.php';
 require_once __DIR__.'/../includes/class-wpbn-entrance.php';
+require_once __DIR__.'/../includes/class-wpbn-text-animation.php';
 
 // Shapes (2026-11-10): posts of their own type (WPBN_Shape::POST_TYPE), no longer attachments.
 function get_post_type($id) { return $GLOBALS['wpbn_test_types'][(int) $id] ?? (isset($GLOBALS['wpbn_shapes'][(int) $id]) ? 'wpbn_shape' : 'attachment'); }
@@ -495,6 +496,28 @@ check(strpos($ee,'class="wpbn-enter wpbn-enter--edge wpbn-enter--edge-left" styl
 check(motion_of($ee,0)['slack']==motion_of($eePlain,0)['slack'] && count(WPBN_Entrance::editor()['types'])===15 && !array_diff_key(WPBN_Entrance::TYPES,WPBN_Entrance::editor()['types']),'From an edge: the photo not grown for it; every kind named in the editor');
 check(strpos($animCss,'@keyframes wpbn-enter-edge{from{transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}')!==false && strpos($animCss,'@keyframes wpbn-enter-rotate-z{')!==false && strpos($animCss,'@keyframes wpbn-enter-flip-x-bottom{')!==false,'Their keyframes');
 check(WPBN_Settings::effective($lay(array('type'=>'shape','use_enter'=>1)))['use_enter']===true && strpos($animCss,'@keyframes wpbn-enter-slide{from{opacity:0;transform:translate(var(--wpbn-ex,0px),var(--wpbn-ey,0px))}}')!==false && strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible')!==false,'Entrance: a Shape layer keeps it (its objects\' windows: WPBN_Shape::layer_entrance()); its keyframes; In view waits');
+// Text animation (WPBN_Text_Animation, 2026-11-11): a title's letters or words one after another; off by default; only titles.
+$ta=$lay(array('type'=>'text','use_text_anim'=>1,'text_anim_type'=>'drop','text_anim_duration'=>9,'text_anim_stagger'=>0.123,'text_anim_delay'=>-2,'text_anim_easing'=>'bounce','text_anim_order'=>'spiral','text_anim_by'=>'lines','text_anim_blur'=>99,'text_anim_distance'=>70,'text_anim_start'=>'load'));
+check($ta['text_anim_duration']==5 && $ta['text_anim_stagger']==0.12 && $ta['text_anim_delay']==0 && $ta['text_anim_easing']==='smooth' && $ta['text_anim_order']==='start' && $ta['text_anim_by']==='letters' && $ta['text_anim_blur']==40
+    && $lay(array('type'=>'text'))['use_text_anim']===false && $lay(array('type'=>'text','text_anim_type'=>'spin'))['text_anim_type']==='fade','Text animation: bounded, allow-listed, off by default');
+$tam=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ta,array('text'=>"Big <u>sk</u>y\nA&B"))))));
+check(strpos($tam,'class="wpbn-ta wpbn-ta--drop" style="--wpbn-tad:5s;--wpbn-tas:0.12s;--wpbn-tae:cubic-bezier(.215,.61,.355,1);--wpbn-tab:40px;--wpbn-tay:70px;')!==false,'Text animation: the kind and its look on the title ('.$tam.')');
+check(strpos($tam,'<span class="wpbn-sr">Big sky A&amp;B</span><span class="wpbn-ta-text" aria-hidden="true">')!==false && substr_count($tam,'class="wpbn-ta-u"')===9 && strpos($tam,'">&amp;</span>')!==false,'Text animation: readers get the whole title; each letter a piece; the text escaped');
+check(strpos($tam,'<span class="wpbn-ta-w"><u><span class="wpbn-ta-u" style="--o:3;">s</span><span class="wpbn-ta-u" style="--o:4;">k</span></u><span class="wpbn-ta-u" style="--o:5;">y</span></span><br>')!==false,'Text animation: an accent inside a word nests; a line break kept');
+$taw=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ta,array('text'=>'One two three four five','text_anim_by'=>'words','text_anim_order'=>'end')),array_merge($ta,array('text'=>'abcdefghij','text_anim_type'=>'scatter','text_anim_order'=>'random')),array_merge($ta,array('type'=>'image','image'=>3)),array_merge($ta,array('text'=>'abcde','text_anim_order'=>'center'))))));
+preg_match_all('/--o:(\d+);/',$taw,$orders);
+check(array_slice($orders[1],0,5)===array('4','3','2','1','0') && strpos($taw,'<span class="wpbn-ta-w"><span class="wpbn-ta-u" style="--o:4;">One</span></span>')!==false,'Text animation by words, right to left');
+$random=array_map('intval',array_slice($orders[1],5,10)); $sorted=$random; sort($sorted);
+check($sorted===range(0,9) && $random!==range(0,9) && preg_match_all('/--r:-?[01](\.\d+)?;/',$taw)===10,'Random order: each place once, shuffled; Scatter: a height for each letter');
+check(array_slice($orders[1],15,5)===array('2','1','0','1','2'),'From the middle: the middle letter first');
+$scatterAgain=WPBN_Text_Animation::split('abcdefghij',WPBN_Settings::sanitize(array('layers'=>array(array_merge($ta,array('text_anim_type'=>'scatter','text_anim_order'=>'random')))))['layers'][0]);
+check(strpos($taw,$scatterAgain)!==false && strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ta,array('type'=>'image','image'=>3)))))),'class="wpbn-ta')===false,'The same title drawn the same every time; not for images');
+check(strpos($animCss,'@keyframes wpbn-ta-unfold{from{opacity:0;clip-path:inset(50% 0 50% 0)')!==false && strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-ta--visible .wpbn-ta-u{animation-play-state:paused}')!==false && strpos($animCss,'@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-ta-u{animation:none}')!==false,'Text animation: keyframes, In view, reduced motion');
+// No flicker (2026-11-11): moves in perspective (Chrome stepped a flat one by whole pixels), Pop's size so only in Firefox; the end kept.
+check(strpos($animCss,'@keyframes wpbn-ta-drop{from{opacity:0;transform:perspective(1000px) translate3d(0,calc(-1 * var(--wpbn-tay,70px)),0)')!==false && strpos($animCss,'to{opacity:1;transform:perspective(1000px) translate3d(0,0,0);filter:blur(0px)}}')!==false
+    && strpos($animCss,'@keyframes wpbn-ta-scatter{from{opacity:0;transform:perspective(1000px) translate3d(')!==false && strpos($animCss,'@supports (-moz-appearance:none){@keyframes wpbn-ta-pop{from{opacity:0;transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-taz,.3)))')!==false
+    && strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($ta,array('text'=>'A','text_anim_type'=>'pop','text_anim_scale'=>0)))))),'--wpbn-taz:0.01;')!==false,'Text animation: moves in perspective, Pop\'s in Firefox; its start size at least 1%');
+foreach (array_keys(WPBN_Text_Animation::KINDS) as $kind) { check(strpos($animCss,'.wpbn-ta--'.$kind.' .wpbn-ta-u{animation-name:wpbn-ta-'.$kind.'}')!==false && isset(WPBN_Text_Animation::editor()['types'][$kind]),'Text animation '.$kind.': its keyframes and its name in the editor'); }
 // Shape layers (WPBN_Shape): an SVG read as objects, only their shapes kept; each object a window onto its fill.
 $sp=WPBN_Shape::parse('<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><style>.st0{fill:#878787}.h{fill-rule:evenodd}</style></defs><rect class="st0" x="400" y="275" width="200" height="450"/><rect class="st0" x="700" y="275" width="200" height="450"/><path class="h" data-name="Ring" d="M0 0H100V100H0Z M25 25H75V75H25Z"/></svg>');
 check(array_column($sp['objects'],'key')===array('o1','o2','o3') && $sp['objects'][2]['name']==='Ring' && $sp['viewbox']===array(0.0,0.0,1000.0,1000.0),'Shape: its objects in the file\'s order, with their names');

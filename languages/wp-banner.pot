@@ -35,19 +35,19 @@ msgid "https://relevant.no/"
 msgstr ""
 
 #. translators: %s: the scene's title
-#: wp-banner.php:45 includes/class-wpbn-tools.php:40 includes/class-wpbn-wpbakery.php:57
+#: wp-banner.php:46 includes/class-wpbn-tools.php:40 includes/class-wpbn-wpbakery.php:57
 msgid "Scene"
 msgstr ""
 
-#: wp-banner.php:45
+#: wp-banner.php:46
 msgid "All scenes"
 msgstr ""
 
-#: wp-banner.php:45 includes/class-wpbn-wpbakery.php:91
+#: wp-banner.php:46 includes/class-wpbn-wpbakery.php:91
 msgid "Add scene"
 msgstr ""
 
-#: wp-banner.php:45 includes/class-wpbn-wpbakery.php:97
+#: wp-banner.php:46 includes/class-wpbn-wpbakery.php:97
 msgid "Edit scene"
 msgstr ""
 
@@ -87,7 +87,7 @@ msgstr ""
 msgid "WP Banner settings"
 msgstr ""
 
-#: includes/class-wpbn-access.php:137 includes/class-wpbn-access.php:142 includes/class-wpbn-admin.php:100
+#: includes/class-wpbn-access.php:137 includes/class-wpbn-access.php:142 includes/class-wpbn-admin.php:104
 msgid "Settings"
 msgstr ""
 
@@ -128,112 +128,112 @@ msgstr ""
 msgid "Paste it into any page, or use the “WP Banner” element in WPBakery. To make the scene the background of the row, column or block it stands in, see “Insert into blocks by class” in Scene settings."
 msgstr ""
 
-#: includes/class-wpbn-admin.php:86
+#: includes/class-wpbn-admin.php:90
 msgid "The scene settings are too large to be saved. Remove some layers or shorten their texts, then update the scene again."
 msgstr ""
 
-#: includes/class-wpbn-admin.php:93
+#: includes/class-wpbn-admin.php:97
 msgid "Layers"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:93
+#: includes/class-wpbn-admin.php:97
 msgid "The back layer is first, the front one last. Drag a layer to change its depth."
 msgstr ""
 
-#: includes/class-wpbn-admin.php:94
+#: includes/class-wpbn-admin.php:98
 msgid "Scene settings"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:94
+#: includes/class-wpbn-admin.php:98
 msgid "Size, placement"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:97
+#: includes/class-wpbn-admin.php:101
 msgid "Add element"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:102
+#: includes/class-wpbn-admin.php:106
 msgid "Preview"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:103
+#: includes/class-wpbn-admin.php:107
 msgid "Desktop"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:103
+#: includes/class-wpbn-admin.php:107
 msgid "Tablet"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:103
+#: includes/class-wpbn-admin.php:107
 msgid "Mobile"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:104 includes/class-wpbn-admin.php:125
+#: includes/class-wpbn-admin.php:108 includes/class-wpbn-admin.php:129
 msgid "Preview device"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:107
+#: includes/class-wpbn-admin.php:111
 msgid "Turn the tablet or phone sideways"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:109
+#: includes/class-wpbn-admin.php:113
 msgid "Dark screen"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:112
+#: includes/class-wpbn-admin.php:116
 msgid "Developer mode: the boxes of the scene and its layers, with their sizes and distances"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:115
+#: includes/class-wpbn-admin.php:119
 msgid "Screen"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:116
+#: includes/class-wpbn-admin.php:120
 msgid "Screen width (px)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:117
+#: includes/class-wpbn-admin.php:121
 msgid "Screen height (px)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:120
+#: includes/class-wpbn-admin.php:124
 msgid "Undo (Ctrl + Z)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:121
+#: includes/class-wpbn-admin.php:125
 msgid "Redo (Ctrl + Shift + Z)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:122
+#: includes/class-wpbn-admin.php:126
 msgid "History"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:129
+#: includes/class-wpbn-admin.php:133
 msgid "Update"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:130
+#: includes/class-wpbn-admin.php:134
 msgid "Play the scroll"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:131
+#: includes/class-wpbn-admin.php:135
 msgid "Banner preview"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:131
+#: includes/class-wpbn-admin.php:135
 msgid "Scroll simulation"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:160
+#: includes/class-wpbn-admin.php:164
 msgid "The scene settings were not saved: they are too large. Remove some layers or shorten their texts, then update the scene again."
 msgstr ""
 
-#: includes/class-wpbn-admin.php:161
+#: includes/class-wpbn-admin.php:165
 msgid "The scene settings were not saved: the editor sent them damaged. Reload the page and try again."
 msgstr ""
 
 #. translators: %d: the most layers a scene can have
-#: includes/class-wpbn-admin.php:163
+#: includes/class-wpbn-admin.php:167
 msgid "A scene can have at most %d layers: only the first ones were saved."
 msgstr ""
 
@@ -361,7 +361,7 @@ msgstr ""
 msgid "Once"
 msgstr ""
 
-#: includes/class-wpbn-animation.php:161
+#: includes/class-wpbn-animation.php:161 includes/class-wpbn-text-animation.php:182
 msgid "Smooth"
 msgstr ""
 
@@ -506,28 +506,100 @@ msgstr ""
 msgid "Reveal from the bottom"
 msgstr ""
 
-#: includes/class-wpbn-shape.php:560
+#: includes/class-wpbn-shape.php:563
 msgid "This server cannot read SVG files (PHP's DOM extension is missing)."
 msgstr ""
 
-#: includes/class-wpbn-shape.php:562
+#: includes/class-wpbn-shape.php:565
 msgid "This SVG has a DOCTYPE, which is not accepted. Export it again without one."
 msgstr ""
 
-#: includes/class-wpbn-shape.php:569
+#: includes/class-wpbn-shape.php:572
 msgid "This is not an SVG file."
 msgstr ""
 
-#: includes/class-wpbn-shape.php:571
+#: includes/class-wpbn-shape.php:574
 msgid "The SVG has no size: give it a viewBox (or a width and a height)."
 msgstr ""
 
-#: includes/class-wpbn-shape.php:579
+#: includes/class-wpbn-shape.php:582
 msgid "The SVG's main group has a transform that cannot be read. Export it again."
 msgstr ""
 
-#: includes/class-wpbn-shape.php:593
+#: includes/class-wpbn-shape.php:596
 msgid "No shapes were found in this SVG. Turn text into outlines and embed no pictures."
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:173
+msgid "Letters fade in"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:173
+msgid "Scatter (from random heights)"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:174
+msgid "Unfold (from the middle line)"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:174
+msgid "Pop (grow in)"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:174
+msgid "Drop (from above)"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:178
+msgid "Letters"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:178
+msgid "Words"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:179
+msgid "Left to right"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:179
+msgid "Right to left"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:179
+msgid "From the middle"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:180
+msgid "From both ends"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:180
+msgid "Random"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:181
+msgid "Ease out"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:181
+msgid "Ease in and out"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:181
+msgid "Linear"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:182
+msgid "Strong"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:182
+msgid "Sharp"
+msgstr ""
+
+#: includes/class-wpbn-text-animation.php:182
+msgid "Overshoot"
 msgstr ""
 
 #: includes/class-wpbn-tools.php:22

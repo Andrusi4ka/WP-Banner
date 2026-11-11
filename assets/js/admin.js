@@ -735,7 +735,7 @@
      * off with None; the type chosen before is kept). Its own change handler (data-anim-kind, not data-key).
      */
     function kindSelect(which, l, types, help) {
-        const flag = which === 'enter' ? 'use_enter' : 'use_anim', key = which + '_type', id = 'wpbn-f-' + key, value = l[flag] ? l[key] : 'none';
+        const flag = {enter:'use_enter', anim:'use_anim', text:'use_text_anim'}[which], key = which === 'text' ? 'text_anim_type' : which + '_type', id = 'wpbn-f-' + key, value = l[flag] ? l[key] : 'none';
         return withTip('<div class="wpbn-field">' + head(id, 'Type') + '<select id="' + id + '" data-anim-kind="' + which + '">'
             + Object.entries(Object.assign({none:'None'}, types)).map(([v, t]) => '<option value="' + v + '"' + (v === value ? ' selected' : '') + '>' + escape(t) + '</option>').join('') + '</select></div>', help);
     }
@@ -753,6 +753,28 @@
             + range('enter_duration', 'Duration (s)', {min:ENTER.duration[0], max:ENTER.duration[1], step:0.1, to:3})
             + range('enter_delay', 'Delay (s)', {min:ENTER.delay[0], max:ENTER.delay[1], to:5, step:0.1, tip:obj ? 'E.g. the strips one after another: each a little later than the one before.' : 'E.g. the title a moment after the photo.'})
             + (ANIM ? select('enter_easing', 'Easing', ANIM.easings) : '')));
+    }
+    /*
+     * A title's Text animation (WPBN_Text_Animation, 2026-11-11, user's request): its letters or words coming in one after
+     * another, once. Its Type (None: off) sets the kind's own look (its duration, interval, order, easing, blur…), as the
+     * user's examples have it; the rest tunes it. Distance only for Scatter and Drop, Start size only for Pop.
+     */
+    const TEXT_ANIM = boot.textAnim || null;
+    function textAnimationCard(l) {
+        if (!TEXT_ANIM) return '';
+        const T = TEXT_ANIM, starts = ANIM ? ANIM.starts : {load:'On load', visible:'In view'};
+        const types = Object.fromEntries(Object.entries(T.types).map(([k, t]) => [k, t.name]));
+        return card('Text animation', kindSelect('text', l, types, 'The title\'s letters (or words) come in one after another, once, as the page loads or once the banner is in view. Choosing a type sets its own look; tune it below. The Entrance animation, if any, moves the whole title as well.')
+            + withTip(select('text_anim_start', 'Starts', starts), 'On load: as the page opens. In view: once the banner is on the screen, for banners lower on the page.')
+            + select('text_anim_by', 'Split into', T.by)
+            + withTip(select('text_anim_order', 'Order', T.orders), 'Which letters come first.')
+            + range('text_anim_duration', 'Duration (s)', {min:T.duration[0], max:T.duration[1], step:0.1, to:3, tip:'How long each letter takes to come in.'})
+            + range('text_anim_stagger', 'Interval (s)', {min:T.stagger[0], max:T.stagger[1], step:0.01, to:0.5, tip:'Time between one letter starting and the next: smaller is faster.'})
+            + range('text_anim_delay', 'Delay (s)', {min:T.delay[0], max:T.delay[1], step:0.1, to:5, tip:'Before the first letter, e.g. a moment after the photo.'})
+            + select('text_anim_easing', 'Easing', T.easings)
+            + (['scatter', 'drop'].includes(l.text_anim_type) ? range('text_anim_distance', 'Distance (px)', {min:T.distance[0], max:T.distance[1], to:200, tip:l.text_anim_type === 'scatter' ? 'How far above or below each letter starts, at most.' : 'How far above each letter starts.'}) : '')
+            + (l.text_anim_type === 'pop' ? range('text_anim_scale', 'Start size (%)', {min:T.scale[0], max:T.scale[1], tip:'How small each letter starts.'}) : '')
+            + range('text_anim_blur', 'Blur (px)', {min:T.blur[0], max:T.blur[1], to:20, tip:'How blurred each letter starts; 0: sharp.'}));
     }
     // obj: a Shape object's (WPBN_Shape::loop()).
     function animationCard(l, obj) {
@@ -1692,6 +1714,8 @@
                     ['image', 'overlay', 'button', 'shortcode'].includes(l.type) ? ['filters', 'Filters', 'image-filter', card('Filters', l.type === 'image' || l.type === 'shortcode' ? filterFields() : l.type === 'overlay' ? overlayFilterFields(l)
                         : respRange('backdrop_blur', 'Blur (px)', {min:0, max:100, to:50, tip:'Blurs what is under the button, like frosted glass; 0: none. Shows through a see-through fill: Border, Underline, or Filled with a see-through color.'}))] : null,
                     ['entrance', 'Entrance animation', 'migrate', entranceCard(l), !!l.use_enter],
+                    // A title's letters coming in one by one (2026-11-11).
+                    l.type === 'text' ? ['textanim', 'Text animation', 'editor-spellcheck', textAnimationCard(l), !!l.use_text_anim] : null,
                     ['loop', 'Loop animation', 'controls-repeat', animationCard(l), !!l.use_anim],
                     // As the page scrolls (an overlay, 2026-11-10: its travel and zoom too, for one smaller than the scene), with the
                     // mouse (not an overlay), coming in, running on.
@@ -1896,6 +1920,15 @@
         if (!sel) return;
         const o = current(), which = sel.dataset.animKind, value = sel.value;
         if (which === 'enter') { o.use_enter = value !== 'none'; if (value !== 'none') o.enter_type = value; }
+        else if (which === 'text') {
+            // Another kind: its own look (WPBN_Text_Animation::KINDS); the delay and when it starts are kept.
+            o.use_text_anim = value !== 'none';
+            const kind = TEXT_ANIM && TEXT_ANIM.types[value];
+            if (kind && o.text_anim_type !== value) {
+                o.text_anim_type = value;
+                ['duration', 'stagger', 'order', 'easing', 'blur', 'distance', 'scale'].forEach(k => { o['text_anim_' + k] = kind.def[k]; });
+            }
+        }
         else {
             o.use_anim = value !== 'none';
             if (value !== 'none' && o.anim_type !== value && ANIM && ANIM.types[value]) {
@@ -2227,6 +2260,16 @@
     function preview() {
         previewLayers = scene.layers.slice(); previewDevice = device();
         sync(); $('refresh').classList.remove('is-stale'); stopPlay(); $('frame').dataset.state='loading';
+        // The page shown stays until the new one comes (the server draws it, a second or so): its entrances back to their
+        // start now, so a title whose letters came in does not show whole, vanish and come in again (user's report and
+        // frames, 2026-11-11). Text and Entrance animations only: a Loop going back would jump.
+        try {
+            const doc = $('frame').contentDocument;
+            if (doc && doc.getAnimations) doc.getAnimations().forEach(a => {
+                const el = a.effect && a.effect.target;
+                if (el && el.closest && el.closest('.wpbn-ta-u, .wpbn-enter, .wpbn-shape-in, .wpbn-oenter')) { a.pause(); a.currentTime = 0; }
+            });
+        } catch (error) { /* No page in it yet. */ }
         const form = document.createElement('form');
         form.method='post'; form.action=boot.endpoint; form.target='wpbn_preview_frame'; form.hidden=true;
         Object.entries({action:'wpbn_preview',nonce:boot.nonce,post_id:boot.postId,scene:JSON.stringify(scene)}).forEach(([name,value]) => {
@@ -2258,25 +2301,27 @@
     // A screen size of one's own per device (the fields above the preview). Typed sizes apply with
     // Update, as the other preview changes; empty fields: the device's usual size and drawing.
     // A size of one's own is shown in a plain frame: the device drawings have fixed proportions.
-    // For this visit only (user's request, 2026-11-10): the editor always opens with the usual screens (until then they were
-    // kept in the browser, wpbn-preview-sizes, removed here once).
+    // Kept per scene in this browser (user's request, 2026-11-11: the usual screens only for a new scene; until then they were
+    // for one visit (2026-11-10), and before that one set for every scene, wpbn-preview-sizes, removed here once). A new
+    // scene has a post ID of its own, so it opens on the usual screens; emptying the fields forgets them.
     // TODO: once the plugin is done, offer screen presets, each with a drawing of its own.
     const SCREENS = {desktop:[1280,721], tablet:[820,1101], mobile:[390,844]};
     const SIZE_LIMITS = {w:[240,3840], h:[240,2160]};
     const draftSizes = {}, sizes = {};
+    const SIZES_KEY = 'wpbn-preview-sizes-' + boot.postId;
     try { localStorage.removeItem('wpbn-preview-sizes'); } catch (error) { /* No storage: nothing kept. */ }
-    // Kept across a save (user's request, 2026-11-11): Update / Publish reloads the page, and the sizes typed go with it,
-    // once (this tab, this scene, sent at most KEEP_FOR ago), so opening the editor anew still shows the usual screens.
-    const KEEP_KEY = 'wpbn-preview-sizes-' + boot.postId, KEEP_FOR = 10 * 60 * 1000;
     try {
-        const kept = JSON.parse(sessionStorage.getItem(KEEP_KEY) || 'null');
-        sessionStorage.removeItem(KEEP_KEY);
+        const kept = JSON.parse(localStorage.getItem(SIZES_KEY) || 'null');
         const ok = (v, [min, max]) => v === null || (Number.isInteger(v) && v >= min && v <= max);
-        if (kept && typeof kept.at === 'number' && Date.now() - kept.at < KEEP_FOR && kept.sizes && typeof kept.sizes === 'object') Object.keys(SCREENS).forEach(d => {
-            const s = kept.sizes[d];
+        if (kept && typeof kept === 'object') Object.keys(SCREENS).forEach(d => {
+            const s = kept[d];
             if (Array.isArray(s) && s.length === 2 && ok(s[0], SIZE_LIMITS.w) && ok(s[1], SIZE_LIMITS.h) && (s[0] !== null || s[1] !== null)) { draftSizes[d] = [s[0], s[1]]; sizes[d] = [s[0], s[1]]; }
         });
     } catch (error) { /* No storage, or not ours: the usual screens. */ }
+    // What is typed, kept at once (Update not needed for it to be remembered).
+    function keepSizes() {
+        try { if (Object.keys(draftSizes).length) localStorage.setItem(SIZES_KEY, JSON.stringify(draftSizes)); else localStorage.removeItem(SIZES_KEY); } catch (error) { /* No storage: not kept. */ }
+    }
     // Which device's values a width shows (frontend.js's breakpoints).
     const valuesFor = w => w <= 767 ? 'mobile' : w <= 1024 ? 'tablet' : 'desktop';
     // What was typed is kept as typed ([width or null, height or null]); an empty one is the device's usual value.
@@ -2295,6 +2340,7 @@
         const turn = sideways(d), wide = turn ? $('res-h') : $('res-w'), tall = turn ? $('res-w') : $('res-h');
         const w = read(wide, SIZE_LIMITS.w), h = read(tall, SIZE_LIMITS.h);
         if (w === null && h === null) delete draftSizes[d]; else draftSizes[d] = [w, h];
+        keepSizes();
         $('refresh').classList.add('is-stale');
     }
     ['res-w', 'res-h'].forEach(id => { $(id).addEventListener('input', sizeInput); $(id).addEventListener('change', () => { sizeInput(); sizeFields(); }); });
@@ -2417,11 +2463,6 @@
     let savedState='', sending=false;
     const unsaved=()=>!sending && savedState!=='' && pageState()!==savedState;
     document.getElementById('post').addEventListener('submit',e=>{if(!e.defaultPrevented)sending=true;});
-    // The preview's own sizes into the page the save opens (KEEP_KEY above); none: nothing kept.
-    document.getElementById('post').addEventListener('submit',e=>{
-        if(e.defaultPrevented)return;
-        try{if(Object.keys(draftSizes).length)sessionStorage.setItem(KEEP_KEY,JSON.stringify({at:Date.now(),sizes:draftSizes}));else sessionStorage.removeItem(KEEP_KEY);}catch(error){/* No storage: the usual screens. */}
-    });
     addEventListener('beforeunload',e=>{if(unsaved()){e.preventDefault();e.returnValue='';}});
     // Position. An image layer: the point of the photo kept in view where its box crops it
     // (object-position), the whole photo shown, as WP Swiper's Image position; one for every

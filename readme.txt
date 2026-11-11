@@ -19,6 +19,7 @@ WP Banner adds a "WP Banner" menu (for administrators only) where you build scen
 * Scroll animation, each behind a switch: horizontal and vertical travel, zoom, and the opacity a layer ends at. Image edges never show while the layers move.
 * Animation, for each layer: motion of its own that runs by itself, as well as the scroll motion, from the moment the page loads or once the banner is in view: zoom (with its direction), fade, or a slide sideways or up and down; start and end and duration per device, a delay, back and forth / from the start / once, and its easing. Paused while the banner is off the screen.
 * Entrance animation, for each layer: how it comes in, once — fading in, sliding in from a side or zooming into place — as the page loads or once the banner is in view; its duration, delay and easing. The Animation above (now Loop animation) is for motion that runs on.
+* Text animation, for titles: the letters (or words) come in one after another, once — fading in, scattered from random heights, unfolding from their middle line, popping in or dropping from above, blurred if you like — in an order of your choice (left to right, right to left, from the middle, from both ends, random), with their duration, the interval between them, a delay and easing. Works with the title's Gradient and accent words; screen readers read the title whole.
 * Follow the mouse, for each layer: on computers it moves a little with the pointer; front layers moving more than back ones add depth.
 * Per device (desktop, tablet, mobile): position, scale, opacity, motion, image fit, the image itself and the text size; tablet and mobile follow the larger screen until given their own. Each slider resets to its default.
 * Scene attributes: an Element ID and extra CSS classes on the banner's block.
@@ -60,6 +61,7 @@ Deleting the plugin under Plugins removes its scenes and settings; the images st
 * Shape layers: an SVG's objects as windows onto a photo layer, an image, a colour or gradient, or frosted glass; a border along their outline, rounded corners for rectangles, a shadow, invert, opacity and filters; entrance, loop and scroll animation for each object and for the whole Shape; the drawing fitted per device (cover, contain, stretch, or a size and place of your own), its empty space trimmed if wanted.
 * A new editor, as WP Swiper's: the layers as tiles across the top, a menu of each layer's blocks, the preview beside them.
 * Entrance animation for each layer: fade, slide, zoom, from the banner's edge, flips and a turn.
+* Text animation for titles: letters or words one after another (fade, scatter, unfold, pop, drop), in any order.
 * Layer names, rotation, padding, border and rounded corners; shadows for images, overlays, buttons and shortcodes.
 * Filters per device: black and white, blur, brightness, contrast and saturation, for images, Shape objects, overlays (of what is under them) and shortcodes.
 * Gradients for titles and buttons; icons for buttons (Font Awesome Free, or an image of your own); an eyedropper in the colour window where the browser has one.

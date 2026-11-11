@@ -152,8 +152,28 @@
         });
     }
 
+    /*
+     * A title with a Gradient and a Text animation (WPBN_Text_Animation): each piece paints the gradient itself (moving pieces
+     * lose the title's: Chrome squeezes it into each letter, Safari draws none), as large as the whole title and moved back by
+     * where the piece stands in it at rest (offsets: the animation's transforms do not change them).
+     */
+    function pieces(s) {
+        const at = function (el) { let x = 0, y = 0; for (; el; el = el.offsetParent) { x += el.offsetLeft; y += el.offsetTop; } return [x, y]; };
+        s.el.querySelectorAll('.wpbn-text-gradient.wpbn-ta').forEach(function (title) {
+            const W = title.offsetWidth, H = title.offsetHeight;
+            if (!W || !H) return;
+            const t = at(title);
+            title.querySelectorAll('.wpbn-ta-u').forEach(function (p) {
+                const a = at(p);
+                p.style.backgroundSize = W + 'px ' + H + 'px';
+                p.style.backgroundPosition = (t[0] - a[0]) + 'px ' + (t[1] - a[1]) + 'px';
+            });
+        });
+    }
+
     function bleed(s) {
         edges(s);
+        pieces(s);
         boxes(s);
         const W = s.el.clientWidth, H = s.el.clientHeight, d = device();
         const fills = [];

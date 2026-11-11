@@ -966,6 +966,28 @@ const server=http.createServer((req,res)=>{
         assert.ok(Math.abs(edge.x-edge.want)<1 && edge.x<0 && edge.name==='wpbn-enter-edge','From the left edge: it starts just outside the banner ('+JSON.stringify(edge)+')');
         await ed.selectOption('#wpbn-f-enter_type','none');
         assert.ok((await edTitle()).use_enter===false && (await edTitle()).enter_type==='edge-left','None: off, the type kept');
+        // Text animation (2026-11-11): a title's letters one after another. None to start with; a type sets its own look;
+        // Distance only for Scatter and Drop, Start size only for Pop; in the preview each letter a piece, in its order.
+        assert.ok(await ed.locator('#wpbn-f-text_anim_type').inputValue()==='none' && await ed.locator('#wpbn-f-text_anim_type').evaluate(el=>el.closest('.wpbn-block').id)==='wpbn-block-textanim','Text animation: its own block, None');
+        await ed.selectOption('#wpbn-f-text_anim_type','scatter');
+        let edTa=await edTitle();
+        assert.ok(edTa.use_text_anim===true && edTa.text_anim_order==='random' && edTa.text_anim_stagger===0.05 && edTa.text_anim_blur===10 && edTa.text_anim_distance===100 && edTa.text_anim_easing==='strong','Scatter: its own look ('+JSON.stringify(edTa)+')');
+        assert.ok(await ed.locator('#wpbn-f-text_anim_distance').count()===1 && await ed.locator('#wpbn-f-text_anim_scale').count()===0,'Scatter: a Distance, no Start size');
+        await ed.selectOption('#wpbn-f-text_anim_type','pop');
+        assert.ok((await edTitle()).text_anim_scale===30 && (await edTitle()).text_anim_order==='start' && await ed.locator('#wpbn-f-text_anim_distance').count()===0 && await ed.locator('#wpbn-f-text_anim_scale').inputValue()==='30','Pop: its Start size, no Distance');
+        await ed.fill('#wpbn-f-text_anim_stagger','0.2');await ed.selectOption('#wpbn-f-text_anim_start','load');
+        assert.ok((await edTitle()).text_anim_stagger===0.2 && await ed.locator('[data-block="textanim"] .wpbn-menu-item__dot').count()===1,'Its interval kept; a dot on its block');
+        await ed.click('#wpbn-refresh');await ed.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const taFrame=await ed.frameLocator('#wpbn-frame').locator('.wpbn-layer--text .wpbn-ta').evaluate(el=>{const p=[...el.querySelectorAll('.wpbn-ta-u')];return {cls:el.className,n:p.length,text:el.querySelector('.wpbn-sr').textContent,anim:getComputedStyle(p[1]).animationName,delays:p.slice(0,3).map(x=>getComputedStyle(x).animationDelay)};});
+        assert.ok(taFrame.cls==='wpbn-ta wpbn-ta--pop' && taFrame.n>3 && taFrame.text.length>0 && taFrame.anim==='wpbn-ta-pop' && JSON.stringify(taFrame.delays)===JSON.stringify(['0s','0.2s','0.4s']),'In the preview: each letter a piece, one interval after another ('+JSON.stringify(taFrame)+')');
+        // Update again once the letters are in (2026-11-11, user's frames: the title showed whole until the new page came,
+        // then vanished and came in again): the page shown hides them at once, back at their start.
+        await ed.waitForFunction(()=>[...document.getElementById('wpbn-frame').contentDocument.querySelectorAll('.wpbn-ta-u')].every(el=>getComputedStyle(el).opacity==='1'),null,{timeout:10000});
+        const rewound=await ed.evaluate(()=>{const doc=document.getElementById('wpbn-frame').contentDocument,first=doc.querySelector('.wpbn-ta-u');document.getElementById('wpbn-refresh').click();return getComputedStyle(first).opacity;});
+        assert.equal(rewound,'0','Update: the letters shown go back to their start at once');
+        await ed.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        await ed.selectOption('#wpbn-f-text_anim_type','none');
+        assert.ok((await edTitle()).use_text_anim===false && (await edTitle()).text_anim_type==='pop' && await ed.locator('[data-block="textanim"] .wpbn-menu-item__dot').count()===0,'None: off, the type kept');
         // Follow the mouse: no switch (2026-11-09), its Distance 0 to start with.
         assert.ok(await ed.locator('#wpbn-f-use_mouse').count()===0 && (await edTitle()).use_mouse===true && await ed.locator('#wpbn-f-mouse').inputValue()==='0','Follow the mouse: no switch, 0px');
         await ed.fill('#wpbn-f-mouse','20');
@@ -1017,7 +1039,7 @@ const server=http.createServer((req,res)=>{
         await tp.click('#wpbn-scene-settings');
         assert.deepEqual(await menuState(),['Size*','Placement','Attributes'],'The scene\'s blocks');
         await tp.click('#wpbn-add-toggle');await tp.click('.wpbn-modal--add [data-add="text"]');
-        assert.deepEqual(await menuState(),['Content*','Title style','Size','Effect','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'A new title opens on Content');
+        assert.deepEqual(await menuState(),['Content*','Title style','Size','Effect','Entrance animation','Text animation','Loop animation','Scroll animation','Follow the mouse'],'A new title opens on Content');
         await tp.click('[data-block="scroll"]');
         await tp.click('[data-select="0"]');
         assert.equal((await menuState())[6],'Scroll animation*','The block kept from layer to layer');
@@ -1165,24 +1187,27 @@ const server=http.createServer((req,res)=>{
         const top0=await coverAt(0), top100=await coverAt(100);
         assert.ok(top0.height>top0.H+10 && Math.abs(top0.top)<1 && Math.abs(top100.top-(top100.H-top100.height))<1 && (await shData()).layers[1].y===100,'Cover: Y 0% its top edge at the scene\'s, 100% its bottom ('+JSON.stringify([top0,top100])+')');
         await sh.close();
-        // The preview's own size across a save (2026-11-11): the form sent, the page it opens has it; once only, so a
-        // reload (or opening the editor anew) shows the usual screen again. In a tab of its own (sessionStorage is the tab's).
+        // The preview's own size kept per scene in the browser (2026-11-11): typed, it is there after any reload or a save;
+        // another scene (a new one: a post ID of its own) opens on the usual screens; emptied fields forget it.
         const ks=await browser.newPage({viewport:{width:1600,height:1000}});
         ks.on('pageerror',e=>errors.push(e.message));
         const ksReady=async()=>{await ks.waitForFunction(()=>document.querySelector('#wpbn-frame') && document.querySelector('#wpbn-frame').dataset.state==='done');};
         const ksWidth=()=>ks.locator('#wpbn-frame').evaluate(f=>f.contentWindow.innerWidth);
         await ks.goto('http://127.0.0.1:'+server.address().port);await ksReady();
+        assert.equal(await ks.locator('#wpbn-res-w').inputValue(),'','A scene opened for the first time: the usual screen');
         await ks.fill('#wpbn-res-w','1000');await ks.fill('#wpbn-res-h','700');
-        await ks.evaluate(()=>document.getElementById('post').dispatchEvent(new Event('submit',{cancelable:true})));
         await ks.reload();await ksReady();
-        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ks.locator('#wpbn-res-h').inputValue(),await ksWidth()],['1000','700',1000],'Saved: the preview keeps its own size');
+        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ks.locator('#wpbn-res-h').inputValue(),await ksWidth()],['1000','700',1000],'Reloaded: the preview keeps its own size');
         await ks.reload();await ksReady();
-        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ksWidth()],['',1280],'Opened again without a save: the usual screen');
-        // A save that is not sent (too large: the submit prevented) keeps nothing.
-        await ks.fill('#wpbn-res-w','900');
-        await ks.evaluate(()=>{const f=document.getElementById('post');f.addEventListener('submit',e=>e.preventDefault(),{once:true,capture:true});f.dispatchEvent(new Event('submit',{cancelable:true}));});
+        assert.equal(await ksWidth(),1000,'And again');
+        assert.deepEqual(await ks.evaluate(()=>Object.keys(localStorage).filter(k=>/^wpbn-preview-sizes/.test(k))),['wpbn-preview-sizes-7'],'Kept for this scene only');
+        // Another scene (here: the stored size moved to another post ID, as a new scene would have none).
+        await ks.evaluate(()=>{localStorage.setItem('wpbn-preview-sizes-8',localStorage.getItem('wpbn-preview-sizes-7'));localStorage.removeItem('wpbn-preview-sizes-7');});
         await ks.reload();await ksReady();
-        assert.equal(await ks.locator('#wpbn-res-w').inputValue(),'','A save not sent: the usual screen');
+        assert.deepEqual([await ks.locator('#wpbn-res-w').inputValue(),await ksWidth()],['',1280],'Another scene\'s size not taken: the usual screen');
+        await ks.fill('#wpbn-res-w','900');await ks.fill('#wpbn-res-w','');
+        await ks.reload();await ksReady();
+        assert.equal(await ks.evaluate(()=>localStorage.getItem('wpbn-preview-sizes-7')),null,'Emptied: forgotten');
         await ks.close();
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');

@@ -28,6 +28,7 @@ require_once WPBN_DIR . 'includes/class-wpbn-settings.php';
 require_once WPBN_DIR . 'includes/class-wpbn-gradient.php';
 require_once WPBN_DIR . 'includes/class-wpbn-animation.php';
 require_once WPBN_DIR . 'includes/class-wpbn-entrance.php';
+require_once WPBN_DIR . 'includes/class-wpbn-text-animation.php';
 require_once WPBN_DIR . 'includes/class-wpbn-render.php';
 require_once WPBN_DIR . 'includes/class-wpbn-palette.php';
 require_once WPBN_DIR . 'includes/class-wpbn-fonts.php';

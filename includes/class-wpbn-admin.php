@@ -76,6 +76,8 @@ class WPBN_Admin {
         $boot['animations'] = WPBN_Animation::editor();
         // The Entrance animation's kinds (WPBN_Entrance; admin.js entranceCard()).
         $boot['entrance'] = WPBN_Entrance::editor();
+        // A title's Text animation (WPBN_Text_Animation; admin.js textAnimationCard()).
+        $boot['textAnim'] = WPBN_Text_Animation::editor();
         // A Shape object's kinds (WPBN_Shape::ENTER).
         $boot['entrance']['objectTypes'] = WPBN_Shape::enter_names();
         // Shape layers' SVGs (WPBN_Shape::editor()) and the nonce to upload one.

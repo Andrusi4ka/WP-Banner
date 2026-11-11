@@ -244,6 +244,32 @@
 @keyframes wpbn-enter-flip-y-right{from{opacity:0;transform:perspective(1000px) translateX(100px) rotateY(90deg) scale(.6)}}
 .wpbn-scene .wpbn-enter--rotate-z{animation-name:wpbn-enter-rotate-z}
 @keyframes wpbn-enter-rotate-z{from{opacity:0;transform:rotate(-20deg) scale(.8)}}
+/* A title's Text animation (WPBN_Text_Animation): its words do not break (.wpbn-ta-w), each piece (a letter, or a word)
+   comes in by its place in the order (--o) times the interval, after the delay; Scatter from a height of its own (--r).
+   The title reads whole to screen readers (.wpbn-sr); the pieces are hidden from them.
+   Moves and sizes in perspective (2026-11-11, user's report of a slight flicker: Chrome moved a flat translateY by whole pixels,
+   measured 0 0 1 0 0 1 px per 10 ms; in perspective 0.2-0.4 px each time), as the Shape; Pop's size only in Firefox in
+   perspective (s as translateZ(P - P / s), as the layers' slow zoom there). The end kept as the last keyframe (fill both). */
+.wpbn-scene .wpbn-sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.wpbn-scene .wpbn-ta-w{display:inline-block;white-space:nowrap}
+.wpbn-scene .wpbn-ta-u{display:inline-block;animation-duration:var(--wpbn-tad,1s);animation-timing-function:var(--wpbn-tae,ease-out);animation-delay:calc(var(--wpbn-tal,0s) + var(--o,0) * var(--wpbn-tas,.1s));animation-iteration-count:1;animation-fill-mode:both}
+.wpbn-scene .wpbn-ta--fade .wpbn-ta-u{animation-name:wpbn-ta-fade}
+@keyframes wpbn-ta-fade{from{opacity:0;filter:blur(var(--wpbn-tab,0px))}}
+.wpbn-scene .wpbn-ta--scatter .wpbn-ta-u{animation-name:wpbn-ta-scatter}
+@keyframes wpbn-ta-scatter{from{opacity:0;transform:perspective(1000px) translate3d(0,calc(var(--r,0) * var(--wpbn-tay,100px)),0);filter:blur(var(--wpbn-tab,0px))}to{opacity:1;transform:perspective(1000px) translate3d(0,0,0);filter:blur(0px)}}
+.wpbn-scene .wpbn-ta--unfold .wpbn-ta-u{animation-name:wpbn-ta-unfold}
+@keyframes wpbn-ta-unfold{from{opacity:0;clip-path:inset(50% 0 50% 0);filter:blur(var(--wpbn-tab,0px))}to{clip-path:inset(0 0 0 0)}}
+.wpbn-scene .wpbn-ta--pop .wpbn-ta-u{animation-name:wpbn-ta-pop}
+@keyframes wpbn-ta-pop{from{opacity:0;transform:scale(var(--wpbn-taz,.3));filter:blur(var(--wpbn-tab,0px))}to{opacity:1;transform:scale(1);filter:blur(0px)}}
+/* Pop in Firefox: in perspective (its flat scale stepped, ~0.8 px now and then); Chrome draws both alike, WebKit's flat one is the smooth one. */
+@supports (-moz-appearance:none){@keyframes wpbn-ta-pop{from{opacity:0;transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-taz,.3)));filter:blur(var(--wpbn-tab,0px))}to{opacity:1;transform:perspective(1000px) translateZ(0);filter:blur(0px)}}}
+.wpbn-scene .wpbn-ta--drop .wpbn-ta-u{animation-name:wpbn-ta-drop}
+@keyframes wpbn-ta-drop{from{opacity:0;transform:perspective(1000px) translate3d(0,calc(-1 * var(--wpbn-tay,70px)),0);filter:blur(var(--wpbn-tab,0px))}to{opacity:1;transform:perspective(1000px) translate3d(0,0,0);filter:blur(0px)}}
+.wpbn-scene:not(.wpbn-scene--seen) .wpbn-ta--visible .wpbn-ta-u{animation-play-state:paused}
+/* With the title's Gradient: on each piece (frontend.js pieces() sizes and places it), not on the title; accent words keep their colour. */
+.wpbn-scene .wpbn-layer--text .wpbn-text-gradient.wpbn-ta{background-image:none!important}
+.wpbn-scene .wpbn-text-gradient.wpbn-ta .wpbn-ta-u{background-image:var(--wpbn-tg);background-repeat:no-repeat;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.wpbn-scene .wpbn-text-gradient.wpbn-ta u .wpbn-ta-u{background-image:none;-webkit-text-fill-color:currentColor}
 .wpbn-scene:not(.wpbn-scene--seen) .wpbn-enter--visible,.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}
 .wpbn-scene .wpbn-layer--text u{color:var(--wpbn-accent,var(--wd-primary-color,var(--wp--preset--color--primary,currentColor)));text-decoration:none}
 /* A title's Gradient: its letters filled with it (its colour where a browser cannot), the accent words in their own colour. */
@@ -286,7 +312,7 @@
 .wpbn-scene .wpbn-layer--text{width:var(--wpbn-tw-m,var(--wpbn-tw-t,var(--wpbn-tw,max-content)));max-width:var(--wpbn-width-m,var(--wpbn-width));font-size:var(--wpbn-mobile-font);letter-spacing:var(--wpbn-mobile-ls,var(--wpbn-tablet-ls,var(--wpbn-ls,normal)))}
 .wpbn-scene .wpbn-layer--button{width:max-content;max-width:var(--wpbn-width-m,var(--wpbn-width-t,var(--wpbn-width)))}
 }
-@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter,.wpbn-scene .wpbn-shape-in,.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter *,.wpbn-scene .wpbn-shape-loop *{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-shape-all,.wpbn-scene .wpbn-shape-loop{--wpbn-slx:0px!important;--wpbn-sly:0px!important;--wpbn-slz:1!important;--wpbn-sla:1!important;--wpbn-lox:0px!important;--wpbn-loy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
+@media(prefers-reduced-motion:reduce){.wpbn-scene .wpbn-ta-u{animation:none}.wpbn-scene .wpbn-layer{--wpbn-dx:0px!important;--wpbn-dy:0px!important;--wpbn-mx:0px!important;--wpbn-my:0px!important;--wpbn-z:1!important;--wpbn-f:0!important}.wpbn-scene.wpbn-scene--fill{animation:none}.wpbn-scene .wpbn-anim{animation:none}.wpbn-scene .wpbn-enter,.wpbn-scene .wpbn-shape-in,.wpbn-scene .wpbn-oenter,.wpbn-scene .wpbn-oenter *,.wpbn-scene .wpbn-shape-loop *{animation:none}.wpbn-scene .wpbn-shape-item{--wpbn-ox:0px!important;--wpbn-oy:0px!important}.wpbn-scene .wpbn-shape-all,.wpbn-scene .wpbn-shape-loop{--wpbn-slx:0px!important;--wpbn-sly:0px!important;--wpbn-slz:1!important;--wpbn-sla:1!important;--wpbn-lox:0px!important;--wpbn-loy:0px!important}.wpbn-scene .wpbn-button{transition:none}}
 /* A layer's Border (2026-11-09; WPBN_Render): its width per side and device, its line and colour; on what shows of it (an image's
    picture, an overlay's box, the others' own box), so it comes in and moves with it. */
 .wpbn-scene .wpbn-layer--border:not(.wpbn-layer--image):not(.wpbn-layer--overlay),.wpbn-scene .wpbn-layer--border.wpbn-layer--image img,.wpbn-scene .wpbn-layer--border .wpbn-overlay{box-sizing:border-box;border-style:var(--wpbn-brs,solid);border-color:var(--wpbn-brc,#fff);border-width:var(--wpbn-brw)}
