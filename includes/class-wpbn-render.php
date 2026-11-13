@@ -161,19 +161,32 @@ class WPBN_Render {
         $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
         // first: the page's first scene (its images load at once); loaded: an image drawn already (only the first gets
         // fetchpriority); links: the Google fonts' <link>s the layers need.
-        $state = array('first'=>$first, 'loaded'=>false, 'links'=>'');
+        // anchors: the uids of the layers drawn that others drawn are attached to (data-uid on them; frontend.js attach()).
+        $state = array('first'=>$first, 'loaded'=>false, 'links'=>'', 'anchors'=>self::anchors($s['layers']));
         foreach ($s['layers'] as $i=>$l) {
-            // Hidden, or a button without text and without an Icon (as WP Top Info Bar's): not drawn.
-            // Hidden on every device one by one (Show on): not drawn either.
-            if ($l['hidden'] || (!empty($l['hide_desktop']) && !empty($l['hide_tablet']) && !empty($l['hide_mobile'])) || ($l['type'] === 'button' && trim($l['button_text']) === '' && self::button_icon($l) === '')) { continue; }
-            // A Shortcode layer: none set, or inside another one's banner: not drawn.
-            if ($l['type'] === 'shortcode' && ($l['shortcode'] === '' || self::$in_shortcode)) { continue; }
-            // A Shape layer without an SVG: nothing to show.
-            if ($l['type'] === 'shape' && !$l['shape']) { continue; }
-            $html .= self::layer($s, $l, $i, $context, $state);
+            if (self::drawn($l)) { $html .= self::layer($s, $l, $i, $context, $state); }
         }
         $html = $state['links'].$html.'</section>';
         return empty($context['host']) ? $html : $html.'<script>'.self::HOST_SCRIPT.'</script>';
+    }
+    // Whether a layer is drawn at all.
+    private static function drawn($l) {
+        // Hidden, or a button without text and without an Icon (as WP Top Info Bar's): not drawn.
+        // Hidden on every device one by one (Show on): not drawn either.
+        if ($l['hidden'] || (!empty($l['hide_desktop']) && !empty($l['hide_tablet']) && !empty($l['hide_mobile'])) || ($l['type'] === 'button' && trim($l['button_text']) === '' && self::button_icon($l) === '')) { return false; }
+        // A Shortcode layer: none set, or inside another one's banner: not drawn.
+        if ($l['type'] === 'shortcode' && ($l['shortcode'] === '' || self::$in_shortcode)) { return false; }
+        // A Shape layer without an SVG: nothing to show.
+        return !($l['type'] === 'shape' && !$l['shape']);
+    }
+    // The uids (as keys) of the drawn layers that drawn layers are attached to (WPBN_Settings::attachments()). One attached
+    // to a layer not drawn (hidden…) stands at its own Position.
+    private static function anchors($layers) {
+        $drawn = array();
+        foreach ($layers as $l) { if ($l['uid'] !== '' && self::drawn($l)) { $drawn[$l['uid']] = true; } }
+        $used = array();
+        foreach ($layers as $l) { if (($l['anchor'] ?? '') !== '' && isset($drawn[$l['anchor']]) && self::drawn($l)) { $used[$l['anchor']] = true; } }
+        return $used;
     }
     // What an icon alone says: the image's alt text (or its title), or the icon's name (solid/arrow-right: arrow right).
     private static function icon_label($l) {
@@ -227,9 +240,18 @@ class WPBN_Render {
         // (frontend.css ax, ay): within its container.
         // An image filling the scene on some devices: there its centre, as before.
         $fills = WPBN_Settings::fills_on($l);
+        // Attached to a layer drawn here (2026-11-13): on the devices it has a place for, its own point is the one put at that layer's
+        // (frontend.js attach() places it there; until then, and without scripts, it stands at its Position).
+        $attached = WPBN_Settings::attachable($l) && ($l['anchor'] ?? '') !== '' && isset($state['anchors'][$l['anchor']]) && empty($l['copy']);
+        $places = array();
+        foreach (WPBN_Settings::ANCHOR_KEYS as $device=>$key) { $places[$device] = $attached && !$fills[$device] ? ($l[$key] ?? null) : null; }
+        $attached = $attached && array_filter($places);
         if (WPBN_Settings::anchored($l)) {
-            foreach (array('x'=>'anx', 'y'=>'any') as $key=>$var) {
-                foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) { $css .= '--wpbn-'.$var.self::SUFFIX[$device].':'.($fills[$device] ? .5 : max(0, min(1, $value / 100))).';'; }
+            foreach (array('x'=>array('anx', 2), 'y'=>array('any', 3)) as $key=>$var) {
+                foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) {
+                    $point = $places[$device] ? $places[$device][$var[1]] / 100 : ($fills[$device] ? .5 : max(0, min(1, $value / 100)));
+                    $css .= '--wpbn-'.$var[0].self::SUFFIX[$device].':'.$point.';';
+                }
             }
         }
         // The motion per device [desktop, tablet, mobile], and the box frontend.js needs to keep the edges hidden.
@@ -248,6 +270,10 @@ class WPBN_Render {
         $motion['mouse'] = !empty($l['use_mouse']) && $l['type'] !== 'overlay' ? (float) $l['mouse'] : 0;
         // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
         $motion['slack'] = WPBN_Entrance::slack($l, WPBN_Animation::slack($l));
+        // Attached: the layer it is placed by (its data-uid) and, per device, that layer's point (0–1) and the offset (px); null: its Position.
+        if ($attached) {
+            $motion['anchor'] = array('to'=>$l['anchor'], 'at'=>array_values(array_map(function ($p) { return $p ? array($p[0] / 100, $p[1] / 100, $p[4], $p[5], $p[6] ?? 0, $p[7] ?? 0) : null; }, $places)));
+        }
         $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
         // Show on (2026-11-13): hidden on those devices (frontend.css); a copy seen through a Shape object's window is the object's.
         if (empty($l['copy'])) {
@@ -457,6 +483,8 @@ class WPBN_Render {
         }
         // The editor's preview: its place in the scene's list (admin.js Move finds the chosen layer by it).
         $index = !empty($context['indexes']) && empty($l['copy']) ? ' data-layer="'.(int) $i.'"' : '';
+        // A layer others are attached to: its uid, for frontend.js to find it (not on a copy inside a Shape object: that one is not it).
+        if (empty($l['copy']) && $l['uid'] !== '' && isset($state['anchors'][$l['uid']])) { $index .= ' data-uid="'.esc_attr($l['uid']).'"'; }
         return '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'"'.$index.'>'.$inner.'</div>';
     }
 }

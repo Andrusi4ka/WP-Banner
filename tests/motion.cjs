@@ -1326,6 +1326,57 @@ const server=http.createServer((req,res)=>{
         await ks.reload();await ksReady();
         assert.equal(await ks.evaluate(()=>localStorage.getItem('wpbn-preview-sizes-7')),null,'Emptied: forgotten');
         await ks.close();
+        // Attached to another layer (2026-11-13): a button under a title, attached where it stands; it keeps its distance as the
+        // title grows; dragged in the preview (Move), its distance changes.
+        const at=await browser.newPage({viewport:{width:1600,height:1000}});at.on('pageerror',e=>errors.push(e.message));
+        await at.goto('http://127.0.0.1:'+server.address().port);
+        const atData=async()=>JSON.parse(await at.locator('#wpbn-data').inputValue());
+        const atUpdate=async()=>{await at.click('#wpbn-refresh');await at.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');};
+        const atFrame=()=>at.frames().find(f=>f.name()==='wpbn_preview_frame');
+        const atPlace=async(i,y)=>{await at.click('[data-select="'+i+'"]');await at.click(POS);await at.fill('#wpbn-pos-y',String(y));await at.press('#wpbn-pos-y','Enter');};
+        for (const type of ['text','button']) { await at.click('#wpbn-add-toggle');await at.click('.wpbn-modal--add [data-add="'+type+'"]'); }
+        await atPlace(0,30);await atPlace(1,70);
+        await at.click('[data-select="1"]');
+        const titleUid=(await atData()).layers[0].uid;
+        assert.ok(await at.locator('#wpbn-f-anchor option[value="'+titleUid+'"]').count()===1 && await at.locator('#wpbn-f-anchor').inputValue()==='','Attached to: the other layers, None to start with');
+        await atUpdate();
+        const atBoxes=()=>atFrame().evaluate(()=>{const r=e=>e.getBoundingClientRect();const t=document.querySelector('.wpbn-layer--text'),b=document.querySelector('.wpbn-layer--button');return {t:[r(t).top,r(t).bottom],b:[r(b).left,r(b).top]};});
+        const atBefore=await atBoxes();
+        await at.selectOption('#wpbn-f-anchor',titleUid);
+        await at.waitForFunction(()=>JSON.parse(document.getElementById('wpbn-data').value).layers[1].anchor!=='',null,{timeout:20000});
+        const atBtn=(await atData()).layers[1];
+        assert.ok(atBtn.anchor===titleUid && ['anchor_desktop','anchor_tablet','anchor_mobile'].every(k=>Array.isArray(atBtn[k]) && atBtn[k][0]===50 && atBtn[k][1]===100 && atBtn[k][2]===50 && atBtn[k][3]===0 && atBtn[k][5]>0),'Attached: under the title on every device, its top to the title\'s bottom, centred ('+JSON.stringify([atBtn.anchor_desktop,atBtn.anchor_tablet,atBtn.anchor_mobile])+')');
+        assert.match(await at.locator('#wpbn-attach-note').textContent(),/follows/,'It says what it follows');
+        await atUpdate();
+        const atAttached=await atBoxes();
+        assert.ok(Math.abs(atAttached.b[0]-atBefore.b[0])<1.5 && Math.abs(atAttached.b[1]-atBefore.b[1])<1.5,'It stays where it stood ('+JSON.stringify([atBefore.b,atAttached.b])+')');
+        // The title on two lines: the button goes down with its bottom.
+        await at.click('[data-select="0"]');await at.fill('[data-key="text"]','YOUR\nTITLE');
+        await atUpdate();
+        const atTaller=await atBoxes();
+        assert.ok(atTaller.t[1]-atTaller.t[0]>(atAttached.t[1]-atAttached.t[0])*1.5 && Math.abs((atTaller.b[1]-atTaller.t[1])-(atAttached.b[1]-atAttached.t[1]))<1.5,'The title wraps: the button keeps its distance to its bottom');
+        // The title travels as the page scrolls: the button goes with it.
+        await at.click('[data-select="0"]');await at.fill('[data-key="move_y"]','-100');
+        await atUpdate();
+        const atRest=await atBoxes();
+        await atFrame().waitForFunction(()=>typeof window.wpbnPreviewProgress==='function');
+        await at.locator('#wpbn-progress').evaluate(el=>{el.value=100;el.dispatchEvent(new Event('input',{bubbles:true}));});
+        const atScrolled=await atBoxes();
+        assert.ok(atScrolled.t[0]<atRest.t[0]-50 && Math.abs((atScrolled.b[1]-atRest.b[1])-(atScrolled.t[0]-atRest.t[0]))<1.5,'The title travels: the button with it ('+JSON.stringify([atRest,atScrolled])+')');
+        await at.locator('#wpbn-progress').evaluate(el=>{el.value=0;el.dispatchEvent(new Event('input',{bubbles:true}));});
+        // Its tile's Position: Move in the preview; dragged, its distance there.
+        await at.click('[data-select="1"]');
+        assert.match(await posTip(at),/^Attached to /,'Its Position: says it moves in the preview');
+        await at.click(POS);
+        assert.equal(await at.locator('#wpbn-move').getAttribute('aria-pressed'),'true','Its Position turns Move on');
+        await atFrame().locator('#wpbn-move').waitFor();
+        const atVb=await atFrame().locator('#wpbn-move').boundingBox();
+        await at.mouse.move(atVb.x+atVb.width/2,atVb.y+atVb.height/2);await at.mouse.down();await at.mouse.move(atVb.x+atVb.width/2,atVb.y+atVb.height/2+30,{steps:4});await at.mouse.up();
+        const atMoved=(await atData()).layers[1];
+        assert.ok(atMoved.anchor_desktop[5]>atBtn.anchor_desktop[5]+5 && atMoved.anchor_tablet[5]===atBtn.anchor_tablet[5],'Dragged down: its distance on Desktop only');
+        await at.selectOption('#wpbn-f-anchor','');
+        assert.ok((await atData()).layers[1].anchor==='' && (await atData()).layers[1].anchor_desktop===null,'None: placed by its own Position again');
+        await at.close();
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');
     } finally {if(browser)await browser.close();server.close();}

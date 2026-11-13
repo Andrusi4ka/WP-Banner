@@ -385,6 +385,24 @@ check(strpos($autoHtml,'--wpbn-width:max-content;--wpbn-width-t:max-content;--wp
 check(WPBN_Settings::object_sizes($lay(array('type'=>'image','fill_scene'=>false,'overlay_width_unit'=>'auto','height_unit'=>'auto')))['desktop'][1]===array(100,'%'),'Both Auto: the scene\'s height');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($objL)))),'--wpbn-iw')===false,'No Width Auto: as before');
 check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw,none)}'."\n".'.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw,100%);max-width:100%}')!==false,'Its image\'s width on the site, never wider than its container');
+// Attached to another layer (2026-11-13): its place per device chosen by the editor, kept to another layer of the scene, no circles.
+$tA=array('type'=>'text','text'=>'Title','uid'=>'ttl1');
+$bA=array('type'=>'button','button_text'=>'Go','uid'=>'btn1','anchor'=>'ttl1','anchor_desktop'=>array(50,100,50,0,0,24),'anchor_tablet'=>array(7,100,50,0,'x',2),'anchor_mobile'=>array(0,100,0,0,10,9000));
+$att=WPBN_Settings::sanitize(array('layers'=>array($tA,$bA)));
+$bS=$att['layers'][1];
+check($bS['anchor']==='ttl1' && $bS['anchor_desktop']===array(50,100,50,0,0.0,24.0,0,0) && $bS['anchor_tablet']===null && $bS['anchor_mobile']===array(0,100,0,0,10.0,3000.0,0,0),'Attached: its place per device (edges 0 / 50 / 100, the offset within ±3000px; six numbers, as first saved: px; a broken one: none)');
+check(WPBN_Settings::anchor_place(array(0,0,50,50,41.333,87.5,1,'1'))===array(0,0,50,50,41.33,87.5,1,1) && WPBN_Settings::anchor_place(array(0,0,50,50,1,2,5,0))===array(0,0,50,50,1.0,2.0,0,0),'On a picture: its spot as shares of it, per axis');
+check(WPBN_Settings::sanitize(array('layers'=>array($bA)))['layers'][0]['anchor']==='','Attached to a layer not in the scene: not');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','uid'=>'shp1'),array_merge($bA,array('anchor'=>'shp1')))))['layers'][1]['anchor']==='','Not to a Shape');
+$circle=WPBN_Settings::sanitize(array('layers'=>array(array_merge($tA,array('anchor'=>'btn1')),$bA)))['layers'];
+check(($circle[0]['anchor']==='') !== ($circle[1]['anchor']===''),'A circle broken: one of them placed by its own Position again');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'image','uid'=>'img1','fill_scene'=>true,'anchor'=>'ttl1'),$tA)))['layers'][0]['anchor']==='','A photo filling the scene on every device: not attachable');
+$attHtml=WPBN_Render::markup($att);
+check(strpos($attHtml,'data-uid="ttl1"')!==false && substr_count($attHtml,'data-uid=')===1,'The layer it is attached to carries its uid');
+check(strpos($attHtml,'&quot;anchor&quot;:{&quot;to&quot;:&quot;ttl1&quot;,&quot;at&quot;:[[0.5,1,0,24,0,0],null,[0,1,10,3000,0,0]]}')!==false,'Its place per device for frontend.js (none on tablet: its Position there)');
+check(strpos($attHtml,'--wpbn-anx:0.5;--wpbn-anx-t:0.5;--wpbn-anx-m:0;')!==false && strpos($attHtml,'--wpbn-any:0;--wpbn-any-t:0.5;--wpbn-any-m:0;')!==false,'Its own point per device (tablet: from its Position)');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($tA,array('hidden'=>true)),$bA)))),'anchor')===false,'Its layer hidden: at its own Position');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'var(--wpbn-mx,0px) + var(--wpbn-gx,0px)')!==false,'It takes its layer\'s motion on the site');
 // Show on (2026-11-13): a layer hidden on some devices only.
 check($img['hide_desktop']===false && $img['hide_tablet']===false && $img['hide_mobile']===false,'Show on: every device by default');
 $hideM=$lay(array('type'=>'text','text'=>'Hi','hide_mobile'=>1,'hide_tablet'=>'false'));
@@ -476,7 +494,7 @@ check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.w
 // Follow the mouse: no switch since 2026-11-09 (always on, 0 by default); saved with it off: 0.
 $m=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','use_mouse'=>1,'mouse'=>500)),$lay(array('type'=>'overlay','use_mouse'=>1,'mouse'=>30)),$lay(array('type'=>'text','use_mouse'=>0,'mouse'=>30)),$lay(array('type'=>'text','mouse'=>30))))));
 check(motion_of($m,0)['mouse']==200 && motion_of($m,1)['mouse']==0 && motion_of($m,2)['mouse']==0 && motion_of($m,3)['mouse']==30 && WPBN_Settings::layer()['mouse']===0,'Follow the mouse: bounded, not for an overlay, 0 where it was switched off, 0 for a new layer');
-check(strpos($animCss,'+ var(--wpbn-mx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px))')!==false,'The pointer\'s offset in the layer\'s place');
+check(strpos($animCss,'+ var(--wpbn-mx,0px) + var(--wpbn-gx,0px)),calc(var(--wpbn-dy,0px) + var(--wpbn-ky,0px) + var(--wpbn-my,0px) + var(--wpbn-gy,0px))')!==false,'The pointer\'s offset in the layer\'s place (and an attached layer\'s, its layer\'s motion)');
 check(!array_key_exists('decorative',$lay(array('type'=>'image','decorative'=>1))),'No Decorative switch: an image\'s alt text is the media library\'s');
 // Rotation (per device, degrees; 2026-11-09): bounded, its CSS per device, in the layer's transform; a Shape layer is not turned.
 $rot=WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','rotate'=>-400,'rotate_mobile'=>15)),$lay(array('type'=>'shape','rotate'=>30)))));

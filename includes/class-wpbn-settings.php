@@ -306,6 +306,11 @@ class WPBN_Settings {
             'shape_trim'=>false, 'shape_size_by'=>'height', 'shape_size_unit'=>'px', 'shape_size'=>300, 'shape_size_tablet'=>null, 'shape_size_mobile'=>null,
             // The layer's own name for others to point to it (a Shape object showing it: WPBN_Shape), given by the editor; '' none yet.
             'uid'=>'',
+            // Attached to another layer (2026-11-13, user's request: "move it and attach it", no points to set; attachments()): that
+            // layer's uid ('' none: placed by its own Position). Per device (each measured by the editor, none inherited): null, or
+            // [its point of that layer's box x, y; its own point x, y (0 / 50 / 100: the edges or the middle, chosen by the editor from
+            // where it stands); the offset between them x, y (px)]. It follows that layer (frontend.js attach()).
+            'anchor'=>'', 'anchor_desktop'=>null, 'anchor_tablet'=>null, 'anchor_mobile'=>null,
             // Follow the mouse (px): how far the layer moves as the pointer crosses the scene (devices with a mouse; WPBN_Render, frontend.js).
             // No switch since 2026-11-09 (user's request): always on, 0 by default (it stays).
             'use_mouse'=>true, 'mouse'=>0,
@@ -708,6 +713,9 @@ class WPBN_Settings {
                 }
             }
             $l['uid'] = is_string($raw['uid'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $raw['uid']) ? $raw['uid'] : '';
+            // Attached to a layer (checked against the others once all are read: attachments()), its place per device.
+            $l['anchor'] = is_string($raw['anchor'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $raw['anchor']) ? $raw['anchor'] : '';
+            foreach (self::ANCHOR_KEYS as $key) { $l[$key] = self::anchor_place($raw[$key] ?? null); }
             $l = array_merge($l, self::filters($raw));
             // Follow the mouse: no switch since 2026-11-09 (user's request); 0 stays. A layer saved with it off: 0.
             $l['mouse'] = array_key_exists('use_mouse', $raw) && empty($raw['use_mouse']) ? 0 : round(self::number($raw['mouse'] ?? null, 0, -200, 200));
@@ -793,7 +801,51 @@ class WPBN_Settings {
             }
             $out['layers'][] = $l;
         }
+        $out['layers'] = self::attachments($out['layers']);
         return $out;
+    }
+    const ANCHOR_KEYS = array('desktop'=>'anchor_desktop', 'tablet'=>'anchor_tablet', 'mobile'=>'anchor_mobile');
+    /*
+     * An attached layer's place on a device: [x, y of that layer's point, x, y of its own (0, 50 or 100), offset x, y, and per axis
+     * whether that offset is a share of that layer's picture (1: %, from its start; 0: px)], or null. A layer on a picture keeps its
+     * spot on it (a marker on a map, 2026-11-13: in px it landed elsewhere on a smaller map); six numbers (before that): px.
+     */
+    public static function anchor_place($v) {
+        if (!is_array($v) || (count($v) !== 6 && count($v) !== 8)) { return null; }
+        $v = array_values(array_pad(array_values($v), 8, 0));
+        $out = array();
+        foreach ($v as $i=>$n) {
+            if (!is_numeric($n)) { return null; }
+            $out[] = $i < 4 ? (in_array((int) $n, array(0, 50, 100), true) ? (int) $n : 50) : ($i < 6 ? round(max(-3000, min(3000, (float) $n)), 2) : ((int) $n === 1 ? 1 : 0));
+        }
+        return $out;
+    }
+    // A layer that can be attached to another: one placed by its own point (a title, text, button, shortcode, overlay or image object).
+    public static function attachable($l) { return self::anchored($l); }
+    // A layer others can be attached to: any but a Shape (it covers the whole scene).
+    public static function anchor_for($l) { return $l['type'] !== 'shape'; }
+    /*
+     * Attachments checked against the scene's layers: kept only on a layer that can have one, pointing to another layer of the
+     * scene with that uid that can take it, and never round (A on B on A): the layer that would close the circle is placed by its
+     * own Position again. Uids are unique here (a repeated one: the later layer's dropped as a target).
+     */
+    public static function attachments($layers) {
+        $by = array();
+        foreach ($layers as $i=>$l) { if ($l['uid'] !== '' && !isset($by[$l['uid']])) { $by[$l['uid']] = $i; } }
+        foreach ($layers as $i=>$l) {
+            $to = $l['anchor'];
+            if ($to === '') { continue; }
+            if (!self::attachable($l) || !isset($by[$to]) || $by[$to] === $i || !self::anchor_for($layers[$by[$to]])) { $layers[$i]['anchor'] = ''; }
+        }
+        foreach (array_keys($layers) as $i) {
+            $seen = array($i=>true);
+            for ($j = $i; $layers[$j]['anchor'] !== ''; ) {
+                $j = $by[$layers[$j]['anchor']];
+                if (isset($seen[$j])) { $layers[$i]['anchor'] = ''; break; }
+                $seen[$j] = true;
+            }
+        }
+        return $layers;
     }
     // Sanitized (and old formats migrated) once a request per scene: a page may draw a scene more than once.
     private static $cache = array();

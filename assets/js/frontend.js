@@ -67,10 +67,78 @@
             el.querySelectorAll('.wpbn-layer').forEach(layer => s.layers.push({el: layer, m: parse(layer.dataset.motion)}));
             // A Shape layer's objects with a travel of their own (WPBN_Shape): their windows move, not what they show.
             el.querySelectorAll('.wpbn-shape-item[data-move]').forEach(item => s.items.push({el: item, m: parse(item.dataset.move)}));
+            link(s);
             scenes.push(s);
             size(s);
             watch(s);
             follow(s);
+        });
+    }
+
+    /*
+     * Layers attached to another (WPBN_Render: data-motion anchor, 2026-11-13): each one's layer (to, found by its data-uid), in the
+     * order they are placed (s.order: a layer before those attached to it, so a chain follows along), lever: where its point is from
+     * that layer's middle (px; its zoom moves the point so far).
+     */
+    function link(s) {
+        const by = {};
+        s.layers.forEach(layer => { if (layer.el.dataset.uid) by[layer.el.dataset.uid] = layer; });
+        s.layers.forEach(function (layer) {
+            const a = layer.m.anchor;
+            layer.to = a && Array.isArray(a.at) && by[a.to] && by[a.to] !== layer ? by[a.to] : null;
+            layer.lever = [0, 0];
+            layer.go = [0, 0];
+            layer.on = false;
+        });
+        const depth = layer => { let n = 0; for (let x = layer; x.to && n < 50; x = x.to) n++; return n; };
+        s.order = s.layers.map((layer, i) => [depth(layer), i, layer]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(e => e[2]);
+        s.attached = s.order.filter(layer => layer.to);
+        // An image others are attached to: placed again once its picture has loaded (its size decides where it shows).
+        new Set(s.attached.map(layer => layer.to.el)).forEach(el => el.querySelectorAll('img').forEach(img => { if (!img.complete) img.addEventListener('load', () => { bleed(s); schedule(); }); }));
+    }
+    /*
+     * What shows of a layer others are attached to, within its box (2026-11-13: an image attached to a photo with Contain held to
+     * its frame, the whole container, and never moved): [its middle from the box's middle x, y; its width, height], at rest, not
+     * scaled. An image's picture: inside its Padding and Border, and with Contain as large as fits there, where Image position puts
+     * it (object-position); Cover shows all of its frame. Any other layer: its box. The editor measures with the same (admin.js).
+     */
+    window.wpbnPicture = function (a, cs, w, h) {
+        const img = a.classList.contains('wpbn-layer--image') ? a.querySelector('img') : null;
+        if (!img) return [0, 0, w, h];
+        const ic = getComputedStyle(img), px = (c, k) => parseFloat(c[k]) || 0;
+        const x0 = px(cs, 'paddingLeft') + px(ic, 'borderLeftWidth'), y0 = px(cs, 'paddingTop') + px(ic, 'borderTopWidth');
+        const cw = Math.max(0, w - x0 - px(cs, 'paddingRight') - px(ic, 'borderRightWidth')), ch = Math.max(0, h - y0 - px(cs, 'paddingBottom') - px(ic, 'borderBottomWidth'));
+        let dw = cw, dh = ch, ox = x0, oy = y0;
+        if (ic.objectFit === 'contain' && img.naturalWidth && img.naturalHeight && cw && ch) {
+            const q = Math.min(cw / img.naturalWidth, ch / img.naturalHeight), pos = ic.objectPosition.split(' ').map(v => /%$/.test(v) ? parseFloat(v) / 100 : .5);
+            dw = img.naturalWidth * q; dh = img.naturalHeight * q;
+            ox += (cw - dw) * pos[0]; oy += (ch - dh) * (pos[1] === undefined ? .5 : pos[1]);
+        }
+        return [ox + dw / 2 - w / 2, oy + dh / 2 - h / 2, dw, dh];
+    };
+    // A number from a computed custom property (frontend.css --wpbn-s, --wpbn-ax: their values on this device), or a fallback.
+    const prop = (cs, name, fallback) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
+    /*
+     * An attached layer placed by its layer on this device: that layer's box at rest (left, top, width and height as laid out: no
+     * transform, no motion), moved by its own point (ax, ay) and grown by its Scale around its middle, as frontend.css draws it
+     * before it moves; at its point of it plus the offset. Its own point (--wpbn-anx, -any: WPBN_Render) goes there. Its layer not
+     * shown, or no place for this device: its own Position.
+     */
+    function attach(s) {
+        const d = device();
+        s.attached.forEach(function (layer) {
+            const a = layer.to.el, p = layer.m.anchor.at[d], st = layer.el.style;
+            if (!Array.isArray(p) || !a.getClientRects().length || !layer.el.getClientRects().length) { st.left = st.top = ''; layer.lever = [0, 0]; layer.on = false; return; }
+            const cs = getComputedStyle(a), w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0, k = prop(cs, '--wpbn-s', 1);
+            const cx = (parseFloat(cs.left) || 0) + w / 2 - prop(cs, '--wpbn-ax', .5) * w, cy = (parseFloat(cs.top) || 0) + h / 2 - prop(cs, '--wpbn-ay', .5) * h;
+            // An image: its picture as drawn in its frame (Contain: smaller, where Image position puts it), not the frame.
+            const pic = window.wpbnPicture(a, cs, w, h);
+            // Per axis: its point of that layer plus an offset in px, or (p[4], p[5]: on a picture) a share of the picture from its start.
+            const share = i => Number(p[4 + i]) === 1;
+            layer.lever = [0, 1].map(i => (pic[i] + (share(i) ? (Number(p[2 + i]) || 0) / 100 * pic[2 + i] - pic[2 + i] / 2 : (clamp(Number(p[i]) || 0, 0, 1) - .5) * pic[2 + i])) * k);
+            layer.on = true;
+            st.left = (cx + layer.lever[0] + (share(0) ? 0 : Number(p[2]) || 0)).toFixed(2) + 'px';
+            st.top = (cy + layer.lever[1] + (share(1) ? 0 : Number(p[3]) || 0)).toFixed(2) + 'px';
         });
     }
 
@@ -105,18 +173,29 @@
             item.el.style.setProperty('--wpbn-ox', ((Number(item.m.x) || 0) * t).toFixed(2) + 'px');
             item.el.style.setProperty('--wpbn-oy', ((Number(item.m.y) || 0) * t).toFixed(2) + 'px');
         });
-        s.layers.forEach(function (layer) {
+        // In their order (link()): an attached layer after its layer, whose motion it takes.
+        s.order.forEach(function (layer) {
             const m = layer.m, st = layer.el.style, at = key => Number((m[key] || [])[d]) || 0;
-            st.setProperty('--wpbn-dx', (at('move_x') * t).toFixed(2) + 'px');
-            st.setProperty('--wpbn-dy', (at('move_y') * t).toFixed(2) + 'px');
+            const dx = at('move_x') * t, dy = at('move_y') * t;
+            st.setProperty('--wpbn-dx', dx.toFixed(2) + 'px');
+            st.setProperty('--wpbn-dy', dy.toFixed(2) + 'px');
             st.setProperty('--wpbn-z', (1 + at('zoom') / 100 * t).toFixed(4));
             st.setProperty('--wpbn-f', (at('fade') / 100 * t).toFixed(4));
             // Follow the mouse: up to its distance (px) with the pointer at the scene's edge; negative: against the pointer.
-            const follows = Number(m.mouse) || 0;
+            const follows = Number(m.mouse) || 0, mx = follows * s.mx, my = follows * s.my;
             if (follows) {
-                st.setProperty('--wpbn-mx', (follows * s.mx).toFixed(2) + 'px');
-                st.setProperty('--wpbn-my', (follows * s.my).toFixed(2) + 'px');
+                st.setProperty('--wpbn-mx', mx.toFixed(2) + 'px');
+                st.setProperty('--wpbn-my', my.toFixed(2) + 'px');
             }
+            // Attached: its layer's travel and mouse motion (with what that one follows), and its point moved by that layer's zoom.
+            let gx = 0, gy = 0;
+            if (layer.to && layer.on) {
+                const z = (Number((layer.to.m.zoom || [])[d]) || 0) / 100 * t;
+                gx = layer.to.go[0] + z * layer.lever[0];
+                gy = layer.to.go[1] + z * layer.lever[1];
+            }
+            if (layer.to) { st.setProperty('--wpbn-gx', gx.toFixed(2) + 'px'); st.setProperty('--wpbn-gy', gy.toFixed(2) + 'px'); }
+            layer.go = [dx + mx + gx, dy + my + gy];
         });
     }
     // The layers following the mouse a step closer to the pointer; true while they have further to go.
@@ -202,6 +281,7 @@
     }
 
     function bleed(s) {
+        attach(s);
         edges(s);
         pieces(s);
         boxes(s);
@@ -321,6 +401,9 @@
     function watch(s) {
         if (near) near.observe(s.el);
         if (seen) seen.observe(s.el); else s.el.classList.add('wpbn-scene--seen');
+        // The layers others are attached to: placed again as they change size (a font or an image arriving, a title wrapping).
+        const anchors = Array.from(new Set(s.attached.map(layer => layer.to.el)));
+        if (anchors.length && 'ResizeObserver' in window) { s.anchors = new ResizeObserver(function () { bleed(s); schedule(); }); anchors.forEach(a => s.anchors.observe(a)); }
         resizeWatch(s);
     }
     function resizeWatch(s) {
@@ -348,6 +431,7 @@
             if (near) near.unobserve(scenes[i].el);
             if (seen) seen.unobserve(scenes[i].el);
             if (scenes[i].resize) scenes[i].resize.disconnect();
+            if (scenes[i].anchors) scenes[i].anchors.disconnect();
             scenes.splice(i, 1);
         }
         place(); replaced(); bind(); sizeAll(); schedule();

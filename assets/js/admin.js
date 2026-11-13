@@ -838,13 +838,20 @@
     }
     // Container (and Position beside it, for a title or an overlay), then its width for Custom.
     function containerField(l) {
-        return (anchored(l) ? containerPositionField(l) : containerSelect(l))
+        // Attached to a layer (2026-11-13, user's question): its place comes from that layer, so its Container only sizes it (a
+        // title wrapping there, a width in %, Width Auto's limit); greyed where it sizes nothing (a width in px or vw), its value kept.
+        return needsAll((anchored(l) ? containerPositionField(l) : containerSelect(l))
             // Container width: only for Custom (or Theme container in a theme without one, which uses it).
-            + (customWidth() ? deviceNumberField(l, 'cwidth') : '');
+            + (customWidth() ? deviceNumberField(l, 'cwidth') : ''), 'container');
+    }
+    // Does its Container size it (as WPBN_Render: a title's, a text's, a button's max width; a width in % or Auto, on a device it is placed)?
+    function sizedByContainer(l) {
+        if (l.type === 'text' || l.type === 'richtext' || l.type === 'button') return true;
+        return Object.keys(DEVICES).some(d => (l.type !== 'image' || imageObject(l, d)) && ['%', 'auto'].includes(effSize('width', d, l)[1]));
     }
     // A button: Open in a new window with a link only; Corners not for Underline.
     // An image object: Image fit and its photo's point in view only where its box can crop it (not with Height Auto).
-    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto' && effSize('width', device(), current())[1] !== 'auto', classed, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
+    const NEEDS = {container: () => selected < 0 || !layerByUid(current().anchor) || sizedByContainer(current()), cropbox: () => effSize('height', device(), current())[1] !== 'auto' && effSize('width', device(), current())[1] !== 'auto', classed, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
         // A Shape object's Filters: on a photo or an image; its Shadow: not on glass.
         pictured: () => current().fill === 'layer' || current().fill === 'image',
         edged: () => current().fill !== 'glass'};
@@ -1440,6 +1447,7 @@
     function positionTip(l) {
         const d = device();
         if (!anchored(l) && l.type === 'image' && images[l.image]) return 'Image position: ' + l.focus_x + '% ' + l.focus_y + '%';
+        if (attachedOn(l, d)) return 'Attached to ' + (layerByUid(l.anchor).name || 'a layer') + ': move it in the preview';
         return 'Position' + (d === 'desktop' ? '' : ' on ' + DEVICES[d][1]) + ': ' + eff(l, 'x', d) + '% ' + eff(l, 'y', d) + '%';
     }
     function rowAction(action, index) {
@@ -1449,6 +1457,8 @@
         // Position: the layer chosen (its settings shown), then its Position window.
         if (action === 'position') {
             if (index !== selected || selectedObject >= 0) { selected = index; selectedObject = -1; list(); settings(); }
+            // Attached to a layer here: it is moved in the preview (Move), its distance to that layer (2026-11-13).
+            if (attachedOn(l, device())) { moving = true; moveState(); const b = $('layers').querySelector('[data-row-action="position"][data-index="' + index + '"]'); if (b) b.focus(); return; }
             // Its kind on the device edited now (an image may fill the scene on one device and be an object on another).
             const button = $('layers').querySelector('[data-row-action="position"][data-index="' + index + '"]');
             if (button) button.dataset.kind = anchored(l) ? 'place' : 'focus';
@@ -1733,8 +1743,10 @@
                     l.type === 'overlay' ? ['fill', 'Fill', 'art', card('Fill', first)] : null,
                     ...cards,
                     // Where and how large.
-                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(respCheck('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title. The icons choose the device: e.g. on Mobile an object above the title, filling the scene on larger screens. Filling the scene is for Cover; a whole picture (Contain) is better as an object: Width and Height 100%, or Height 100% and Width Auto.') : '')
+                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + attachField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(respCheck('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title. The icons choose the device: e.g. on Mobile an object above the title, filling the scene on larger screens. Filling the scene is for Cover; a whole picture (Contain) is better as an object: Width and Height 100%, or Height 100% and Width Auto.') : '')
                         + containerField(l)
+                        // Attached to another layer (2026-11-13).
+                        + (attachable(l) ? attachField(l) : '')
                         // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
                         + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
                         // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
@@ -2389,21 +2401,41 @@
         const S = sceneEl.getBoundingClientRect(), L = layerEl.getBoundingClientRect(), c = container(S.width, l, d) || {left:0, width:S.width};
         // The room it moves in: its container (its height: the scene) less its own size, as the Position window's (along()).
         moveDrag = {x:event.clientX, y:event.clientY, from:[eff(l, 'x', d), eff(l, 'y', d)], room:[c.width - L.width, S.height - L.height], c, d, l, layerEl, sceneEl, value:null};
+        // Attached and placed by its layer here (frontend.js attach() set its left / top): its distance to that layer moves instead.
+        const to = layerEl.style.left !== '' && attachedOn(l, d) ? sceneEl.querySelector(':scope > .wpbn-layer[data-uid="' + l.anchor + '"]') : null;
+        if (to) moveDrag.att = {to, left:parseFloat(layerEl.style.left) || 0, top:parseFloat(layerEl.style.top) || 0, moved:false};
     }
     function moveDragTo(event) {
         if (!moveDrag) return;
         const m = moveDrag, sfx = SUFFIX[m.d];
+        if (m.att) {
+            m.layerEl.style.left = (m.att.left + event.clientX - m.x) + 'px';
+            m.layerEl.style.top = (m.att.top + event.clientY - m.y) + 'px';
+            m.att.moved = true;
+            moveOutline(event.currentTarget, m.sceneEl, m.layerEl, m.l, m.d);
+            return;
+        }
         m.value = [0, 1].map(i => Math.abs(m.room[i]) < 1 ? m.from[i] : percent(m.from[i] + (i ? event.clientY - m.y : event.clientX - m.x) / m.room[i] * 100));
         // Shown at once, as WPBN_Render places it: its point at its Position within its container (px here; Update draws it in %).
         m.layerEl.style.setProperty('--wpbn-left' + sfx, (m.c.left + m.c.width * m.value[0] / 100) + 'px');
         m.layerEl.style.setProperty('--wpbn-top' + sfx, m.value[1] + '%');
         m.layerEl.style.setProperty('--wpbn-anx' + sfx, String(m.value[0] / 100));
         m.layerEl.style.setProperty('--wpbn-any' + sfx, String(m.value[1] / 100));
+        // The layers attached to it follow at once (frontend.js places them again on a resize).
+        if (m.layerEl.dataset.uid) { const win = frameWin(); if (win) win.dispatchEvent(new win.Event('resize')); }
         moveOutline(event.currentTarget, m.sceneEl, m.layerEl, m.l, m.d);
     }
     function moveDrop(event) {
         const m = moveDrag;
         moveDrag = null; event.currentTarget.classList.remove('is-dragging');
+        // Attached: its edges and distance to its layer again, as it stands now (Update then draws it so: its data on the page is the old one).
+        if (m && m.att) {
+            const win = frameWin();
+            if (!m.att.moved || !win) return;
+            m.l[ANCHOR_KEY[m.d]] = sidesOf(restBox(win, m.att.to, true), restBox(win, m.layerEl));
+            settings(); list(); changed();
+            return;
+        }
         if (!m || !m.value || (m.value[0] === m.from[0] && m.value[1] === m.from[1])) return;
         m.l[dkey('x', m.d)] = m.value[0]; m.l[dkey('y', m.d)] = m.value[1];
         // The preview shows it already: Update is not asked for by this alone.
@@ -2412,6 +2444,119 @@
         if (!stale) $('refresh').classList.remove('is-stale');
     }
     $('move').onclick = () => { moving = !moving; moveState(); };
+
+    /*
+     * Attached to another layer (user's request, 2026-11-13: "move it and attach it", no points to set; the earlier try with points,
+     * 2026-11-12, was rolled back). Chosen in Size (Attached to): the layer stays where it stands on every device, measured in a hidden
+     * still preview per device (measureOn()); from then on frontend.js attach() keeps its distance to that layer. Which edges hold
+     * (sidesOf()): below that layer, its top to that layer's bottom; above, its bottom to the top; beside it, the facing edges;
+     * overlapping, the nearer of the two left edges, middles or right edges (likewise up and down). Dragged in the preview (Move): the
+     * distance, and the edges again, for the device shown. Kept per device: anchor_desktop / _tablet / _mobile [x, y of that layer's
+     * point, x, y of its own (0 / 50 / 100), offset x, y px] (WPBN_Settings::anchor_place()).
+     */
+    const ANCHOR_KEY = {desktop:'anchor_desktop', tablet:'anchor_tablet', mobile:'anchor_mobile'};
+    const layerByUid = uid => uid ? scene.layers.find(x => x.uid === uid) || null : null;
+    // A layer that can be attached: one placed by its own Position (WPBN_Settings::attachable()).
+    const attachable = l => textual(l) || l.type === 'overlay' || (l.type === 'image' && Object.keys(DEVICES).some(d => imageObject(l, d)));
+    // Attached on a device: to a layer there, with a place measured for it.
+    const attachedOn = (l, d) => !!layerByUid(l.anchor) && Array.isArray(l[ANCHOR_KEY[d]]);
+    // The layers it may be attached to: any other but a Shape, none attached (by a chain) to it.
+    function anchorChoices(l) {
+        const leadsTo = x => { for (let n = 0, y = x; y && n < 50; n++) { if (y === l) return true; y = layerByUid(y.anchor); } return false; };
+        return scene.layers.filter(x => x !== l && x.type !== 'shape' && !leadsTo(x));
+    }
+    let attaching = null;
+    function attachField(l) {
+        const to = layerByUid(l.anchor);
+        const options = '<option value="">None</option>' + anchorChoices(l).map(x => '<option value="' + escape(x.uid) + '"' + (to === x ? ' selected' : '') + '>' + escape(x.name || TYPE_NAMES[x.type]) + '</option>').join('');
+        const state = attaching === l ? 'Measuring where it stands on each device…' : to ? 'It follows ' + escape(to.name || TYPE_NAMES[to.type]) + ' and keeps its distance to it. Move it in the preview to change that distance there.' : '';
+        return withTip('<div class="wpbn-field">' + head('wpbn-f-anchor', 'Attached to') + '<select id="wpbn-f-anchor" data-attach' + (attaching ? ' disabled' : '') + '>' + options + '</select>' + (state ? '<p class="description" id="wpbn-attach-note">' + state + '</p>' : '') + '</div>',
+            'Another layer this one moves with: as it scrolls, follows the mouse, zooms or grows (a title wrapping onto more lines). It stays where it stands now; from then on its distance to that layer is kept, on each device its own. Where that layer is hidden, it stands at its own Position.');
+    }
+    // A layer's box at rest in a preview's scene (px), as frontend.js attach() reads it: laid out, its own point (ax, ay), its Scale.
+    // picture: what shows of it (an image's picture in its frame: frontend.js wpbnPicture()), for the layer attached to; else its box.
+    // bx, by: its box's middle; ox, oy: what shows, its middle from there; w, h: its size (not scaled); k: its Scale.
+    function restBox(win, el, picture) {
+        const cs = win.getComputedStyle(el), num = (name, fallback) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
+        const W = parseFloat(cs.width) || 0, H = parseFloat(cs.height) || 0, k = num('--wpbn-s', 1);
+        const bx = (parseFloat(cs.left) || 0) - num('--wpbn-ax', .5) * W + W / 2, by = (parseFloat(cs.top) || 0) - num('--wpbn-ay', .5) * H + H / 2;
+        const [ox, oy, w, h] = picture && win.wpbnPicture ? win.wpbnPicture(el, cs, W, H) : [0, 0, W, H];
+        return {bx, by, ox, oy, w, h, k, image:!!picture && el.classList.contains('wpbn-layer--image'), left:bx + (ox - w / 2) * k, right:bx + (ox + w / 2) * k, top:by + (oy - h / 2) * k, bottom:by + (oy + h / 2) * k};
+    }
+    // Which edges hold, and the distance between them: [that layer's point x, y, its own x, y (0 / 50 / 100), offset x, y].
+    function sidesOf(T, E) {
+        const pick = (a0, a1, b0, b1) => {
+            if (b0 >= a1 - 0.5) return [100, 0];
+            if (b1 <= a0 + 0.5) return [0, 100];
+            const gaps = [Math.abs(b0 - a0), Math.abs((b0 + b1) / 2 - (a0 + a1) / 2), Math.abs(b1 - a1)];
+            return [[0, 0], [50, 50], [100, 100]][gaps.indexOf(Math.min(...gaps))];
+        };
+        let [ax, sx] = pick(T.left, T.right, E.left, E.right), [ay, sy] = pick(T.top, T.bottom, E.top, E.bottom);
+        // On a picture (overlapping it that way): its middle kept at its spot on it, a share of the picture from its start (a marker on
+        // a map stays on its town however large the map is drawn); else the facing edges and a distance in px.
+        const on = T.image ? [E.right > T.left + .5 && E.left < T.right - .5, E.bottom > T.top + .5 && E.top < T.bottom - .5] : [false, false];
+        if (on[0]) { ax = 0; sx = 50; }
+        if (on[1]) { ay = 0; sy = 50; }
+        // That layer's point on its box as drawn (its Scale); its own on its box as laid out (frontend.css puts it at left / top).
+        const tx = T.bx + (T.ox + (ax / 100 - .5) * T.w) * T.k, ty = T.by + (T.oy + (ay / 100 - .5) * T.h) * T.k;
+        const ex = E.bx + (sx / 100 - .5) * E.w, ey = E.by + (sy / 100 - .5) * E.h;
+        const dx = on[0] ? Math.round((ex - tx) / (T.w * T.k) * 10000) / 100 : Math.round((ex - tx) * 10) / 10;
+        const dy = on[1] ? Math.round((ey - ty) / (T.h * T.k) * 10000) / 100 : Math.round((ey - ty) * 10) / 10;
+        return [ax, ay, sx, sy, dx, dy, on[0] ? 1 : 0, on[1] ? 1 : 0];
+    }
+    // The scene rendered still (WPBN_Admin::preview_body()) in a hidden frame at a screen's size, ready to be measured.
+    const measureFrame = document.createElement('iframe');
+    measureFrame.name = 'wpbn_measure_frame'; measureFrame.title = ''; measureFrame.tabIndex = -1; measureFrame.setAttribute('aria-hidden', 'true');
+    Object.assign(measureFrame.style, {position:'fixed', left:'-20000px', top:'0', border:'0', visibility:'hidden', pointerEvents:'none'});
+    document.body.append(measureFrame);
+    function measureOn(json, w, h) {
+        return new Promise(resolve => {
+            Object.assign(measureFrame.style, {width:w + 'px', height:h + 'px'});
+            const done = async () => {
+                measureFrame.removeEventListener('load', done);
+                let win = null;
+                try { win = measureFrame.contentWindow; if (win.document.fonts) await win.document.fonts.ready; } catch (error) { win = null; }
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve(win)));
+            };
+            measureFrame.addEventListener('load', done);
+            const form = document.createElement('form');
+            form.method = 'post'; form.action = boot.endpoint; form.target = 'wpbn_measure_frame'; form.hidden = true;
+            Object.entries({action:'wpbn_preview', nonce:boot.nonce, post_id:boot.postId, scene:json, still:'1'}).forEach(([name, value]) => { const input = document.createElement('input'); input.type = 'hidden'; input.name = name; input.value = value; form.append(input); });
+            document.body.append(form); form.submit(); form.remove();
+        });
+    }
+    // Its place on a device from a still preview: both layers shown there, else none (it stands at its Position there).
+    function placeIn(win, ti, i) {
+        const sceneEl = win && win.document.querySelector('.wpbn-scene');
+        const T = sceneEl && sceneEl.querySelector(':scope > .wpbn-layer[data-layer="' + ti + '"]'), E = sceneEl && sceneEl.querySelector(':scope > .wpbn-layer[data-layer="' + i + '"]');
+        return T && E && T.getClientRects().length && E.getClientRects().length ? sidesOf(restBox(win, T, true), restBox(win, E)) : null;
+    }
+    async function attachTo(l, uid) {
+        const to = layerByUid(uid);
+        if (!to) return;
+        attaching = l; settings();
+        // Where it stands now: by its own Position (not attached yet).
+        const copy = JSON.parse(JSON.stringify(scene)), i = scene.layers.indexOf(l), ti = scene.layers.indexOf(to);
+        copy.layers[i].anchor = '';
+        const places = {};
+        for (const d of Object.keys(DEVICES)) {
+            const [w, h] = SCREENS[d];
+            places[d] = anchored(l, d) ? placeIn(await measureOn(JSON.stringify(copy), w, Math.max(h, Math.round(sceneHeight(d)))), ti, i) : null;
+        }
+        attaching = null;
+        if (scene.layers.indexOf(l) < 0) return;
+        l.anchor = uid;
+        Object.keys(DEVICES).forEach(d => { l[ANCHOR_KEY[d]] = places[d]; });
+        settings(); list(); changed();
+    }
+    app.addEventListener('change', event => {
+        const sel = event.target.closest && event.target.closest('[data-attach]'), l = sel && scene.layers[selected];
+        if (!l) return;
+        if (sel.value) { attachTo(l, sel.value); return; }
+        l.anchor = '';
+        Object.values(ANCHOR_KEY).forEach(k => { l[k] = null; });
+        settings(); list(); changed();
+    });
     // Developer mode told of the layer chosen and of names and places changed (its boxes follow at once, without an Update).
     function devSync() {
         if (!dev) return;
