@@ -179,13 +179,13 @@ class WPBN_Render {
         // A Shape layer without an SVG: nothing to show.
         return !($l['type'] === 'shape' && !$l['shape']);
     }
-    // The uids (as keys) of the drawn layers that drawn layers are attached to (WPBN_Settings::attachments()). One attached
-    // to a layer not drawn (hidden…) stands at its own Position.
+    // The drawn layers that drawn layers are attached to (WPBN_Settings::attachments()): uid => the devices it is hidden on (Show on).
+    // One attached to a layer not drawn (hidden…), or on a device it is hidden on, stands at its own Position there.
     private static function anchors($layers) {
         $drawn = array();
-        foreach ($layers as $l) { if ($l['uid'] !== '' && self::drawn($l)) { $drawn[$l['uid']] = true; } }
+        foreach ($layers as $l) { if ($l['uid'] !== '' && self::drawn($l)) { $drawn[$l['uid']] = array('desktop'=>!empty($l['hide_desktop']), 'tablet'=>!empty($l['hide_tablet']), 'mobile'=>!empty($l['hide_mobile'])); } }
         $used = array();
-        foreach ($layers as $l) { if (($l['anchor'] ?? '') !== '' && isset($drawn[$l['anchor']]) && self::drawn($l)) { $used[$l['anchor']] = true; } }
+        foreach ($layers as $l) { if (($l['anchor'] ?? '') !== '' && isset($drawn[$l['anchor']]) && self::drawn($l)) { $used[$l['anchor']] = $drawn[$l['anchor']]; } }
         return $used;
     }
     // What an icon alone says: the image's alt text (or its title), or the icon's name (solid/arrow-right: arrow right).
@@ -241,10 +241,11 @@ class WPBN_Render {
         // An image filling the scene on some devices: there its centre, as before.
         $fills = WPBN_Settings::fills_on($l);
         // Attached to a layer drawn here (2026-11-13): on the devices it has a place for, its own point is the one put at that layer's
+        // A copy of it seen through a Shape object's window too (frontend.js places it as it places the layer, so they stay lined up).
         // (frontend.js attach() places it there; until then, and without scripts, it stands at its Position).
-        $attached = WPBN_Settings::attachable($l) && ($l['anchor'] ?? '') !== '' && isset($state['anchors'][$l['anchor']]) && empty($l['copy']);
+        $attached = WPBN_Settings::attachable($l) && ($l['anchor'] ?? '') !== '' && isset($state['anchors'][$l['anchor']]);
         $places = array();
-        foreach (WPBN_Settings::ANCHOR_KEYS as $device=>$key) { $places[$device] = $attached && !$fills[$device] ? ($l[$key] ?? null) : null; }
+        foreach (WPBN_Settings::ANCHOR_KEYS as $device=>$key) { $places[$device] = $attached && !$fills[$device] && !$state['anchors'][$l['anchor']][$device] ? ($l[$key] ?? null) : null; }
         $attached = $attached && array_filter($places);
         if (WPBN_Settings::anchored($l)) {
             foreach (array('x'=>array('anx', 2), 'y'=>array('any', 3)) as $key=>$var) {

@@ -2968,7 +2968,7 @@
                     item.innerHTML=shapeSvg(layer,-1,'',null,true);canvas.append(item);return;
                 }
                 const v=key=>eff(layer,key,device);
-                const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');
+                const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');item.dataset.layer=String(scene.layers.indexOf(layer));
                 const box=boxOf(device,layer);
                 Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100,device)+' rotate('+(Number(v('rotate'))||0)+'deg)'});
                 // A title: as wide as its text, at most its container (frontend.css).
@@ -3000,9 +3000,33 @@
                     Object.assign(item.style,{letterSpacing:inlineFor(layer,'spacing',device)*width/baseWidth+'px',textTransform:layer.text_transform||'none',fontStyle:layer.font_style||'normal'});}
                 canvas.append(item);
             });
+            placeAttached(canvas,device,width/baseWidth);
         });
         if(!focusMode())drawLive();
         showPosition();
+    }
+    /*
+     * Attached layers drawn where they stand on the site (2026-11-13): at their place by the layer they follow (as frontend.js attach():
+     * what shows of it, a picture with Contain fitted in its box; a share of it, or its edge and the distance, scaled to the frame), a
+     * chain in order. k: the frame's pixels per the scene's.
+     */
+    function placeAttached(canvas,d,k){
+        const box=canvas.getBoundingClientRect();if(!box.width||!box.height)return;
+        const itemOf=l=>canvas.querySelector('[data-layer="'+scene.layers.indexOf(l)+'"]');
+        const depth=l=>{let n=0;for(let x=l;x&&layerByUid(x.anchor)&&n<50;x=layerByUid(x.anchor))n++;return n;};
+        scene.layers.filter(l=>attachedOn(l,d)&&!hiddenOn(layerByUid(l.anchor),d)&&!(l===positionLayer&&!focusMode())).sort((a,b)=>depth(a)-depth(b)).forEach(l=>{
+            const item=itemOf(l),to=layerByUid(l.anchor),toItem=itemOf(to),p=l[ANCHOR_KEY[d]];
+            if(!item||!toItem)return;
+            const r=toItem.getBoundingClientRect();let T={left:r.left-box.left,top:r.top-box.top,width:r.width,height:r.height};
+            const img=toItem.querySelector('img');
+            if(img&&!img.complete){img.addEventListener('load',()=>placeAttached(canvas,d,k),{once:true});}
+            if(img&&img.style.objectFit==='contain'&&img.naturalWidth&&img.naturalHeight){
+                const q=Math.min(T.width/img.naturalWidth,T.height/img.naturalHeight),dw=img.naturalWidth*q,dh=img.naturalHeight*q,pos=(img.style.objectPosition||'50% 50%').split(' ').map(v=>parseFloat(v)/100);
+                T={left:T.left+(T.width-dw)*(Number.isFinite(pos[0])?pos[0]:.5),top:T.top+(T.height-dh)*(Number.isFinite(pos[1])?pos[1]:.5),width:dw,height:dh};
+            }
+            const at=i=>{const start=i?T.top:T.left,size=i?T.height:T.width;return Number(p[6+i])===1?start+p[4+i]/100*size:start+p[i]/100*size+p[4+i]*k;};
+            Object.assign(item.style,{left:at(0)/box.width*100+'%',top:at(1)/box.height*100+'%',transform:'translate('+(-p[2])+'%,'+(-p[3])+'%) scale('+eff(l,'scale',d)/100+') rotate('+(Number(eff(l,'rotate',d))||0)+'deg)'});
+        });
     }
     function openPosition(layer,button) {
         positionKind=button && button.dataset.kind==='place' ? 'place' : 'focus';

@@ -11,7 +11,7 @@ const POS='.wpbn-layer-row.is-active [data-row-action="position"]';
 const posTip=async p=>{await p.hover(POS);return p.locator(POS).getAttribute('title');};
 // The Position window's X and Y (typed or set by dragging, 2026-11-09), as "X% Y%".
 const focusValue=p=>p.evaluate(()=>document.getElementById('wpbn-pos-x').value+'% '+document.getElementById('wpbn-pos-y').value+'%');
-const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/PHP/php.exe';
+const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/php.exe';
 const fixture=(mode,input='',image=false,still=false)=>execFileSync(php,[path.join(__dirname,'settings.php'),mode],{encoding:'utf8',input,env:Object.assign({},process.env,image?{WPBN_TEST_IMAGE:'1'}:{},still?{WPBN_TEST_STILL:'1'}:{})});
 const server=http.createServer((req,res)=>{
     const url=new URL(req.url,'http://localhost');
@@ -1347,6 +1347,11 @@ const server=http.createServer((req,res)=>{
         const atBtn=(await atData()).layers[1];
         assert.ok(atBtn.anchor===titleUid && ['anchor_desktop','anchor_tablet','anchor_mobile'].every(k=>Array.isArray(atBtn[k]) && atBtn[k][0]===50 && atBtn[k][1]===100 && atBtn[k][2]===50 && atBtn[k][3]===0 && atBtn[k][5]>0),'Attached: under the title on every device, its top to the title\'s bottom, centred ('+JSON.stringify([atBtn.anchor_desktop,atBtn.anchor_tablet,atBtn.anchor_mobile])+')');
         assert.match(await at.locator('#wpbn-attach-note').textContent(),/follows/,'It says what it follows');
+        // The Position window (the title's): the button drawn where it stands, under the title, centred.
+        await at.click('[data-select="0"]');await at.click(POS);
+        const atDrawn=await at.evaluate(()=>{const c=document.querySelector('.wpbn-focus__stage .wpbn-position-canvas'),r=i=>c.querySelector('[data-layer="'+i+'"]').getBoundingClientRect(),t=r(0),b=r(1);return {gap:b.top-t.bottom,centres:(b.left+b.right)/2-(t.left+t.right)/2};});
+        assert.ok(atDrawn.gap>0 && Math.abs(atDrawn.centres)<2,'The Position window draws it under the title, centred ('+JSON.stringify(atDrawn)+')');
+        await at.click('.wpbn-modal__cancel');await at.click('[data-select="1"]');
         await atUpdate();
         const atAttached=await atBoxes();
         assert.ok(Math.abs(atAttached.b[0]-atBefore.b[0])<1.5 && Math.abs(atAttached.b[1]-atBefore.b[1])<1.5,'It stays where it stood ('+JSON.stringify([atBefore.b,atAttached.b])+')');

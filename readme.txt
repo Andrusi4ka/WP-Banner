@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,15 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.1.0 =
+* Attached to: a layer can follow another one. Place it where you want it and choose the layer: it stays there, and from then on it moves with that layer — as it scrolls, zooms, follows the mouse or grows taller (a title wrapping onto more lines). On a picture it keeps its spot on it, so a marker stays on its town however large the map is drawn.
+* Move: drag the chosen layer right in the preview, on the device it shows.
+* Show on: hide any layer on desktop, tablet or phone.
+* Fill the scene per device: a photo can fill the scene on large screens and be a picture of its own size on phones.
+* Insert into blocks by class per device: the banner can be a block's background on large screens and a block of its own on phones, switching as the screen changes.
+* Images placed by their own size: Frame width Auto (as wide as the picture at its height, never wider than its container), and Width / Height named Frame width / Frame height.
+* The Position window: Desktop / Tablet / Mobile buttons in its head; X or Y greyed where the layer fills its container that way; a place moved on one device no longer carried to another; attached layers drawn where they stand.
 
 = 1.0.0 =
 * Text animation for titles: the letters (or words) come in one after another, once — fading in, scattered from random heights, unfolding from their middle line, popping in or dropping from above — in the order you choose (left to right, right to left, from the middle, from both ends, random), with their duration, the interval between them, a delay, easing and blur. Works with the title's gradient and accent words; screen readers read the title whole; smooth in Chrome, Firefox and Safari.

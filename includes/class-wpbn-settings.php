@@ -841,7 +841,9 @@ class WPBN_Settings {
             $seen = array($i=>true);
             for ($j = $i; $layers[$j]['anchor'] !== ''; ) {
                 $j = $by[$layers[$j]['anchor']];
-                if (isset($seen[$j])) { $layers[$i]['anchor'] = ''; break; }
+                // Back at this one: it closes the circle, placed by its own Position again. Another one of the circle (this one only
+                // leads into it): it is broken when its own turn comes; this one keeps its attachment.
+                if (isset($seen[$j])) { if ($j === $i) { $layers[$i]['anchor'] = ''; } break; }
                 $seen[$j] = true;
             }
         }

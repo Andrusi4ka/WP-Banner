@@ -13,7 +13,7 @@ const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 const playwright=require('playwright-core');
 const root=path.resolve(__dirname,'..');
-const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/PHP/php.exe';
+const php=process.env.PHP_BIN || 'C:/OSPanel/modules/PHP-8.3/php.exe';
 // A scene: a photo that travels and zooms, a title that slides in on load and zooms slowly for ever, and a
 // Shape (attachment 900 in tests/settings.php: three strips) in colour that fades in and slides for ever.
 const SCENE={height:600,height_unit:'px',layers:[

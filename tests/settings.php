@@ -396,6 +396,12 @@ check(WPBN_Settings::sanitize(array('layers'=>array($bA)))['layers'][0]['anchor'
 check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','uid'=>'shp1'),array_merge($bA,array('anchor'=>'shp1')))))['layers'][1]['anchor']==='','Not to a Shape');
 $circle=WPBN_Settings::sanitize(array('layers'=>array(array_merge($tA,array('anchor'=>'btn1')),$bA)))['layers'];
 check(($circle[0]['anchor']==='') !== ($circle[1]['anchor']===''),'A circle broken: one of them placed by its own Position again');
+// A layer only leading into a circle (C on A, A on B, B on A) keeps its attachment; one of the circle is broken.
+$into=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','uid'=>'aaaa','anchor'=>'bbbb'),array('type'=>'text','uid'=>'bbbb','anchor'=>'aaaa'),array('type'=>'button','uid'=>'cccc','anchor'=>'aaaa'))))['layers'];
+check($into[2]['anchor']==='aaaa' && (($into[0]['anchor']==='') !== ($into[1]['anchor']==='')),'Leading into a circle: kept; the circle itself broken once');
+// The layer attached to hidden on mobile (Show on): there it stands at its own Position, by its own point.
+$hidM=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($tA,array('hide_mobile'=>true)),array_merge($bA,array('x'=>30,'y'=>70))))));
+check(strpos($hidM,'&quot;at&quot;:[[0.5,1,0,24,0,0],null,null]')!==false && strpos($hidM,'--wpbn-anx-m:0.3;')!==false,'Its layer hidden on mobile: its own Position there');
 check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'image','uid'=>'img1','fill_scene'=>true,'anchor'=>'ttl1'),$tA)))['layers'][0]['anchor']==='','A photo filling the scene on every device: not attachable');
 $attHtml=WPBN_Render::markup($att);
 check(strpos($attHtml,'data-uid="ttl1"')!==false && substr_count($attHtml,'data-uid=')===1,'The layer it is attached to carries its uid');
@@ -403,6 +409,9 @@ check(strpos($attHtml,'&quot;anchor&quot;:{&quot;to&quot;:&quot;ttl1&quot;,&quot
 check(strpos($attHtml,'--wpbn-anx:0.5;--wpbn-anx-t:0.5;--wpbn-anx-m:0;')!==false && strpos($attHtml,'--wpbn-any:0;--wpbn-any-t:0.5;--wpbn-any-m:0;')!==false,'Its own point per device (tablet: from its Position)');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array_merge($tA,array('hidden'=>true)),$bA)))),'anchor')===false,'Its layer hidden: at its own Position');
 check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'var(--wpbn-mx,0px) + var(--wpbn-gx,0px)')!==false,'It takes its layer\'s motion on the site');
+// A copy of it seen through a Shape object's window is placed by its layer too (lined up with it).
+$copyHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($tA,array_merge($bA,array('type'=>'image','image'=>3,'fill_scene'=>false,'uid'=>'img9')),array('type'=>'shape','shape'=>900,'uid'=>'shp9','shape_objects'=>array(array('key'=>'o1','fill'=>'layer','source'=>'img9')))))));
+check(substr_count($copyHtml,'&quot;anchor&quot;:{&quot;to&quot;:&quot;ttl1&quot;')===2,'A copy of it in a Shape object\'s window: placed by its layer too');
 // Show on (2026-11-13): a layer hidden on some devices only.
 check($img['hide_desktop']===false && $img['hide_tablet']===false && $img['hide_mobile']===false,'Show on: every device by default');
 $hideM=$lay(array('type'=>'text','text'=>'Hi','hide_mobile'=>1,'hide_tablet'=>'false'));

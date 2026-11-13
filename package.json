@@ -4,7 +4,7 @@
   "description": "Development tools for WP Banner (not part of the plugin zip): the browser tests in tests/motion.cjs (Chrome) and tests/engines.cjs (Chromium, Firefox, WebKit: npx playwright-core install firefox webkit once); npm run pot writes languages/wp-banner.pot.",
   "scripts": {
     "test": "npm run test:php && npm run test:browser && npm run test:engines",
-    "test:php": "node -e \"require('child_process').execFileSync(process.env.PHP_BIN||'C:/OSPanel/modules/PHP-8.3/PHP/php.exe',['tests/settings.php'],{stdio:'inherit'})\"",
+    "test:php": "node -e \"require('child_process').execFileSync(process.env.PHP_BIN||'C:/OSPanel/modules/PHP-8.3/php.exe',['tests/settings.php'],{stdio:'inherit'})\"",
     "test:browser": "node tests/motion.cjs",
     "test:engines": "node tests/engines.cjs",
     "pot": "node tests/make-pot.cjs"
