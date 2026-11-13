@@ -116,7 +116,7 @@ class WPBN_Animation {
     // [from, to] on a device as CSS takes them (zoom: a scale, fade: an opacity, slide: px), within the type's range.
     private static function values($l, $device) {
         $type = self::types()[$l['anim_type']];
-        $min = WPBN_Settings::fills($l) && $type['fill_min'] !== null ? max($type['min'], $type['fill_min']) : $type['min'];
+        $min = WPBN_Settings::fills($l, $device) && $type['fill_min'] !== null ? max($type['min'], $type['fill_min']) : $type['min'];
         $out = array();
         foreach (array('anim_from', 'anim_to') as $key) {
             $value = max($min, min($type['max'], (float) WPBN_Settings::resolved($l, $key)[$device]));

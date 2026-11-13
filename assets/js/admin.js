@@ -33,8 +33,11 @@
     const OVERLAY_FIXED = {scale:100, opacity:100};
     // Placed as a title is: its Position also its own point there (0% flush left / top, 100% right / bottom), within its container.
     // An image layer with Fill the scene off (WPBN_Settings::object()): an object with its own Width and Height, placed as a title.
-    const imageObject = l => l.type === 'image' && l.fill_scene === false;
-    const anchored = l => textual(l) || l.type === 'overlay' || imageObject(l);
+    // Per device since 2026-11-13 (user's request): fill_scene_tablet / _mobile, null = the larger screen's; d: the device edited by default.
+    const imageObject = (l, d) => l.type === 'image' && eff(l, 'fill_scene', d || device()) === false;
+    const anchored = (l, d) => textual(l) || l.type === 'overlay' || imageObject(l, d);
+    // Hidden on a device (Show on; WPBN_Render: wpbn-layer--hide-d, -t, -m).
+    const hiddenOn = (l, d) => !!l['hide_' + d];
     // A field with its help behind an "i" beside the label (the dark tooltip), instead of under it.
     const withTip = (html, text) => html.replace('</label>', '</label>' + tip(text));
     // dev: Developer mode in the preview (preview-dev.js), kept as the preview is redrawn.
@@ -560,6 +563,13 @@
         // The switch in the field's head row, so a tip (withTip()) sits right after its label, on its line.
         return '<div class="wpbn-field wpbn-field--check"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + key + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label></div>' + note(help) + '</div>';
     }
+    // A per-device switch (Fill the scene): on or off for the device edited, its device icons (green dots: a value of its own)
+    // and Reset (tablet / mobile: follow the larger screen again).
+    function respCheck(base, label) {
+        const l = current(), d = device(), key = dkey(base, d), id = 'wpbn-f-' + key, on = eff(l, base, d) !== false;
+        return '<div class="wpbn-field wpbn-field--check wpbn-field--resp-check" data-base="' + base + '"><div class="wpbn-field__head"><label class="wpbn-switch" for="' + id + '"><input id="' + id + '" type="checkbox" data-key="' + key + '"' + (on ? ' checked' : '') + '><span class="wpbn-switch__track" aria-hidden="true"></span><span>' + label + '</span></label>'
+            + devices(ownValues(l, base)) + (d === 'desktop' ? '' : resetButton(l, key, base, label)) + '</div></div>';
+    }
     // A field that only applies in some settings: greyed (not hidden) otherwise, its value kept.
     // A title's Font size, a value per device: tablet and mobile empty follow the larger screen
     // (as WPBN_Settings::fonts()). kind => its keys, its field.
@@ -791,7 +801,7 @@
             : 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
         // Reset takes the kind's own start and end.
         [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
-        const min = l.type === 'image' && l.fill_scene && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
+        const min = l.type === 'image' && !imageObject(l) && type.fillMin != null ? Math.max(type.min, type.fillMin) : type.min;
         const span = {min, max:type.max, from:Math.max(min, type.span[0]), to:type.span[1]};
         // What and when; then the kind's own fields; then how it runs.
         // Its fields always active (user's request, 2026-11-09): with None they do nothing, their values kept; Type and Starts each on a row.
@@ -804,9 +814,10 @@
             + range('anim_delay', 'Delay (s)', {min:ANIM.delay[0], max:ANIM.delay[1], to:10, step:0.1, tip:'Before the first run, on every device: e.g. the title a moment after the photo.'})));
     }
     // Placed by class: the scene fills its block.
-    // Placement by class only with the desktop Height on Auto (as WPBN_Settings::placed_by_class()).
-    const autoHeight = () => scene.height_unit === 'auto';
-    const filling = () => !!String(scene.target || '').trim() && autoHeight();
+    // Placement by class per device (as WPBN_Settings::placed_on(); 2026-11-13, user's request): with a class, where its
+    // Background of the block switch is on (tablet / mobile null: the larger screen's); d: the device edited by default.
+    const classed = () => !!String(scene.target || '').trim();
+    const filling = d => classed() && eff(scene, 'as_background', d || device()) !== false;
     // A layer's Container (as WPBN_Container::of()): the box its Position X and Width are shares of, centred
     // in the scene, at a scene width w; null: the whole scene. Theme container: the theme's (boot.themeContainer);
     // without one, or Custom: the width set (container_width), 15px kept clear on each side of a narrower scene.
@@ -833,7 +844,7 @@
     }
     // A button: Open in a new window with a link only; Corners not for Underline.
     // An image object: Image fit and its photo's point in view only where its box can crop it (not with Height Auto).
-    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto', autoheight: autoHeight, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
+    const NEEDS = {cropbox: () => effSize('height', device(), current())[1] !== 'auto' && effSize('width', device(), current())[1] !== 'auto', classed, link: () => !!String(current().button_url || '').trim(), corners: () => current().button_style !== 'underline',
         // A Shape object's Filters: on a photo or an image; its Shadow: not on glass.
         pictured: () => current().fill === 'layer' || current().fill === 'image',
         edged: () => current().fill !== 'glass'};
@@ -944,6 +955,8 @@
             const on = !!(NEEDS[el.dataset.needs] && NEEDS[el.dataset.needs]());
             el.classList.toggle('is-disabled', !on);
             el.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = !on; });
+            // Reset stays greyed with nothing to reset.
+            if (on) el.querySelectorAll('[data-reset]').forEach(b => { b.disabled = !canReset(current(), b.dataset.reset, b.dataset.resetBase || null); });
         });
     }
     // The image on a device: tablet and mobile 0 = the larger screen's.
@@ -999,7 +1012,8 @@
     function fitPositionField(layer) {
         if (!imageObject(layer)) return respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'});
         const p = positionParts(layer);
-        return respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'}, p.button + p.value).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"');
+        return withTip(respSelect('fit', 'Image fit', {cover:'Cover', contain:'Contain'}, p.button + p.value).replace('<div class="wpbn-field"', '<div class="wpbn-field wpbn-position wpbn-fit-position"'),
+            'How the picture fits in its frame: Cover fills the frame (its edges cropped), Contain shows all of it. Image position: the part kept in view, or where it sits in the room left.');
     }
 
     // An overlay's fill as CSS: its gradient (with its switch on) or its colour.
@@ -1187,7 +1201,15 @@
         closePicker(); closeFonts(); startEditor(); refreshFontSample(); drawGradient();
     }
     // A layer's name (the layer list shows it), the top field of its settings.
-    const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>';
+    const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>' + showOnField();
+    // Show on (2026-11-13, user's request): the devices the layer shows on, each pressed or not (hide_desktop / _tablet / _mobile;
+    // the eye on its tile hides it on all of them).
+    function showOnField() {
+        const l = current();
+        return withTip('<div class="wpbn-field">' + head('wpbn-f-show-desktop', 'Show on') + '<div class="wpbn-segment wpbn-show-on" role="group" aria-label="Show on">'
+            + Object.entries(DEVICES).map(([d, [icon, name]], i) => '<button type="button"' + (i ? '' : ' id="wpbn-f-show-desktop"') + ' class="wpbn-segment__btn" data-show-on="' + d + '" aria-pressed="' + !hiddenOn(l, d) + '" title="' + (hiddenOn(l, d) ? 'Hidden on ' : 'Shown on ') + name + '"><span class="dashicons dashicons-' + icon + '" aria-hidden="true"></span><span class="wpbn-segment__name">' + name + '</span></button>').join('')
+            + '</div></div>', 'The devices the layer shows on: click one to hide it there, e.g. the cutout not on Mobile. The eye on its tile hides it everywhere.');
+    }
     // A layer's turn around its middle, per device (degrees, clockwise; WPBN_Settings::RESPONSIVE rotate).
     /*
      * Scroll animation: no switch (user's request, 2026-11-09): its values apply as set, at rest (0 travel, 0 zoom, Opacity at
@@ -1366,7 +1388,7 @@
             // Its number (1: the back layer) in the thumbnail's corner.
             const numbered = thumb.replace(/<\/span>$/, '<span class="wpbn-tile__number">' + (i + 1) + '</span></span>');
             const row = document.createElement('div');
-            row.className = 'wpbn-layer-row wpbn-tile' + (i === selected ? ' is-active' : '') + (l.hidden ? ' is-hidden' : '');
+            row.className = 'wpbn-layer-row wpbn-tile' + (i === selected ? ' is-active' : '') + (l.hidden || hiddenOn(l, device()) ? ' is-hidden' : '');
             row.setAttribute('role', 'listitem');
             row.dataset.index = i;
             // Its thumbnail, name and kind; between the thumbnail and the name (admin.css): hide and duplicate at the left, delete at the right.
@@ -1427,7 +1449,10 @@
         // Position: the layer chosen (its settings shown), then its Position window.
         if (action === 'position') {
             if (index !== selected || selectedObject >= 0) { selected = index; selectedObject = -1; list(); settings(); }
-            openPosition(l, $('layers').querySelector('[data-row-action="position"][data-index="' + index + '"]'));
+            // Its kind on the device edited now (an image may fill the scene on one device and be an object on another).
+            const button = $('layers').querySelector('[data-row-action="position"][data-index="' + index + '"]');
+            if (button) button.dataset.kind = anchored(l) ? 'place' : 'focus';
+            openPosition(l, button);
             return;
         }
         if (action === 'hide') {
@@ -1476,22 +1501,26 @@
         textwidth:{auto:'As wide as its text: lines break only at the edge of its container.', '%':'A share of its container: the lines wrap there; 100 is all of it.',
             px:'A fixed width: the lines wrap there (never wider than its container).', vw:'A share of the screen width: the lines wrap there (never wider than its container).'},
         // An image object's Height: Auto, the image's own proportions at its Width.
-        image:{auto:'As tall as the image at its width (its own proportions): nothing is cropped.', '%':'A share of the scene\'s height: 100 is all of it.', px:'A fixed height.', vh:'A share of the screen height: 100 is the whole screen.'}
+        // Its Frame (2026-11-13, user's request: Width and Height said nothing of what they size): the layer's box; the picture
+        // fits in it by Image fit, or is it with Auto.
+        image:{auto:'The frame as tall as the picture at the frame\'s width: the frame is the picture, nothing is cropped.', '%':'The frame\'s height, a share of the scene\'s: 100 is all of it. The picture fits in it by Image fit.', px:'The frame\'s height, fixed. The picture fits in it by Image fit.', vh:'The frame\'s height, a share of the screen height. The picture fits in it by Image fit.'},
+        // Its Width (2026-11-13): Auto, the image's own proportions at its Height (Height 100%: the whole height of the scene).
+        imagewidth:{auto:'The frame as wide as the picture at the frame\'s height, at most its container: e.g. Frame height 100% for the whole height of the scene.', '%':'The frame\'s width, a share of its container: 100 is all of it. The picture fits in it by Image fit.', px:'The frame\'s width, fixed. The picture fits in it by Image fit.', vw:'The frame\'s width, a share of the screen width. The picture fits in it by Image fit.'}
     };
     // The scene's Height, or (obj: an overlay) the layer's Height or Width (kind), as the scene's Height: the number,
     // its unit, Inherit on tablet / mobile.
     // Its green dots: desktop with a height (or width) and unit other than the standard ones, tablet / mobile with a unit of their own.
     const heightDots = (o, k) => ({desktop:!isStandard(o, SIZE[k].desktop[0]) || !isStandard(o, SIZE[k].desktop[1]), tablet:o[SIZE[k].tablet[1]] != null, mobile:o[SIZE[k].mobile[1]] != null});
     function heightField(obj, kind) {
-        const layer = !!obj, o = obj || scene, k = kind || 'height', wide = k !== 'height', label = wide ? 'Width' : 'Height';
+        const layer = !!obj, o = obj || scene, k = kind || 'height', wide = k !== 'height', label = o.type === 'image' && layer ? (wide ? 'Frame width' : 'Frame height') : (wide ? 'Width' : 'Height');
         const d = device(), [key, unitKey] = SIZE[k][d], own = o[unitKey] != null, [number, unit] = effSize(k, d, o), id = 'wpbn-f-' + key, off = unit === 'auto';
         const [min, max] = unit === 'px' ? [layer ? 1 : 160, wide ? 3000 : 2400] : unit === 'auto' ? [1, wide ? 3000 : 2400] : [1, layer && (unit === '%' || wide) ? 100 : 200];
         const inherit = d === 'desktop' ? '' : '<option value=""' + (own ? '' : ' selected') + '>Inherit</option>';
         const dots = heightDots(o, k);
         return '<div class="wpbn-field wpbn-field--height">' + head(id, label, (layer ? '' : heightTip()) + devices(dots)) + '<div class="wpbn-field__row">'
             + '<input id="' + id + '" data-height="' + d + '" data-size="' + k + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
-            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? (o.type === 'image' && k === 'height' ? ['auto'].concat(LAYER_UNITS.height) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
-            + '</div>' + (layer ? '<p class="description">' + LAYER_UNIT_HELP[o.type === 'image' && k === 'height' ? 'image' : k][unit] + '</p>' : '<p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p>') + '</div>';
+            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? (o.type === 'image' && (k === 'height' || k === 'width') ? ['auto'].concat(LAYER_UNITS[k]) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
+            + '</div>' + (layer ? '<p class="description">' + LAYER_UNIT_HELP[o.type === 'image' && k === 'height' ? 'image' : o.type === 'image' && k === 'width' ? 'imagewidth' : k][unit] + '</p>' : '<p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p>') + '</div>';
     }
     // With a class to fill blocks by: where this height is used, behind an "i" beside Height (its unit's help, under it, gives way).
     function heightTip() {
@@ -1505,8 +1534,10 @@
     // The class to add to a block; a warning when another scene uses it too.
     // Shown only while "Insert into blocks by class" is on (its value is kept while off).
     function targetField() {
-        const id = 'wpbn-f-target', help = 'Only with Height on Auto. Add this class to a row, column or block (in WPBakery: its "Extra class name") and put the WP Banner element inside it: the scene becomes that block\'s background, as wide and tall as the block, behind its content. One class, without the dot. Empty: not used.';
-        return needs('<div class="wpbn-field">' + head(id, 'Insert into blocks by class', tip(help)) + '<input id="' + id + '" data-key="target" type="text" value="' + escape(scene.target || '') + '" placeholder="wpbn-scene-' + boot.postId + '"></div>', 'autoheight')
+        const id = 'wpbn-f-target', help = 'Add this class to a row, column or block (in WPBakery: its "Extra class name") and put the WP Banner element inside it: the scene becomes that block\'s background, as wide and tall as the block, behind its content. One class, without the dot. Empty: not used.';
+        return '<div class="wpbn-field">' + head(id, 'Insert into blocks by class', tip(help)) + '<input id="' + id + '" data-key="target" type="text" value="' + escape(scene.target || '') + '" placeholder="wpbn-scene-' + boot.postId + '"></div>'
+            // Per device (2026-11-13, user's request): off, the scene stays a block of its own where the element stands, with its Height.
+            + needs(withTip(respCheck('as_background', 'Background of the block'), 'On: on this device the scene is the block\'s background (its height is the block\'s). Off: it stays a block of its own where the element stands, with its Height. The icons choose the device: e.g. the background on Desktop, a block of its own on Mobile.'), 'classed')
             + '<p class="wpbn-target-warning" id="wpbn-target-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span></span></p>';
     }
     function targetWarning() {
@@ -1522,6 +1553,12 @@
         // The scene's Height, or an overlay's Height or Width (no minimum in px; in % and vw, at most all of it).
         const o = current(), layer = o !== scene, k = kind || 'height';
         const [key, unitKey, fallback] = SIZE[k][device], unit = o[unitKey];
+        // An image object: Width and Height not both Auto (2026-11-13). Width Auto: a Height of the scene's (100%) if it had none;
+        // Height Auto: a Width of half its container.
+        if (o.type === 'image' && unit === 'auto' && (k === 'width' || k === 'height')) {
+            const other = k === 'width' ? 'height' : 'width', [ok, ouk] = SIZE[other][device];
+            if (effSize(other, device, o)[1] === 'auto') { o[ouk] = '%'; o[ok] = other === 'height' ? 100 : 50; }
+        }
         if (unit == null) o[key] = null;
         else {
             if (o[key] == null) o[key] = device === 'desktop' ? (layer ? 100 : fallback) : effSize(k, UP[device], o)[0];
@@ -1696,7 +1733,7 @@
                     l.type === 'overlay' ? ['fill', 'Fill', 'art', card('Fill', first)] : null,
                     ...cards,
                     // Where and how large.
-                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(check('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title.') : '')
+                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(respCheck('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title. The icons choose the device: e.g. on Mobile an object above the title, filling the scene on larger screens. Filling the scene is for Cover; a whole picture (Contain) is better as an object: Width and Height 100%, or Height 100% and Width Auto.') : '')
                         + containerField(l)
                         // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
                         + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
@@ -1745,11 +1782,14 @@
         drawGradient();
         startEditor();
         $('scene-settings').setAttribute('aria-current', String(selected < 0));
+        // Move in the preview follows the layer chosen (and its place, changed here).
+        moveState();
     }
     // One device for the preview and for the fields' device icons.
     function setDevice(value, focusField) {
         $('device').value = value;
-        resize(); settings();
+        // The tiles too: a layer hidden on this device shows so (Show on).
+        resize(); list(); settings();
         if (focusField) { const button = $('settings').querySelector('[data-field-device="' + value + '"]'); if (button) button.focus(); }
     }
     // The preview is redrawn only by Update; until then the button is lit (as WP Swiper's).
@@ -1856,13 +1896,15 @@
         if (!key) return;
         const obj = current();
         if (input.type === 'checkbox') {
+            // Fill the scene (per device): was the image an object on any device before?
+            const wasObject = /^fill_scene/.test(key) && Object.keys(DEVICES).some(dv => imageObject(obj, dv));
             obj[key] = input.checked;
             // Scroll animation: a layer's travel, zoom and opacity at the end on or off together (WPBN_Settings::sanitize()).
             // Placement: a class ready to copy; the height note follows it.
             // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
-            if (key === 'fill_scene' && !input.checked && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
+            if (/^fill_scene/.test(key) && !input.checked && !wasObject && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
                 && ['tablet', 'mobile'].every(dv => obj[WIDTH[dv][1]] == null && obj[HEIGHT[dv][1]] == null)) { obj.overlay_width = 50; obj.height_unit = 'auto'; }
-            if (/^use_/.test(key) || key === 'fill_scene' || key === 'shape_trim') {
+            if (/^use_/.test(key) || /^fill_scene/.test(key) || /^as_background/.test(key) || key === 'shape_trim') {
                 settings(); const again = $('settings').querySelector('[data-key="' + key + '"]'); if (again) again.focus();
                 list(); changed(); return;
             }
@@ -1894,7 +1936,7 @@
             settings(); changed(); return;
         }
         refreshDots(input.closest('.wpbn-field')); refreshReset(input.closest('.wpbn-field'));
-        if (key === 'target') { targetWarning(); heightHelp(); }
+        if (key === 'target') { targetWarning(); heightHelp(); applyStates(); }
         // The font sample shows the title's text.
         if (key === 'text' || key === 'content') refreshFontSample();
         // A button's link: Open in a new window applies with one; a Shape object's Edge color, with an Edge.
@@ -2032,6 +2074,15 @@
             return;
         }
         if (button.dataset.fieldDevice) { setDevice(button.dataset.fieldDevice, true); return; }
+        // Show on: the layer shown or hidden on that device.
+        if (button.dataset.showOn) {
+            const l = current(), d = button.dataset.showOn, name = DEVICES[d][1];
+            l['hide_' + d] = !l['hide_' + d];
+            button.setAttribute('aria-pressed', String(!l['hide_' + d]));
+            button.title = (l['hide_' + d] ? 'Hidden on ' : 'Shown on ') + name;
+            list(); changed();
+            return;
+        }
         if (button.dataset.select !== undefined) { selected = Number(button.dataset.select); selectedObject = -1; list(); settings(); focusRow(selected); return; }
         // A Shape layer's object: chosen from its row under the layer, or hidden / shown.
         if (button.dataset.object !== undefined && button.dataset.layer !== undefined) {
@@ -2285,14 +2336,82 @@
             if (win.wpbnPreviewProgress) win.wpbnPreviewProgress(Number($('progress').value)/100);
             if (win.wpbnDev) win.wpbnDev(dev, devInfo());
         } catch (error) { /* Frame navigation is in progress. */ }
+        moveState();
     }
     // What Developer mode labels (preview-dev.js): the layer chosen, each layer's name, and the chosen one's Position on the
     // device shown (a placed layer's: a photo filling the scene has none).
     function devInfo() {
         const layers = {}, d = device();
-        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && (anchored(l) || (l.type === 'shape' && eff(l, 'shape_fit', d) !== 'stretch'))) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
+        scene.layers.forEach((l, i) => { layers[i] = {name:l.name || TYPE_NAMES[l.type] || 'Layer'}; if (i === selected && (anchored(l, d) || (l.type === 'shape' && eff(l, 'shape_fit', d) !== 'stretch'))) layers[i].position = 'X ' + eff(l, 'x', d) + '% · Y ' + eff(l, 'y', d) + '%'; });
         return {selected, layers};
     }
+    /*
+     * Move (user's request, 2026-11-13): the chosen layer, and only it, dragged right in the preview, wherever the pointer is on
+     * the scene; its X / Y kept for the device the preview shows (its width's values). For the layers placed by their Position
+     * (a title, a text, a button, a shortcode, an overlay, an image object); a photo filling the scene and a Shape: the Position
+     * window. The preview at rest meanwhile (body.wpbn-moving, preview-dev.css), the layer moved there at once by its CSS
+     * variables (WPBN_Render: data-layer finds it), its box outlined, its container's edges dashed. An axis it fills has no room.
+     */
+    let moving = false, moveDrag = null;
+    const SUFFIX = {desktop:'', tablet:'-t', mobile:'-m'};
+    const frameWin = () => { try { const win = $('frame').contentWindow; return win && win.document && win.document.body ? win : null; } catch (error) { return null; } };
+    const movedLayer = () => selected >= 0 && selectedObject < 0 ? scene.layers[selected] : null;
+    function moveState() {
+        const button = $('move'), l = movedLayer(), win = frameWin(), d = win ? valuesFor(win.innerWidth) : device();
+        const can = !!l && !l.hidden && !hiddenOn(l, d) && anchored(l, d);
+        if (!can) moving = false;
+        button.disabled = !can;
+        button.setAttribute('aria-pressed', String(moving));
+        button.title = can ? 'Move the chosen layer in the preview (on ' + DEVICES[d][1] + ')' : 'Move: choose a title, text, button, shortcode, overlay or image object shown on this device (a photo filling the scene or a Shape: its Position button)';
+        if (!win) return;
+        const doc = win.document, sceneEl = doc.querySelector('.wpbn-scene'), layerEl = moving && sceneEl ? sceneEl.querySelector(':scope > .wpbn-layer[data-layer="' + selected + '"]') : null;
+        doc.body.classList.toggle('wpbn-moving', !!layerEl);
+        let veil = doc.getElementById('wpbn-move');
+        if (!layerEl) { if (veil) veil.remove(); return; }
+        if (!veil) {
+            veil = doc.createElement('div'); veil.id = 'wpbn-move'; veil.className = 'wpbn-move';
+            veil.addEventListener('pointerdown', movePress); veil.addEventListener('pointermove', moveDragTo);
+            ['pointerup', 'pointercancel'].forEach(name => veil.addEventListener(name, moveDrop));
+        }
+        if (veil.parentNode !== sceneEl) sceneEl.append(veil);
+        moveOutline(veil, sceneEl, layerEl, l, d);
+    }
+    function moveOutline(veil, sceneEl, layerEl, l, d) {
+        const S = sceneEl.getBoundingClientRect(), L = layerEl.getBoundingClientRect(), c = container(S.width, l, d);
+        veil.innerHTML = (c ? [c.left, c.left + c.width].map(x => '<span class="wpbn-move__edge" style="left:' + x + 'px"></span>').join('') : '')
+            + '<span class="wpbn-move__box" style="left:' + (L.left - S.left) + 'px;top:' + (L.top - S.top) + 'px;width:' + L.width + 'px;height:' + L.height + 'px"></span>';
+    }
+    function movePress(event) {
+        const win = frameWin(), l = movedLayer(), veil = event.currentTarget;
+        if (event.button !== 0 || !win || !l) return;
+        event.preventDefault(); veil.setPointerCapture(event.pointerId); veil.classList.add('is-dragging');
+        const sceneEl = veil.parentNode, layerEl = sceneEl.querySelector(':scope > .wpbn-layer[data-layer="' + selected + '"]'), d = valuesFor(win.innerWidth);
+        const S = sceneEl.getBoundingClientRect(), L = layerEl.getBoundingClientRect(), c = container(S.width, l, d) || {left:0, width:S.width};
+        // The room it moves in: its container (its height: the scene) less its own size, as the Position window's (along()).
+        moveDrag = {x:event.clientX, y:event.clientY, from:[eff(l, 'x', d), eff(l, 'y', d)], room:[c.width - L.width, S.height - L.height], c, d, l, layerEl, sceneEl, value:null};
+    }
+    function moveDragTo(event) {
+        if (!moveDrag) return;
+        const m = moveDrag, sfx = SUFFIX[m.d];
+        m.value = [0, 1].map(i => Math.abs(m.room[i]) < 1 ? m.from[i] : percent(m.from[i] + (i ? event.clientY - m.y : event.clientX - m.x) / m.room[i] * 100));
+        // Shown at once, as WPBN_Render places it: its point at its Position within its container (px here; Update draws it in %).
+        m.layerEl.style.setProperty('--wpbn-left' + sfx, (m.c.left + m.c.width * m.value[0] / 100) + 'px');
+        m.layerEl.style.setProperty('--wpbn-top' + sfx, m.value[1] + '%');
+        m.layerEl.style.setProperty('--wpbn-anx' + sfx, String(m.value[0] / 100));
+        m.layerEl.style.setProperty('--wpbn-any' + sfx, String(m.value[1] / 100));
+        moveOutline(event.currentTarget, m.sceneEl, m.layerEl, m.l, m.d);
+    }
+    function moveDrop(event) {
+        const m = moveDrag;
+        moveDrag = null; event.currentTarget.classList.remove('is-dragging');
+        if (!m || !m.value || (m.value[0] === m.from[0] && m.value[1] === m.from[1])) return;
+        m.l[dkey('x', m.d)] = m.value[0]; m.l[dkey('y', m.d)] = m.value[1];
+        // The preview shows it already: Update is not asked for by this alone.
+        const stale = $('refresh').classList.contains('is-stale');
+        settings(); list(); changed();
+        if (!stale) $('refresh').classList.remove('is-stale');
+    }
+    $('move').onclick = () => { moving = !moving; moveState(); };
     // Developer mode told of the layer chosen and of names and places changed (its boxes follow at once, without an Update).
     function devSync() {
         if (!dev) return;
@@ -2478,7 +2597,8 @@
     // one's own 1000px wide shows the tablet's).
     // An overlay's Height on a device as a share of the scene's (its px and vh in the window's screen).
     // Its Width as a share of the scene's (% of its container; px and vw in the window's screen).
-    function overlayWidth(layer, d) { const [v, u] = effSize('width', d, layer); return u === '%' ? v * boxOf(d, layer).width / 100 : u === 'vw' ? v : v / sceneWidth(d) * 100; }
+    // An image object's Width Auto (2026-11-13): its image's proportions at its Height.
+    function overlayWidth(layer, d) { const [v, u] = effSize('width', d, layer); if (u === 'auto' && layer.type === 'image') { const info = imageInfo[imageFor(layer, d)] || {}, ratio = info.width && info.height ? info.width / info.height : 3 / 2; return Math.min(boxOf(d, layer).width, imageObjectHeight(layer, d) / 100 * sceneHeight(d) * ratio / sceneWidth(d) * 100); } return u === '%' ? v * boxOf(d, layer).width / 100 : u === 'vw' ? v : v / sceneWidth(d) * 100; }
     // A title's or a Text layer's own Width as a share of the scene, at most its container's (frontend.css max-width); Auto: null (its text's).
     function textWidth(layer, d) {
         if (layer.type !== 'text' && layer.type !== 'richtext') return null;
@@ -2490,7 +2610,8 @@
     function overlayHeight(layer, d) { const [v, u] = effHeight(d, layer), h = sceneHeight(d); return Math.min(100, u === '%' ? v : (u === 'vh' ? screenOf(d)[1] * v / 100 : v) / h * 100); }
     // An image object's Height as a share of the scene's; Auto: the image's proportions at its Width.
     function imageObjectHeight(layer, d) {
-        const [v, u] = effHeight(d, layer), h = sceneHeight(d);
+        const [v, u0] = effHeight(d, layer), h = sceneHeight(d), u = u0 === 'auto' && effSize('width', d, layer)[1] === 'auto' ? '%' : u0;
+        if (u0 === 'auto' && u === '%') return 100;
         if (u === 'auto') { const info = imageInfo[imageFor(layer, d)] || {}, ratio = info.width && info.height ? info.height / info.width : 2 / 3; return overlayWidth(layer, d) / 100 * sceneWidth(d) * ratio / h * 100; }
         return (u === '%' ? v / 100 * h : u === 'vh' ? screenOf(d)[1] * v / 100 : v) / h * 100;
     }
@@ -2498,7 +2619,10 @@
     const positionModal=document.createElement('div');
     positionModal.className='wpbn-modal wpbn-modal--position';positionModal.hidden=true;
     positionModal.setAttribute('role','dialog');positionModal.setAttribute('aria-modal','true');positionModal.setAttribute('aria-labelledby','wpbn-position-title');
-    positionModal.innerHTML='<div class="wpbn-modal__backdrop"></div><div class="wpbn-modal__box"><div class="wpbn-modal__head"><h2 class="wpbn-modal__title" id="wpbn-position-title"><span class="wpbn-modal__what">Position</span> <span class="wpbn-modal__layer"></span></h2><button type="button" class="wpbn-modal__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
+    positionModal.innerHTML='<div class="wpbn-modal__backdrop"></div><div class="wpbn-modal__box"><div class="wpbn-modal__head"><h2 class="wpbn-modal__title" id="wpbn-position-title"><span class="wpbn-modal__what">Position</span> <span class="wpbn-modal__layer"></span></h2>'
+        // The device to place it on (user's request, 2026-11-13), as the frames below do: a green dot where it has a place of its own.
+        +'<div class="wpbn-pos-devices" role="group" aria-label="Device">'+Object.entries(DEVICES).map(([d,[icon,name]])=>'<button type="button" class="wpbn-pos-device" data-pos-device="'+d+'" aria-pressed="false"><span class="dashicons dashicons-'+icon+'" aria-hidden="true"></span><span class="wpbn-pos-device__name">'+name+'</span></button>').join('')+'</div>'
+        +'<button type="button" class="wpbn-modal__close" aria-label="Close"><span class="dashicons dashicons-no-alt" aria-hidden="true"></span></button></div>'
         +'<div class="wpbn-modal__body"><p class="description wpbn-position-help"></p>'
         +'<div class="wpbn-focus"><div class="wpbn-focus__main"><div class="wpbn-focus__stage" tabindex="0" role="slider" aria-label="Layer position" aria-valuemin="0" aria-valuemax="100"><img class="wpbn-focus__image" alt="" draggable="false"><div class="wpbn-focus__live" aria-hidden="true"><iframe name="wpbn_position_frame" tabindex="-1" title="" sandbox="allow-scripts allow-same-origin"></iframe></div><div class="wpbn-position-canvas"></div><span class="wpbn-focus__point" aria-hidden="true"></span></div></div>'
         // The devices' frames: buttons that switch the window to that device (user's request, 2026-11-10); an image's point is one for all, they only show it.
@@ -2545,7 +2669,7 @@
     // (0% its left / top edge, 100% its right / bottom), so it stays within its container.
     // A Shape's drawing fitted by Cover, Contain or Stretch (2026-11-10): placed so too, as background-position places a picture
     // (0% flush left / top, 100% right / bottom; WPBN_Shape::fit_css()); a Custom size by its middle.
-    const pointPlaced=(layer,d)=>anchored(layer) || (layer.type==='shape' && eff(layer,'shape_fit',d||positionDevice)!=='custom');
+    const pointPlaced=(layer,d)=>anchored(layer,d||positionDevice) || (layer.type==='shape' && eff(layer,'shape_fit',d||positionDevice)!=='custom');
     const anchorAt=(layer,x,y,scale,d)=>'translate('+(pointPlaced(layer,d) ? -x : -50)+'%,'+(pointPlaced(layer,d) ? -y : -50)+'%) scale('+scale+')';
     const focusImage=positionModal.querySelector('.wpbn-focus__image');
     // The layer as it would be with the draft applied: an image's point in view, or the text's place on the device being edited.
@@ -2569,14 +2693,28 @@
         if(focusMode() || d===positionDevice)return;
         positionDrafts=placeDrafts();
         positionDevice=d;
-        const layer=withDraft();
+        // Its place there from the drafts kept so far (withDraft() would also give the device left's draft to this one).
+        const layer=Object.assign({},positionLayer);
+        Object.keys(positionDrafts).forEach(dv=>{layer[dkey('x',dv)]=positionDrafts[dv][0];layer[dkey('y',dv)]=positionDrafts[dv][1];});
         positionDraft=[eff(layer,'x',d),eff(layer,'y',d)];positionStart=positionDraft.slice();
         positionModal.querySelector('.wpbn-modal__layer').textContent=positionLayer.name+' · '+DEVICES[d][1];
         positionDevices();drawPositionScenes();
     }
     function positionDevices() {
         const image=focusMode();
-        positionModal.querySelectorAll('.wpbn-focus__device').forEach(b=>{const on=!image && b.dataset.device===positionDevice;b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));b.disabled=image;});
+        // An image object's place: not on a device it fills the scene on (Fill the scene per device), its frame only shows it.
+        const fills=d=>positionKind==='place' && positionLayer.type==='image' && !imageObject(positionLayer,d);
+        positionModal.querySelectorAll('.wpbn-focus__device').forEach(b=>{const on=!image && b.dataset.device===positionDevice;b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));b.disabled=image || fills(b.dataset.device);
+            b.title=fills(b.dataset.device) ? 'It fills the scene on '+DEVICES[b.dataset.device][1] : 'Position on '+DEVICES[b.dataset.device][1];});
+        // The device buttons in the head: the same; an image's point is one for every device.
+        positionModal.querySelectorAll('[data-pos-device]').forEach(b=>{const d=b.dataset.posDevice, on=!image && d===positionDevice;b.classList.toggle('is-active',on);b.setAttribute('aria-pressed',String(on));b.disabled=image || fills(d);
+            b.title=image ? 'The point in view is one for every device' : fills(d) ? 'It fills the scene on '+DEVICES[d][1] : 'Position on '+DEVICES[d][1];});
+        positionDots();
+    }
+    // A green dot on a device with a place of its own (tablet / mobile), as the drafts so far make it.
+    function positionDots() {
+        const layer=focusMode() ? null : withDraft();
+        positionModal.querySelectorAll('[data-pos-device]').forEach(b=>{const d=b.dataset.posDevice;b.classList.toggle('has-value',!!layer && d!=='desktop' && (layer[dkey('x',d)]!=null || layer[dkey('y',d)]!=null));});
     }
     // The layer's box in scene pixels at a scroll progress (0 start, 1 end), as frontend.css draws it.
     function layerBox(layer, d, progress) {
@@ -2588,7 +2726,7 @@
     // Hatched bands where the layer does not reach (images only: text never fills the scene).
     function drawGaps(canvas) {
         canvas.querySelectorAll('.wpbn-position-gap').forEach(gap=>gap.remove());
-        if(anchored(positionLayer) || positionLayer.type==='shape')return;
+        if(anchored(positionLayer,canvasDevice(canvas)) || positionLayer.type==='shape')return;
         const b=layerBox(withDraft(),canvasDevice(canvas),0);
         const pct=(v,of)=>Math.max(0,Math.min(100,v/of*100));
         const top=pct(b.top,b.h), bottom=pct(b.bottom,b.h), left=pct(b.left,b.w), right=pct(b.right,b.w);
@@ -2601,7 +2739,7 @@
     function warn() {
         const box=positionModal.querySelector('.wpbn-position-warning'), layer=withDraft();
         // Edges uncovered at rest. While scrolling the site grows the layers that fill the scene, so their edges never show.
-        const found=anchored(positionLayer) || positionLayer.type==='shape' ? [] : Object.keys(DEVICES).filter(d=>uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
+        const found=positionLayer.type==='shape' ? [] : Object.keys(DEVICES).filter(d=>!anchored(positionLayer,d) && uncovered(layerBox(layer,d,0))).map(d=>DEVICES[d][1]);
         // A shortcode's element taller than the scene (as the preview drew it): the scene cuts it.
         const tall=positionLayer.type==='shortcode' ? Object.keys(DEVICES).filter(d=>{const real=shortcodeHeight(positionLayer,d);return real&&real.own&&real.height>100.5;}).map(d=>DEVICES[d][1]) : [];
         box.hidden=!found.length&&!tall.length;
@@ -2628,7 +2766,26 @@
             else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),layer.type==='shape' ? 1 : eff(layer,'scale',d)/100,d);placeLabel(target,eff(layer,'y',d));}
             drawGaps(canvas);
         });
-        warn();
+        warn();positionDots();positionAxes();
+    }
+    /*
+     * An axis on which the layer takes all of its container (Width 100%: its X; Height 100%: its Y) has no room to move it: its value
+     * changes nothing there (user's request, 2026-11-13: greyed, as Image fit with Height Auto). Measured on the stage as drawn
+     * (its scale and turn included); an image's Image position aligns the picture in its box instead.
+     */
+    let positionFixed=[false,false];
+    function positionAxes() {
+        const target=focusStage.querySelector('.wpbn-position-target'), r=focusStage.getBoundingClientRect();
+        positionFixed=[false,false];
+        if(!focusMode() && target && r.width && pointPlaced(positionLayer,positionDevice)){
+            const t=target.getBoundingClientRect(), cw=boxOf(positionDevice,positionLayer).width/100*r.width;
+            positionFixed=[Math.abs(cw-t.width)<1,Math.abs(r.height-t.height)<1];
+        }
+        const image=positionLayer && positionLayer.type==='image';
+        positionInputs.forEach((input,i)=>{
+            input.disabled=positionFixed[i];input.closest('.wpbn-axis').classList.toggle('is-fixed',positionFixed[i]);
+            input.title=positionFixed[i] ? 'It takes the whole '+(i ? 'height of the scene' : 'width of its container')+' here: '+(i ? 'Y' : 'X')+' changes nothing'+(image ? '. Image position aligns the picture in its box.' : '.') : '';
+        });
     }
     function drawPositionScenes() {
         // The big stage. An image: the whole photo at its own proportions (the CSS sizes it).
@@ -2655,7 +2812,7 @@
             const edges=boxOf(device,positionLayer);
             if(!focusMode() && edges.width<100){const guide=document.createElement('span');guide.className='wpbn-position-container';Object.assign(guide.style,{left:edges.left+'%',width:edges.width+'%'});canvas.append(guide);}
             scene.layers.forEach(layer=>{
-                if(layer.hidden && layer!==positionLayer)return;
+                if((layer.hidden || hiddenOn(layer,device)) && layer!==positionLayer)return;
                 // A Shape layer: not drawn on the site yet, so not here either.
                 if(layer.type==='shape'){
                     // Being placed: its drawing at its size on this device (its Fit), at its Position.
@@ -2668,7 +2825,7 @@
                 const v=key=>eff(layer,key,device);
                 const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');
                 const box=boxOf(device,layer);
-                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100)+' rotate('+(Number(v('rotate'))||0)+'deg)'});
+                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100,device)+' rotate('+(Number(v('rotate'))||0)+'deg)'});
                 // A title: as wide as its text, at most its container (frontend.css).
                 if(textual(layer))Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
                 // Its own Width: as wide as set, its lines wrapping there; aligned within it as on the site (a title centred).
@@ -2690,7 +2847,7 @@
                 if(layer.type==='overlay'){const blur=(Number(eff(layer,'backdrop_blur',device))||0)*width/baseWidth;Object.assign(item.style,{backdropFilter:backdropCss(layer, blur, device),width:overlayWidth(layer,device)+'%',height:overlayHeight(layer,device)+'%',background:overlayFill(layer)});canvas.append(item);return;}
                 if(layer.type==='image') {
                     // An image object: its own box (Width, Height; Auto: the image's proportions); else the whole scene's height.
-                    if(imageObject(layer))Object.assign(item.style,{width:overlayWidth(layer,device)+'%',height:imageObjectHeight(layer,device)+'%'});
+                    if(imageObject(layer,device))Object.assign(item.style,{width:overlayWidth(layer,device)+'%',height:imageObjectHeight(layer,device)+'%'});
                     else item.style.height='100%';
                     if(images[layer.image]){const image=document.createElement('img');image.src=images[layer.image];image.alt='';image.style.objectFit=v('fit');image.style.objectPosition=layer.focus_x+'% '+layer.focus_y+'%';item.append(image);}
                 }else{item.textContent=layer.text;item.style.color=layer.color;item.style.fontSize=fontFor(layer,device)*width/baseWidth+'px';item.style.lineHeight='1.05';
@@ -2716,7 +2873,7 @@
         positionModal.querySelector('.wpbn-modal__layer').textContent=image ? layer.name : layer.name+' · '+DEVICES[positionDevice][1];
         positionModal.querySelector('.wpbn-position-help').textContent=image
             ? 'Click the part of the image to keep in view when its layer crops it. It applies on every device; the frames show each one. Arrow keys move the point by 1%; with Shift, by 10%.'
-            : anchored(layer)
+            : anchored(layer,positionDevice)
             ? 'Drag the '+(layer.type==='text' ? 'title' : layer.type==='richtext' ? 'text' : layer.type==='button' ? 'button' : layer.type==='shortcode' ? 'element' : layer.type==='image' ? 'image' : 'overlay')+' to move it within its container (dashed), or click to put it there. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
             : layer.type==='shape'
             ? 'Drag the drawing to choose which part of it shows where the scene crops it (Cover) or where it stands in the room left (Contain); a Custom size: where its middle is. 0% and 100% put it at the edges. Arrow keys move it by 1%; with Shift, by 10%.'
@@ -2751,6 +2908,8 @@
         positionDraft=dragging && dragging.move
             ? [along(dragging.from[0],event.clientX-dragging.x,roomX),along(dragging.from[1],event.clientY-dragging.y,roomY)]
             : [percent(text ? fromScene(positionLayer,d,(event.clientX-r.left)/r.width*100) : (event.clientX-r.left)/r.width*100),percent((event.clientY-r.top)/r.height*100)];
+        // An axis with no room (positionAxes()): its value stays.
+        if(text)positionFixed.forEach((fixed,i)=>{if(fixed)positionDraft[i]=dragging && dragging.from ? dragging.from[i] : positionDraft[i];});
         showPosition();
     }
     focusStage.addEventListener('pointerdown',event=>{
@@ -2770,9 +2929,10 @@
         if(event.key==='Enter'){event.preventDefault();closePosition(true);return;}
         const steps={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
         if(!steps[event.key])return;event.preventDefault();const by=event.shiftKey?10:1;
-        positionDraft=positionDraft.map((value,i)=>percent(value+steps[event.key][i]*by));showPosition();
+        positionDraft=positionDraft.map((value,i)=>positionFixed[i] ? value : percent(value+steps[event.key][i]*by));showPosition();
     });
     positionModal.querySelectorAll('.wpbn-focus__device').forEach(b=>b.addEventListener('click',()=>positionSwitch(b.dataset.device)));
+    positionModal.querySelectorAll('[data-pos-device]').forEach(b=>b.addEventListener('click',()=>positionSwitch(b.dataset.posDevice)));
     positionModal.querySelector('.wpbn-modal__apply').onclick=()=>closePosition(true);
     positionModal.querySelector('.wpbn-modal__cancel').onclick=()=>closePosition(false);
     positionModal.querySelector('.wpbn-modal__close').onclick=()=>closePosition(false);

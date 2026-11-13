@@ -78,6 +78,18 @@ const server=http.createServer((req,res)=>{
         let positioned=JSON.parse(await page.locator('#wpbn-data').inputValue()).layers[0];
         assert.equal(positioned.x,76.8);assert.equal(positioned.y,25);
         assert.equal(await posTip(page),'Position: 76.8% 25%','Its value on hover');
+        // The device chosen in the window's head (2026-11-13), as the frames do: a place of its own there, a green dot on it.
+        await page.click(POS);
+        assert.ok(await page.locator('[data-pos-device="desktop"]').getAttribute('aria-pressed')==='true' && await page.locator('[data-pos-device].has-value').count()===0,'Opened on the device edited, no place of its own elsewhere');
+        await page.click('[data-pos-device="tablet"]');
+        assert.ok(await page.locator('[data-pos-device="tablet"]').getAttribute('aria-pressed')==='true' && await page.locator('.wpbn-focus__device[data-device="tablet"]').evaluate(b=>b.classList.contains('is-active')) && (await page.locator('.wpbn-modal__layer').textContent()).endsWith('Tablet'),'Tablet chosen: its frame and the title follow');
+        await page.fill('#wpbn-pos-x','20');
+        assert.ok(await page.locator('[data-pos-device="tablet"]').evaluate(b=>b.classList.contains('has-value')),'Moved on Tablet: a green dot');
+        await page.locator('.wpbn-modal--position .wpbn-modal__head').screenshot({path:path.join(__dirname,'position-devices.png')});
+        await page.click('[data-pos-device="desktop"]');
+        assert.equal(await focusValue(page),'76.8% 25%','Desktop keeps its own place');
+        await page.click('.wpbn-modal__cancel');
+        assert.equal((await data()).layers[0].x_tablet,null,'Cancel: nothing kept for Tablet');
         assert.equal(await page.locator(POS).evaluate(el=>el===document.activeElement),true,'Focus restored after apply');
         await page.click(POS);
         await positionStage.press('ArrowLeft');await positionStage.press('Escape');
@@ -110,6 +122,30 @@ const server=http.createServer((req,res)=>{
         await frame().waitForFunction(()=>typeof window.wpbnPreviewProgress==='function');
         await page.locator('#wpbn-progress').evaluate(el=>{el.value=100;el.dispatchEvent(new Event('input',{bubbles:true}));});
         assert.equal(await frame().locator('.wpbn-layer').evaluate(el=>parseFloat(el.style.getPropertyValue('--wpbn-dy'))),-80);
+        // Move (2026-11-13): the chosen layer dragged right in the preview, wherever the pointer is on the scene, on the device it
+        // shows; the preview at rest meanwhile.
+        assert.ok(!(await page.locator('#wpbn-move').isDisabled()),'Move: active for the chosen title');
+        await page.click('#wpbn-move');
+        await frame().locator('#wpbn-move').waitFor();
+        assert.ok(await frame().evaluate(()=>document.body.classList.contains('wpbn-moving') && getComputedStyle(document.querySelector('.wpbn-layer')).getPropertyValue('--wpbn-dy').trim()==='0px'),'The preview at rest while moving');
+        const veilBox=await frame().locator('#wpbn-move').boundingBox(), textBefore=await frame().locator('.wpbn-layer').boundingBox();
+        await page.mouse.move(veilBox.x+veilBox.width*.8,veilBox.y+veilBox.height*.2);await page.mouse.down();
+        await page.mouse.move(veilBox.x+veilBox.width*.6,veilBox.y+veilBox.height*.4,{steps:5});await page.mouse.up();
+        const dropped=(await data()).layers[0];
+        assert.ok(dropped.x<50 && dropped.y>50 && dropped.x_tablet==null && dropped.x_mobile==null,'Dragged: the chosen layer, its X / Y for Desktop only ('+dropped.x+' '+dropped.y+')');
+        const textAfter=await frame().locator('.wpbn-layer').boundingBox();
+        assert.ok(textAfter.x<textBefore.x-5 && textAfter.y>textBefore.y+5,'Moved in the preview at once');
+        await page.locator('#wpbn-preview-stage').screenshot({path:path.join(__dirname,'preview-move.png')});
+        await update();
+        await frame().locator('#wpbn-move').waitFor();
+        const textAgain=await frame().locator('.wpbn-layer').boundingBox();
+        assert.ok(Math.abs(textAgain.x-textAfter.x)<2 && Math.abs(textAgain.y-textAfter.y)<2,'Update draws it where it was dropped');
+        await page.click('#wpbn-scene-settings');
+        assert.ok(await page.locator('#wpbn-move').isDisabled() && await frame().locator('#wpbn-move').count()===0 && !(await frame().evaluate(()=>document.body.classList.contains('wpbn-moving'))),'Scene settings: nothing to move, the preview runs again');
+        await page.click('[data-select="0"]');
+        await page.click('#wpbn-undo');
+        assert.ok((await data()).layers[0].x===50 && (await data()).layers[0].y===50,'Undo puts it back');
+        await update();
         await page.click('[data-preview-device="mobile"]');
         await page.waitForTimeout(100);
         assert.equal(await frame().evaluate(()=>innerWidth),390);
@@ -779,7 +815,8 @@ const server=http.createServer((req,res)=>{
         assert.ok(await frame().locator('.wpbn-page').count()===1 && await frame().evaluate(()=>document.documentElement.scrollHeight>innerHeight*1.5),'A placeholder page under the banner');
         // A screen size of one's own, applied with Update, in a plain frame.
         await page.fill('#wpbn-res-w','1000');await page.fill('#wpbn-res-h','700');
-        assert.ok(await page.locator('#wpbn-res-hint').count()===0 && await page.locator('.wpbn-toolbar #wpbn-dark + #wpbn-dev + .wpbn-resolution').count()===1,'Screen: in the bar after the Dark and Developer mode buttons, no hint');await page.locator('.wpbn-toolbar').screenshot({path:path.join(__dirname,'toolbar.png')});
+        assert.ok(await page.locator('#wpbn-res-hint').count()===0 && await page.locator('.wpbn-toolbar #wpbn-dark + #wpbn-dev + #wpbn-move + .wpbn-resolution').count()===1,'Screen: in the bar after the Dark, Developer mode and Move buttons, no hint');await page.locator('.wpbn-toolbar').screenshot({path:path.join(__dirname,'toolbar.png')});
+        assert.ok(await page.evaluate(()=>{const a=document.getElementById('wpbn-dev').getBoundingClientRect(),b=document.getElementById('wpbn-move').getBoundingClientRect();return Math.abs(a.width-b.width)<0.5 && Math.abs(a.height-b.height)<0.5 && Math.abs(a.top-b.top)<0.5;}),'Move: as large as the buttons beside it');
         await update();
         assert.equal(await frame().evaluate(()=>innerWidth),1000);
         assert.equal(await page.locator('#wpbn-preview-stage').evaluate(el=>el.classList.contains('is-custom')),true,'Own size: a plain frame');
@@ -794,15 +831,17 @@ const server=http.createServer((req,res)=>{
         await page.fill('#wpbn-res-w','');await page.fill('#wpbn-res-h','');
         await update();
         assert.equal(await frame().evaluate(()=>innerWidth),1280,'Empty fields: the usual size again');
-        // Placement by class: only with the desktop Height on Auto; greyed otherwise, its state kept.
+        // Placement by class (2026-11-13: per device, with any Height): the class field always active; its Background of the
+        // block switch greyed until there is a class.
         await page.click('#wpbn-scene-settings');
         await page.selectOption('[data-key="height_unit"]','px');
-        assert.equal(await page.locator('#wpbn-f-by_class').count(),0,'No switch: the class alone');
-        assert.equal(await page.locator('#wpbn-f-target').isDisabled(),true,'Height in px: Insert into blocks by class greyed');
+        assert.equal(await page.locator('#wpbn-f-by_class').count(),0,'No old switch: the class alone');
+        assert.equal(await page.locator('#wpbn-f-target').isDisabled(),false,'Height in px: Insert into blocks by class still active');
+        assert.equal(await page.locator('#wpbn-f-as_background').isDisabled(),true,'No class yet: Background of the block greyed');
         await page.selectOption('[data-key="height_unit"]','auto');
-        assert.equal(await page.locator('#wpbn-f-target').isDisabled(),false,'Height Auto: Insert into blocks by class active');
         assert.equal(await page.locator('#wpbn-f-target').getAttribute('placeholder'),'wpbn-scene-7','A class suggested');
         await page.fill('#wpbn-f-target','hero');
+        assert.ok(!(await page.locator('#wpbn-f-as_background').isDisabled()) && await page.locator('#wpbn-f-as_background').isChecked(),'With a class: Background of the block on');
         assert.equal(await page.locator('#wpbn-height-note').isHidden(),true,'With a class, the unit help gives way');
         assert.match(await page.locator('#wpbn-height-tip').getAttribute('data-tip'),/Inside a block with the class/,'Height explains where it is used, on its tooltip');
         assert.equal(await page.locator('#wpbn-height-tip').isVisible(),true);
@@ -811,9 +850,28 @@ const server=http.createServer((req,res)=>{
         await tip.hover();await page.waitForTimeout(200);
         assert.equal(await tip.evaluate(el=>getComputedStyle(el,'::after').visibility),'visible','Help on a dark tooltip on hover');
         assert.equal(await tip.evaluate(el=>getComputedStyle(el,'::after').backgroundColor),'rgb(29, 35, 39)');
+        // Per device: the block's background on Desktop, a block of its own on Mobile (in the preview: put back where it stood).
+        const bgDevice=d=>page.click('.wpbn-field--resp-check [data-field-device="'+d+'"]');
+        await bgDevice('mobile');
+        await page.click('label[for="wpbn-f-as_background_mobile"]');
+        const bg=await data();
+        assert.ok(bg.as_background===true && bg.as_background_tablet==null && bg.as_background_mobile===false,'Off on Mobile only');
+        assert.equal(await page.locator('#wpbn-height-note').isHidden(),false,'On Mobile its own Height applies: the unit help is back');
+        await update();
+        const placedNow=()=>frame().evaluate(()=>{const s=document.querySelector('.wpbn-scene');return s.classList.contains('wpbn-scene--fill')+' '+s.parentElement.classList.contains('wpbn-host');});
+        assert.equal(await placedNow(),'false false','The preview on Mobile: a block of its own');
+        await bgDevice('desktop');
+        await frame().waitForFunction(()=>document.querySelector('.wpbn-scene').classList.contains('wpbn-scene--fill'));
+        assert.equal(await placedNow(),'true true','The same page on Desktop: the block\'s background');
+        assert.ok(await frame().evaluate(()=>{const s=document.querySelector('.wpbn-scene').getBoundingClientRect();return Math.abs(s.height-innerHeight)<2;}),'As tall as its block');
+        await bgDevice('mobile');
+        await frame().waitForFunction(()=>!document.querySelector('.wpbn-scene').classList.contains('wpbn-scene--fill'));
+        assert.equal(await placedNow(),'false false','Narrowed again: put back where it stood');
+        await page.click('.wpbn-field--resp-check [data-reset]');
+        assert.equal((await data()).as_background_mobile,null,'Reset: Mobile follows the larger screen');
+        await bgDevice('desktop');
         await page.selectOption('[data-key="height_unit"]','vh');
-        assert.equal(await page.locator('#wpbn-f-target').isDisabled(),true,'Another height: greyed');
-        assert.equal((await data()).target,'hero','Greyed, the class kept');
+        assert.ok(!(await page.locator('#wpbn-f-target').isDisabled()) && (await data()).target==='hero','Another height: still placed by its class');
         // Attributes: the scene's own id and classes on its block.
         assert.ok(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents().then(t=>t.includes('Attributes')),'Scene settings: Attributes');
         await page.fill('#wpbn-f-css_id','offer');
@@ -874,8 +932,67 @@ const server=http.createServer((req,res)=>{
         await photo.fill('#wpbn-f-height','200');
         await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         assert.equal(Math.round(await objFrame.locator('.wpbn-layer--object').evaluate(el=>el.getBoundingClientRect().height)),200,'Its height: 200px');
+        // Width Auto (2026-11-13): as wide as the image at its Height; Height 100%: the whole height of the scene.
+        await photo.selectOption('[data-key="overlay_width_unit"]','auto');
+        assert.ok((await photoData()).height_unit==='px' && await photo.locator('#wpbn-f-overlay_width').isDisabled() && await photo.locator('[data-key="fit"]').isDisabled(),'Width Auto: its number and Image fit greyed, the Height kept');
+        await photo.selectOption('[data-key="height_unit"]','%');await photo.fill('#wpbn-f-height','100');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const fullH=await objFrame.locator('.wpbn-layer--object').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect(),i=el.querySelector('img');return {h:r.height/s.height,w:r.width,img:i.getBoundingClientRect().width,ratio:i.naturalWidth/i.naturalHeight*r.height};});
+        assert.ok(Math.abs(fullH.h-1)<0.01 && Math.abs(fullH.w-fullH.ratio)<2 && Math.abs(fullH.img-fullH.w)<1,'On the site: the scene\'s whole height, as wide as the image there ('+JSON.stringify(fullH)+')');
+        // Its Position: as tall as the scene, so Y has no room (greyed, the arrows leave it); X still moves it.
+        await photo.click(POS);
+        const room=await photo.evaluate(()=>{const st=document.querySelector('.wpbn-focus__stage').getBoundingClientRect(),t=document.querySelector('.wpbn-focus__stage .wpbn-position-target').getBoundingClientRect();return {full:Math.abs(st.width-t.width)<1,wider:t.width>st.width+0.5};});
+        assert.ok(await photo.locator('#wpbn-pos-y').isDisabled() && await photo.locator('.wpbn-axis:has(#wpbn-pos-y)').evaluate(a=>a.classList.contains('is-fixed')),'Height 100%: Y greyed');
+        assert.ok(!room.wider && (await photo.locator('#wpbn-pos-x').isDisabled())===room.full,'A wide photo: never wider than its container; X greyed only where it takes all of it ('+JSON.stringify(room)+')');
+        const yBefore=(await focusValue(photo)).split(' ')[1];
+        await photo.locator('.wpbn-focus__stage').press('ArrowDown');
+        assert.equal((await focusValue(photo)).split(' ')[1],yBefore,'The arrows leave Y as it is');
+        await photo.click('.wpbn-modal__cancel');
+        await photo.selectOption('[data-key="height_unit"]','auto');
+        obj=await photoData();
+        assert.ok(obj.height_unit==='auto' && obj.overlay_width_unit==='%' && obj.overlay_width===50,'Not both Auto: Height Auto gives its Width half its container');
         await photo.click('label[for="wpbn-f-fill_scene"]');
         assert.ok((await photoData()).fill_scene===true && await photo.locator('#wpbn-f-overlay_width').count()===0,'Back on: it fills the scene again (its object size kept)');
+        // Fill the scene per device (2026-11-13, user's request): off on Mobile only, Desktop and Tablet still filling the scene.
+        const fillDevice=d=>photo.click('#wpbn-settings .wpbn-field--resp-check [data-field-device="'+d+'"]');
+        await fillDevice('mobile');
+        assert.ok(await photo.locator('#wpbn-f-fill_scene_mobile').isChecked() && await photo.locator('.wpbn-field--resp-check [data-reset]').isDisabled(),'Mobile follows Desktop: on, nothing to reset');
+        await photo.click('label[for="wpbn-f-fill_scene_mobile"]');
+        obj=await photoData();
+        assert.ok(obj.fill_scene===true && obj.fill_scene_tablet==null && obj.fill_scene_mobile===false && await photo.locator('#wpbn-f-mobile_overlay_width').count()===1,'Off on Mobile only: its Width there');
+        assert.ok(await photo.locator('.wpbn-field--resp-check [data-field-device="mobile"]').evaluate(b=>b.classList.contains('has-value')) && await photo.locator(POS).getAttribute('title').then(t=>t.startsWith('Position on Mobile')),'A green dot on Mobile; its Position on the tile');
+        const sceneShare=()=>objFrame.locator('.wpbn-layer--object').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {w:r.width/s.width,h:r.height/s.height};});
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const onMobile=await sceneShare();
+        assert.ok(Math.abs(onMobile.w-0.5)<0.01 && onMobile.h<0.99,'On Mobile: an object, half the scene wide ('+JSON.stringify(onMobile)+')');
+        await photo.click(POS);
+        assert.ok(await photo.locator('.wpbn-focus__device[data-device="desktop"]').isDisabled() && !(await photo.locator('.wpbn-focus__device[data-device="mobile"]').isDisabled()),'Its Position window: only Mobile, where it is an object');
+        await photo.click('.wpbn-modal__cancel');
+        await fillDevice('desktop');
+        assert.ok(await photo.locator('#wpbn-f-fill_scene').isChecked() && await photo.locator('#wpbn-f-overlay_width').count()===0,'Desktop still fills the scene');
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const onDesktop=await sceneShare();
+        assert.ok(onDesktop.w>0.99 && onDesktop.h>0.99,'On Desktop: the whole scene ('+JSON.stringify(onDesktop)+')');
+        await fillDevice('mobile');
+        await photo.click('.wpbn-field--resp-check [data-reset]');
+        assert.ok((await photoData()).fill_scene_mobile===null && await photo.locator('#wpbn-f-fill_scene_mobile').isChecked(),'Reset: Mobile follows the larger screen again');
+        await fillDevice('desktop');
+        // Show on (2026-11-13): hidden on Mobile only; its tile dimmed there; the preview hides it there.
+        assert.equal(await photo.locator('[data-show-on][aria-pressed="true"]').count(),3,'Show on: every device by default');
+        await photo.click('[data-show-on="mobile"]');
+        obj=await photoData();
+        assert.ok(obj.hide_mobile===true && !obj.hide_desktop && !obj.hide_tablet && await photo.locator('[data-show-on="mobile"]').getAttribute('aria-pressed')==='false','Hidden on Mobile only');
+        assert.ok(!(await photo.locator('.wpbn-layer-row.is-active').evaluate(r=>r.classList.contains('is-hidden'))),'Its tile as usual on Desktop');
+        const layerShown=()=>objFrame.locator('.wpbn-layer--image').evaluate(el=>el.getClientRects().length>0);
+        await photo.click('#wpbn-refresh');await photo.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        assert.equal(await layerShown(),true,'Shown on Desktop');
+        await fillDevice('mobile');
+        assert.ok(await photo.locator('.wpbn-layer-row.is-active').evaluate(r=>r.classList.contains('is-hidden')),'Its tile dimmed on Mobile');
+        await objFrame.waitForFunction(()=>innerWidth<=767);
+        assert.equal(await layerShown(),false,'Hidden in the preview on Mobile');
+        await photo.click('[data-show-on="mobile"]');
+        assert.equal((await photoData()).hide_mobile,false,'Shown again');
+        await fillDevice('desktop');
         // No Decorative switch (removed 2026-11-09). Its name, the first field; the layer list follows it.
         assert.equal(await photo.locator('#wpbn-f-decorative').count(),0,'No Decorative switch');
         assert.equal(await photo.locator('#wpbn-settings .wpbn-card').first().locator('input').first().getAttribute('id'),'wpbn-f-name','Name: the first field');

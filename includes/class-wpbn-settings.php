@@ -8,7 +8,9 @@ class WPBN_Settings {
     // becomes that block's background, taking its size, behind its content (empty: not used).
     public static function defaults() {
         return array('height'=>720, 'tablet_height'=>null, 'mobile_height'=>null, 'height_unit'=>'auto', 'tablet_height_unit'=>null, 'mobile_height_unit'=>null,
-            'target'=>'', 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
+            // as_background: per device (2026-11-13, user's request), the scene the background of the block with the class
+            // there; off, a block of its own where the element stands. Tablet and mobile null: the larger screen's.
+            'target'=>'', 'as_background'=>true, 'as_background_tablet'=>null, 'as_background_mobile'=>null, 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
     }
     // The scene's own id and classes (Scene settings, Attributes), on its <section>, as WPBakery's "Element ID" and
     // "Extra class name": an id (a letter first; letters, digits, - and _), classes separated by spaces (a dot dropped).
@@ -29,10 +31,22 @@ class WPBN_Settings {
     // so a layer lines up with the page's content; custom: container_width (px). The editor gives a new title the
     // theme's and a new image the whole scene (a photo and its cutout fill it); layers from before it: the whole scene.
     const CONTAINERS = array('full', 'theme', 'custom');
-    // Placement by class applies only while the (desktop) Height is Auto: the height then comes from the block
-    // around the scene. With another height the switch is greyed in the editor and does nothing; it is kept.
+    // Placement by class, per device (2026-11-13, user's request; until then only with the desktop Height on Auto, on every
+    // device): with a class, on the devices its "Background of the block" switch is on (as_background, tablet / mobile
+    // null: the larger screen's). There the height comes from the block; elsewhere the scene is a block of its own with its Height.
+    public static function placed_on($s) {
+        $out = array();
+        $last = !empty($s['as_background']);
+        foreach (array('desktop'=>'', 'tablet'=>'_tablet', 'mobile'=>'_mobile') as $device=>$suffix) {
+            $own = $suffix === '' ? null : ($s['as_background'.$suffix] ?? null);
+            $last = $own === null ? $last : (bool) $own;
+            $out[$device] = ($s['target'] ?? '') !== '' && $last;
+        }
+        return $out;
+    }
+    // On any device.
     public static function placed_by_class($s) {
-        return $s['target'] !== '' && $s['height_unit'] === 'auto';
+        return in_array(true, self::placed_on($s), true);
     }
     // A class as the block's "Extra class name" field takes it: one class, no dot.
     public static function css_class($value) {
@@ -94,9 +108,37 @@ class WPBN_Settings {
     // An image layer with "Fill the scene" on (default; as before 2026-11-08): it fills the scene (Cover / Contain, Scale).
     // Off: an object, as an overlay: its Container, Width and Height per device (Height Auto: the image's proportions),
     // placed by its Position as a title is; Image fit and the point in view within its box.
-    public static function fills($l) { return $l['type'] === 'image' && !empty($l['fill_scene']); }
-    public static function object($l) { return $l['type'] === 'image' && empty($l['fill_scene']); }
-    // Placed by their Position as a title is (their own point there, 0–100% within their container).
+    // Per device since 2026-11-13 (user's request): fill_scene_tablet, fill_scene_mobile, null = the larger screen's.
+    public static function fills_on($l) {
+        if ($l['type'] !== 'image') { return array('desktop'=>false, 'tablet'=>false, 'mobile'=>false); }
+        $out = array();
+        $last = !empty($l['fill_scene']);
+        foreach (array('desktop'=>'', 'tablet'=>'_tablet', 'mobile'=>'_mobile') as $device=>$suffix) {
+            $own = $suffix === '' ? null : ($l['fill_scene'.$suffix] ?? null);
+            $out[$device] = $last = $own === null ? $last : (bool) $own;
+        }
+        return $out;
+    }
+    // Fills the scene on that device.
+    public static function fills($l, $device = 'desktop') { return self::fills_on($l)[$device]; }
+    // An object on that device; null: on any device.
+    public static function object($l, $device = null) {
+        if ($l['type'] !== 'image') { return false; }
+        return $device === null ? in_array(false, self::fills_on($l), true) : !self::fills_on($l)[$device];
+    }
+    // An image object's Width and Height per device, [[number, unit], [number, unit]]: one of them may be Auto (its proportions);
+    // both Auto (not offered by the editor): the scene's height, as wide as the image there.
+    public static function object_sizes($l) {
+        $widths = self::heights($l, self::OVERLAY_WIDTHS);
+        $out = array();
+        foreach (self::heights($l) as $device=>$h) {
+            $w = $widths[$device];
+            if ($w[1] === 'auto' && $h[1] === 'auto') { $h = array(100, '%'); }
+            $out[$device] = array($w, $h);
+        }
+        return $out;
+    }
+    // Placed by their Position as a title is (their own point there, 0–100% within their container); an image: on the devices it is an object on.
     public static function anchored($l) { return self::textual($l) || $l['type'] === 'overlay' || self::object($l); }
     // An overlay, a shortcode and an image object have a Width of their own (OVERLAY_WIDTHS), not their content's.
     public static function sized($l) { return $l['type'] === 'overlay' || $l['type'] === 'shortcode' || self::object($l); }
@@ -137,6 +179,8 @@ class WPBN_Settings {
         $out = array();
         $any = false;
         foreach (array('desktop', 'tablet', 'mobile') as $device) {
+            // An image filling the scene on this device: none there.
+            if ($l['type'] === 'image' && self::fills($l, $device)) { $out[$device] = '0px 0px 0px 0px'; continue; }
             $sides = array();
             foreach (self::BORDER_SIDES as $side) { $p = self::resolved($l, 'padding_'.$side)[$device]; $any = $any || $p > 0; $sides[] = $p.$l['padding_'.$side.'_unit']; }
             $out[$device] = implode(' ', $sides);
@@ -254,8 +298,8 @@ class WPBN_Settings {
             'overlay_width'=>100, 'overlay_width_unit'=>'%', 'tablet_overlay_width'=>null, 'tablet_overlay_width_unit'=>null, 'mobile_overlay_width'=>null, 'mobile_overlay_width_unit'=>null,
             // A title's or a Text layer's Width per device (TEXT_WIDTHS): Auto, its text's.
             'text_width'=>600, 'text_width_unit'=>'auto', 'tablet_text_width'=>null, 'tablet_text_width_unit'=>null, 'mobile_text_width'=>null, 'mobile_text_width_unit'=>null,
-            // An image layer fills the scene; off: an object (fills(), object()).
-            'fill_scene'=>true,
+            // An image layer fills the scene; off: an object (fills(), object()). Tablet and mobile null: the larger screen's.
+            'fill_scene'=>true, 'fill_scene_tablet'=>null, 'fill_scene_mobile'=>null,
             // A Shape layer's SVG (an attachment WPBN_Shape wrote) and its objects [{key, name, hidden}], the back one first.
             'shape'=>0, 'shape_objects'=>array(), 'shape_fit'=>'cover', 'shape_fit_tablet'=>null, 'shape_fit_mobile'=>null,
             // Trim empty space: the drawing cut to its objects' box; Custom size: shape_size (px or % of the scene) by its height or width.
@@ -266,7 +310,8 @@ class WPBN_Settings {
             // No switch since 2026-11-09 (user's request): always on, 0 by default (it stays).
             'use_mouse'=>true, 'mouse'=>0,
             'x'=>50, 'y'=>50, 'width'=>100, 'scale'=>100, 'rotate'=>0, 'move_x'=>0, 'move_y'=>-60, 'zoom'=>0, 'end_opacity'=>100,
-            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
+            // hidden: on every device (the eye on its tile); hide_*: on that device only (Show on, 2026-11-13).
+            'opacity'=>100, 'fit'=>'cover', 'focus_x'=>50, 'focus_y'=>50, 'hidden'=>false, 'hide_desktop'=>false, 'hide_tablet'=>false, 'hide_mobile'=>false, 'container'=>'full', 'container_width'=>1200, 'container_width_tablet'=>null, 'container_width_mobile'=>null,
             // Gradient (WPBN_Gradient): an overlay's fill instead of its colour, with its switch on (only overlays: WPBN_Render).
             'use_gradient'=>false, 'gradient'=>WPBN_Gradient::DEFAULT_VALUE,
             // A title's Gradient (2026-11-10): its letters filled with the gradient above (not the accent words). A switch of
@@ -321,8 +366,16 @@ class WPBN_Settings {
         if (self::textual($l)) {
             foreach (array('scale', 'opacity') as $key) { $l[$key] = 100; $l[$key.'_tablet'] = null; $l[$key.'_mobile'] = null; }
         }
-        if (self::anchored($l)) {
+        if (self::textual($l) || $l['type'] === 'overlay') {
             foreach (array('x', 'y') as $key) { foreach (array('', '_tablet', '_mobile') as $suffix) { if ($l[$key.$suffix] !== null) { $l[$key.$suffix] = max(0, min(100, $l[$key.$suffix])); } } }
+        } elseif (self::object($l)) {
+            // An image: within 0–100% only on the devices it is an object on (each device's value set, so one filling the scene keeps its own).
+            $fills = self::fills_on($l);
+            foreach (array('x', 'y') as $key) {
+                foreach (self::resolved($l, $key) as $device=>$value) {
+                    $l[$key.($device === 'desktop' ? '' : '_'.$device)] = $fills[$device] ? $value : max(0, min(100, $value));
+                }
+            }
         }
         // An overlay: as wide as its Container, its own Height, placed by its Position as a title is; at 100% scale and
         // opacity (the values kept are not used). Since 2026-11-10 (user's request) it travels and zooms with the scroll, as
@@ -480,6 +533,12 @@ class WPBN_Settings {
         $out['css_class'] = self::css_classes($input['css_class'] ?? '');
         // Scenes saved with the former "Insert into blocks by class" switch off: no class.
         if (array_key_exists('by_class', $input) && empty($input['by_class'])) { $out['target'] = ''; }
+        // Background of the block, per device. Scenes saved before it: on every device only with the desktop Height on Auto (as then).
+        $out['as_background'] = array_key_exists('as_background', $input) ? !empty($input['as_background']) && $input['as_background'] !== 'false' : $out['height_unit'] === 'auto';
+        foreach (array('_tablet', '_mobile') as $suffix) {
+            $v = $input['as_background'.$suffix] ?? null;
+            $out['as_background'.$suffix] = $v === null || $v === '' ? null : !empty($v) && $v !== 'false';
+        }
         foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, self::MAX_LAYERS) as $raw) {
             if (!is_array($raw)) { continue; }
             $l = self::layer();
@@ -497,6 +556,8 @@ class WPBN_Settings {
             // The words in <u>: '' = the theme's primary color (Woodmart's), or the title's color without it.
             $l['accent_color'] = self::color($raw['accent_color'] ?? null, '');
             $l['hidden'] = !empty($raw['hidden']);
+            // Show on (2026-11-13, user's request): hidden on some devices only (each one its own, no inheriting).
+            foreach (array('desktop', 'tablet', 'mobile') as $device) { $l['hide_'.$device] = !empty($raw['hide_'.$device]) && $raw['hide_'.$device] !== 'false'; }
             $l['font_size'] = self::number($raw['font_size'] ?? null, $l['font_size'], 8, 500);
             // Tablet and mobile: empty follows the larger screen (scenes saved before tablets had a size of their own too).
             foreach (array('tablet_font_size'=>500, 'mobile_font_size'=>250) as $key=>$max) {
@@ -653,6 +714,11 @@ class WPBN_Settings {
             $l['use_mouse'] = true;
             // Fill the scene (an image layer); off: an object. Layers saved before: on.
             $l['fill_scene'] = array_key_exists('fill_scene', $raw) ? !empty($raw['fill_scene']) : true;
+            // Per device (2026-11-13): tablet and mobile null follow the larger screen.
+            foreach (array('_tablet', '_mobile') as $suffix) {
+                $v = $raw['fill_scene'.$suffix] ?? null;
+                $l['fill_scene'.$suffix] = $v === null || $v === '' ? null : !empty($v) && $v !== 'false';
+            }
             // An overlay's Height: px, vh or % of the scene (no Auto); tablet and mobile without a unit follow the larger screen.
             // An image object's too, or Auto (as tall as the image at its width), its default.
             $height_units = $l['type'] === 'image' ? array_merge(array('auto'), self::LAYER_UNITS) : self::LAYER_UNITS;
@@ -673,9 +739,10 @@ class WPBN_Settings {
             // An overlay's Width, as its Height: %, px or vw.
             foreach (self::OVERLAY_WIDTHS as $device=>$keys) {
                 list($key, $unit) = $keys;
-                $l[$unit] = in_array($raw[$unit] ?? null, self::WIDTH_UNITS, true) ? $raw[$unit] : ($device === 'desktop' ? '%' : null);
+                // An image object's may be Auto (2026-11-13, user's request): as wide as the image at its Height (the number kept for later).
+                $l[$unit] = in_array($raw[$unit] ?? null, $l['type'] === 'image' ? array_merge(array('auto'), self::WIDTH_UNITS) : self::WIDTH_UNITS, true) ? $raw[$unit] : ($device === 'desktop' ? '%' : null);
                 if ($l[$unit] === null) { $l[$key] = null; continue; }
-                $range = array('%'=>array(100, 100), 'vw'=>array(100, 100), 'px'=>array(600, 3000));
+                $range = array('%'=>array(100, 100), 'vw'=>array(100, 100), 'px'=>array(600, 3000), 'auto'=>array(100, 3000));
                 $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);
             }
             // A title's or a Text layer's Width: Auto (layers saved before it: Auto), %, px or vw; tablet and mobile without a unit follow the larger screen.
@@ -739,8 +806,9 @@ class WPBN_Settings {
     // The class a scene is placed by ('' none), without sanitizing its layers (the editor lists the other scenes').
     public static function placed_class($id) {
         $raw = get_post_meta($id, self::META, true);
-        if (!is_array($raw) || (array_key_exists('by_class', $raw) && empty($raw['by_class']))) { return ''; }
-        $unit = in_array($raw['height_unit'] ?? null, self::UNITS, true) ? $raw['height_unit'] : 'auto';
-        return $unit === 'auto' ? self::css_class($raw['target'] ?? '') : '';
+        if (!is_array($raw)) { return ''; }
+        $raw['layers'] = array();
+        $s = self::sanitize($raw);
+        return self::placed_by_class($s) ? $s['target'] : '';
     }
 }

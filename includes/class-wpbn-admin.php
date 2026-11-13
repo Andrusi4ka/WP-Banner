@@ -115,6 +115,9 @@ class WPBN_Admin {
         // Developer mode (as WP Swiper's): the scene's and the layers' boxes, sizes and distances over the preview (assets/js/preview-dev.js).
         $dev = esc_attr__('Developer mode: the boxes of the scene and its layers, with their sizes and distances','wp-banner');
         echo '<button type="button" class="button" id="wpbn-dev" aria-pressed="false" aria-label="'.$dev.'" title="'.$dev.'">'.self::icon('developer-mode.svg').'</button>';
+        // Move (2026-11-13): the chosen layer dragged right in the preview, on the device it shows (admin.js moveState()).
+        $move = esc_attr__('Move the chosen layer in the preview','wp-banner');
+        echo '<button type="button" class="button" id="wpbn-move" aria-pressed="false" aria-label="'.$move.'" title="'.$move.'" disabled><span class="dashicons dashicons-move" aria-hidden="true"></span></button>';
         // A screen size of one's own for the device being previewed (admin.js), small, beside the Dark button; empty = the device's usual size.
         echo '<div class="wpbn-resolution" role="group" aria-labelledby="wpbn-res-label"><span class="wpbn-resolution__label" id="wpbn-res-label">'.esc_html__('Screen','wp-banner').'</span>'
             .'<input type="number" id="wpbn-res-w" min="240" max="3840" step="1" aria-label="'.esc_attr__('Screen width (px)','wp-banner').'"><span aria-hidden="true">×</span>'
@@ -172,12 +175,19 @@ class WPBN_Admin {
     // preview that block is as tall as the screen (a full-height row).
     public static function preview_markup($s) {
         // Placed by class (it fills its block): shown in a block as tall as the screen.
-        if (WPBN_Settings::placed_by_class($s)) {
-            return '<div class="wpbn-host" style="position:relative;height:100vh">'.WPBN_Render::markup($s, array('fill'=>true)).'</div>';
+        $on = WPBN_Settings::placed_on($s);
+        if (!in_array(false, $on, true)) {
+            return '<div class="wpbn-host" style="position:relative;height:100vh">'.WPBN_Render::markup($s, array('fill'=>true, 'indexes'=>true)).'</div>';
         }
-        $markup = WPBN_Render::markup($s);
+        // On some devices only (2026-11-13): in a block with its class, as on a page; frontend.js place() makes it that block's
+        // background on those screens (the block then as tall as the screen), a block of its own on the others.
+        $markup = in_array(true, $on, true) ? WPBN_Render::markup($s, array('host'=>$s['target'], 'host_on'=>$on, 'indexes'=>true)) : WPBN_Render::markup($s, array('indexes'=>true));
         if (array_intersect(array_column(WPBN_Settings::heights($s), 1), array('%','auto'))) {
             $markup = '<div class="wpbn-preview-parent" style="height:100vh">'.$markup.'</div>';
+        }
+        if (in_array(true, $on, true)) {
+            $markup = '<style>.wpbn-preview-host{position:relative}.wpbn-preview-host.wpbn-host{height:100vh}.wpbn-preview-host.wpbn-host>.wpbn-preview-parent{display:none}</style>'
+                .'<div class="wpbn-preview-host '.esc_attr($s['target']).'">'.$markup.'</div>';
         }
         return $markup;
     }

@@ -60,12 +60,14 @@ class WPBN_Render {
             wp_print_styles('wpbn-frontend');
             $styles = (string) ob_get_clean();
         }
-        return $styles.self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : '', 'id'=>$id));
+        return $styles.self::markup($s, array('host'=>WPBN_Settings::placed_by_class($s) ? $s['target'] : '', 'host_on'=>WPBN_Settings::placed_on($s), 'id'=>$id));
     }
     // Placed by class: the scene moves into the nearest block around it with that class, as its
     // background, as soon as the browser reads it (so it does not show first where it stands);
     // frontend.js does the same for scenes added later. No such block: it stays where it is.
-    const HOST_SCRIPT = '(function(s){var c=s&&s.getAttribute("data-host"),p=s&&s.parentElement,h;if(!c||!p)return;try{h=p.closest("."+(window.CSS&&CSS.escape?CSS.escape(c):c));}catch(e){}if(!h)return;s.classList.add("wpbn-scene--fill");h.classList.add("wpbn-host");if(getComputedStyle(h).position==="static")h.style.position="relative";h.insertBefore(s,h.firstChild);})(document.currentScript&&document.currentScript.previousElementSibling);';
+    // Only on the devices in data-host-on (2026-11-13; none: every device); a comment left where it stood (wpbnSpot), so
+    // frontend.js place() can put it back there on a screen it is not placed on.
+    const HOST_SCRIPT = '(function(s){var c=s&&s.getAttribute("data-host"),o=s&&s.getAttribute("data-host-on"),p=s&&s.parentElement,w=innerWidth,h,m;if(!c||!p)return;if(o!==null&&(" "+o+" ").indexOf(" "+(w<=767?"mobile":w<=1024?"tablet":"desktop")+" ")<0)return;try{h=p.closest("."+(window.CSS&&CSS.escape?CSS.escape(c):c));}catch(e){}if(!h)return;s.classList.add("wpbn-scene--fill");h.classList.add("wpbn-host");if(getComputedStyle(h).position==="static")h.style.position="relative";m=document.createComment("wpbn");p.insertBefore(m,s);s.wpbnSpot=m;h.insertBefore(s,h.firstChild);})(document.currentScript&&document.currentScript.previousElementSibling);';
     // A typical screen per device, to guess how many pixels an image needs (sizes).
     const SCREENS = array('desktop'=>array(1440, 900), 'tablet'=>array(1024, 1366), 'mobile'=>array(430, 932));
     // The "sizes" of a layer's image on one device: the width its box shows the
@@ -74,9 +76,22 @@ class WPBN_Render {
     private static function size_for($s, $l, $device, $id) {
         list($screen_w, $screen_h) = self::SCREENS[$device];
         // An image object: its Width (% of its container, px or vw), grown by its Scale and Zoom.
-        if (WPBN_Settings::object($l)) {
+        if (WPBN_Settings::object($l, $device)) {
             $grow = (WPBN_Settings::resolved($l, 'scale')[$device] / 100) * (1 + max(0, WPBN_Settings::resolved($l, 'zoom')[$device]) / 100) * WPBN_Animation::grow($l, $device) * 1.15;
-            list($value, $unit) = WPBN_Settings::heights($l, WPBN_Settings::OVERLAY_WIDTHS)[$device];
+            list($w, $hh) = WPBN_Settings::object_sizes($l)[$device];
+            list($value, $unit) = $w;
+            // Width Auto: as wide as the image at its Height (px, vh, or % of the scene's height).
+            if ($unit === 'auto') {
+                $meta = wp_get_attachment_metadata($id);
+                $ratio = !empty($meta['width']) && !empty($meta['height']) ? $meta['width'] / $meta['height'] : 0;
+                list($sh, $su) = WPBN_Settings::heights($s)[$device];
+                $scene_px = $su === 'px' ? $sh : ($su === 'vh' ? $sh / 100 * $screen_h : $screen_h);
+                $px = $hh[1] === 'px' ? $hh[0] : ($hh[1] === 'vh' ? $hh[0] / 100 * $screen_h : $hh[0] / 100 * $scene_px);
+                // Never wider than its container (frontend.css --wpbn-mw).
+                $c = WPBN_Container::of($l, $device);
+                $room = $c ? max(1, min($screen_w - $c['side'], $c['width']) - $c['inner']) : $screen_w;
+                return $ratio ? round(min($px * $ratio, $room) * $grow).'px' : '100vw';
+            }
             if ($unit === 'px') { return round($value * $grow).'px'; }
             $c = $unit === '%' ? WPBN_Container::of($l, $device) : null;
             if (!$c) { return round($value * $grow).'vw'; }
@@ -143,13 +158,14 @@ class WPBN_Render {
         $auto = array();
         foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
         // Its own id and classes (Scene settings).
-        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"' : '').'>';
+        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
         // first: the page's first scene (its images load at once); loaded: an image drawn already (only the first gets
         // fetchpriority); links: the Google fonts' <link>s the layers need.
         $state = array('first'=>$first, 'loaded'=>false, 'links'=>'');
         foreach ($s['layers'] as $i=>$l) {
             // Hidden, or a button without text and without an Icon (as WP Top Info Bar's): not drawn.
-            if ($l['hidden'] || ($l['type'] === 'button' && trim($l['button_text']) === '' && self::button_icon($l) === '')) { continue; }
+            // Hidden on every device one by one (Show on): not drawn either.
+            if ($l['hidden'] || (!empty($l['hide_desktop']) && !empty($l['hide_tablet']) && !empty($l['hide_mobile'])) || ($l['type'] === 'button' && trim($l['button_text']) === '' && self::button_icon($l) === '')) { continue; }
             // A Shortcode layer: none set, or inside another one's banner: not drawn.
             if ($l['type'] === 'shortcode' && ($l['shortcode'] === '' || self::$in_shortcode)) { continue; }
             // A Shape layer without an SVG: nothing to show.
@@ -209,9 +225,11 @@ class WPBN_Render {
         }
         // A title, text, button, shortcode, overlay or image object: its Position is also the point of it placed there
         // (frontend.css ax, ay): within its container.
+        // An image filling the scene on some devices: there its centre, as before.
+        $fills = WPBN_Settings::fills_on($l);
         if (WPBN_Settings::anchored($l)) {
             foreach (array('x'=>'anx', 'y'=>'any') as $key=>$var) {
-                foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) { $css .= '--wpbn-'.$var.self::SUFFIX[$device].':'.max(0, min(1, $value / 100)).';'; }
+                foreach (WPBN_Settings::resolved($l, $key) as $device=>$value) { $css .= '--wpbn-'.$var.self::SUFFIX[$device].':'.($fills[$device] ? .5 : max(0, min(1, $value / 100))).';'; }
             }
         }
         // The motion per device [desktop, tablet, mobile], and the box frontend.js needs to keep the edges hidden.
@@ -221,16 +239,27 @@ class WPBN_Render {
         foreach (array('x', 'y', 'width', 'scale', 'rotate') as $key) { $motion['box_'.$key] = array_values(WPBN_Settings::resolved($l, $key)); }
         // Per device: an image layer with Cover fills the scene (its edges are kept out of view); Contain, a title or text,
         // an overlay (it does not move) or a layer in a container does not.
-        $motion['fill'] = !WPBN_Settings::fills($l) || $container !== '' ? array(false, false, false) : array_values(array_map(function ($fit) { return $fit !== 'contain'; }, WPBN_Settings::resolved($l, 'fit')));
+        // An image that is an object on a device (Fill the scene off there) does not fill it there.
+        $motion['fill'] = array();
+        foreach (WPBN_Settings::resolved($l, 'fit') as $device=>$fit) { $motion['fill'][] = $fills[$device] && $container === '' && $fit !== 'contain'; }
+        // An image that fills the scene on some devices and is an object on others: where it is one (preview-dev.js).
+        if (WPBN_Settings::object($l) && in_array(true, $fills, true)) { $motion['object'] = array_values(array_map(function ($f) { return !$f; }, $fills)); }
         // Follow the mouse (px; frontend.js, devices with a mouse): not an overlay.
         $motion['mouse'] = !empty($l['use_mouse']) && $l['type'] !== 'overlay' ? (float) $l['mouse'] : 0;
         // How far an Animation's slide takes it, per device [x, y] (WPBN_Animation::slack()): an image filling the scene grows to hide its edges.
         $motion['slack'] = WPBN_Entrance::slack($l, WPBN_Animation::slack($l));
         $classes = 'wpbn-layer wpbn-layer--'.$l['type'];
+        // Show on (2026-11-13): hidden on those devices (frontend.css); a copy seen through a Shape object's window is the object's.
+        if (empty($l['copy'])) {
+            foreach (array('desktop'=>'d', 'tablet'=>'t', 'mobile'=>'m') as $device=>$short) { if (!empty($l['hide_'.$device])) { $classes .= ' wpbn-layer--hide-'.$short; } }
+        }
         // An overlay's or a shortcode's Width per device: % of its container (as the other layers' widths), px or vw.
         if (WPBN_Settings::sized($l)) {
             foreach (WPBN_Settings::heights($l, WPBN_Settings::OVERLAY_WIDTHS) as $device=>$w) {
-                $value = $w[1] !== '%' ? $w[0].$w[1] : ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], $w[0] / 100) : $w[0].'%');
+                // An image filling the scene on this device: as wide as its container there.
+                if ($fills[$device]) { $w = array(100, '%'); }
+                // An image object's Auto (2026-11-13): as wide as its image at its Height (max-content: never squeezed near the scene's edge).
+                $value = $w[1] === 'auto' ? 'max-content' : ($w[1] !== '%' ? $w[0].$w[1] : ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], $w[0] / 100) : $w[0].'%'));
                 $css .= '--wpbn-width'.self::SUFFIX[$device].':'.$value.';';
             }
         }
@@ -381,10 +410,22 @@ class WPBN_Render {
             if ($shape_meta) { $motion['area'] = WPBN_Shape::area($l, $shape_meta); }
             $inner = WPBN_Shape::inner($s, $l, $context, $state);
         } else {
-            // An image object: its Height per device (frontend.css; Auto: as tall as the image at its width).
+            // An image object: its Height per device (frontend.css; Auto: as tall as the image at its width); on a device it
+            // fills the scene on, the scene's height.
             if (WPBN_Settings::object($l)) {
                 $classes .= ' wpbn-layer--object';
-                foreach (WPBN_Settings::heights($l) as $device=>$h) { $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.($h[1] === 'auto' ? 'auto' : $h[0].$h[1]).';'; }
+                $sizes = WPBN_Settings::object_sizes($l);
+                foreach ($sizes as $device=>$wh) { $h = $wh[1]; $css .= '--wpbn-oh'.self::SUFFIX[$device].':'.($fills[$device] ? '100%' : ($h[1] === 'auto' ? 'auto' : $h[0].$h[1])).';'; }
+                // Width Auto on some device: its image as wide as its height makes it there (frontend.css --wpbn-iw).
+                if (array_filter($sizes, function ($wh) { return $wh[0][1] === 'auto'; })) {
+                    foreach ($sizes as $device=>$wh) {
+                        $auto = !$fills[$device] && $wh[0][1] === 'auto';
+                        // Never wider than its container (--wpbn-mw); narrower there, its image shrinks to fit (Contain, whatever its Image fit).
+                        $css .= '--wpbn-iw'.self::SUFFIX[$device].':'.($auto ? 'auto' : '100%').';--wpbn-mw'.self::SUFFIX[$device].':'
+                            .($auto ? ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%') : 'none').';'
+                            .($auto ? '--wpbn-fit'.self::SUFFIX[$device].':contain;' : '');
+                    }
+                }
             }
             // Its Shadow (the title's keys and block): along the image's outline, a transparent PNG's shape (frontend.css drop-shadow).
             if (WPBN_Settings::shadow($l) !== '') { $classes .= ' wpbn-layer--shadow'; $css .= '--wpbn-ds:'.WPBN_Settings::shadow($l).';'; }
@@ -414,6 +455,8 @@ class WPBN_Render {
             $enter_class .= $box; $box = '';
             $inner = '<div class="'.esc_attr($enter_class).'" style="'.esc_attr($enter_css).'">'.$inner.'</div>';
         }
-        return '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'">'.$inner.'</div>';
+        // The editor's preview: its place in the scene's list (admin.js Move finds the chosen layer by it).
+        $index = !empty($context['indexes']) && empty($l['copy']) ? ' data-layer="'.(int) $i.'"' : '';
+        return '<div class="'.esc_attr($classes).'" style="'.esc_attr($css).'" data-motion="'.esc_attr(wp_json_encode($motion)).'"'.$index.'>'.$inner.'</div>';
     }
 }

@@ -165,6 +165,10 @@
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh,100%)}
 /* An image object (Fill the scene off): its own Height (Auto: the image's proportions at its width). */
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh,auto)}
+/* Its Width Auto (2026-11-13): the image as wide as its Height makes it (--wpbn-iw: auto there, else its box's width), never wider
+   than its container (--wpbn-mw): narrower there, it is drawn smaller in its box (Contain). */
+.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw,none)}
+.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw,100%);max-width:100%}
 /* A button (as WP Top Info Bar's, WoodMart's size presets): as wide as its text, clickable (a layer lets clicks
    through), its colour (--wpbn-bc) the fill or the border, its text colour (--wpbn-bt). */
 .wpbn-scene .wpbn-layer--button{width:max-content;max-width:var(--wpbn-width);height:auto}
@@ -283,6 +287,8 @@
 .wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-t,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-t,var(--wpbn-oh,100%))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-t,var(--wpbn-oh,auto))}
+.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw-t,var(--wpbn-mw,none))}
+.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw-t,var(--wpbn-iw,100%))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-t,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-t,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-t,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-t,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-t,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,);backdrop-filter:blur(var(--wpbn-blur-t,var(--wpbn-blur,0px))) var(--wpbn-bdf-t,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-t)}
@@ -302,6 +308,8 @@
 .wpbn-scene .wpbn-shape-item>.wpbn-shape-loop{--wpbn-al:var(--wpbn-ad-m,var(--wpbn-ad-d,8s))}
 .wpbn-scene .wpbn-layer--overlay{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,100%)))}
 .wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh-m,var(--wpbn-oh-t,var(--wpbn-oh,auto)))}
+.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw-m,var(--wpbn-mw-t,var(--wpbn-mw,none)))}
+.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw-m,var(--wpbn-iw-t,var(--wpbn-iw,100%)))}
 .wpbn-scene .wpbn-button{padding:var(--wpbn-bp-m,var(--wpbn-bp,5px 20px));min-height:var(--wpbn-bh-m,var(--wpbn-bh,42px));font-size:var(--wpbn-bf-m,var(--wpbn-bf,13px));--wpbn-isz:var(--wpbn-is-m,var(--wpbn-is,16px));--wpbn-igz:var(--wpbn-ig-m,var(--wpbn-ig,8px))}
 .wpbn-scene .wpbn-layer--blur{-webkit-backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,);backdrop-filter:blur(var(--wpbn-blur-m,var(--wpbn-blur,0px))) var(--wpbn-bdf-m,)}
 .wpbn-scene .wpbn-layer--filter,.wpbn-scene .wpbn-shape-img--filter{--wpbn-fl:var(--wpbn-filter-m)}
@@ -327,3 +335,7 @@
 .wpbn-scene .wpbn-layer--padding{box-sizing:border-box;padding:var(--wpbn-pad)}
 @media(max-width:1024px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-t,var(--wpbn-pad))}}
 @media(max-width:767px){.wpbn-scene .wpbn-layer--padding{padding:var(--wpbn-pad-m,var(--wpbn-pad-t,var(--wpbn-pad)))}}
+/* Show on (2026-11-13): a layer hidden on some devices only (WPBN_Render: wpbn-layer--hide-d, -t, -m). */
+@media(min-width:1025px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-d{display:none!important}}
+@media(min-width:768px) and (max-width:1024px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-t{display:none!important}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-m{display:none!important}}

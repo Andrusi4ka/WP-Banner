@@ -168,7 +168,7 @@ msgstr ""
 msgid "Mobile"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:108 includes/class-wpbn-admin.php:129
+#: includes/class-wpbn-admin.php:108 includes/class-wpbn-admin.php:132
 msgid "Preview device"
 msgstr ""
 
@@ -185,55 +185,59 @@ msgid "Developer mode: the boxes of the scene and its layers, with their sizes a
 msgstr ""
 
 #: includes/class-wpbn-admin.php:119
+msgid "Move the chosen layer in the preview"
+msgstr ""
+
+#: includes/class-wpbn-admin.php:122
 msgid "Screen"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:120
+#: includes/class-wpbn-admin.php:123
 msgid "Screen width (px)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:121
+#: includes/class-wpbn-admin.php:124
 msgid "Screen height (px)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:124
+#: includes/class-wpbn-admin.php:127
 msgid "Undo (Ctrl + Z)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:125
+#: includes/class-wpbn-admin.php:128
 msgid "Redo (Ctrl + Shift + Z)"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:126
+#: includes/class-wpbn-admin.php:129
 msgid "History"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:133
+#: includes/class-wpbn-admin.php:136
 msgid "Update"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:134
+#: includes/class-wpbn-admin.php:137
 msgid "Play the scroll"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:135
+#: includes/class-wpbn-admin.php:138
 msgid "Banner preview"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:135
+#: includes/class-wpbn-admin.php:138
 msgid "Scroll simulation"
 msgstr ""
 
-#: includes/class-wpbn-admin.php:164
+#: includes/class-wpbn-admin.php:167
 msgid "The scene settings were not saved: they are too large. Remove some layers or shorten their texts, then update the scene again."
 msgstr ""
 
-#: includes/class-wpbn-admin.php:165
+#: includes/class-wpbn-admin.php:168
 msgid "The scene settings were not saved: the editor sent them damaged. Reload the page and try again."
 msgstr ""
 
 #. translators: %d: the most layers a scene can have
-#: includes/class-wpbn-admin.php:167
+#: includes/class-wpbn-admin.php:170
 msgid "A scene can have at most %d layers: only the first ones were saved."
 msgstr ""
 

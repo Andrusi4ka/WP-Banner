@@ -17,16 +17,44 @@
     // Placed by class: a scene standing inside a block with its class (data-host) becomes that block's
     // background, as the short script after it already does while the page loads (WPBN_Render::HOST_SCRIPT);
     // here for scenes it did not move (added to the page later). No such block: it stays where it is.
+    // Per device (2026-11-13, user's request): only on the screens in data-host-on (none: every one); on the others it goes back
+    // where it stood (the comment left there: wpbnSpot), a block of its own, as the screen's width changes.
+    const wants = scene => { const on = scene.getAttribute('data-host-on'); return on === null || (' ' + on + ' ').indexOf(' ' + DEVICES[device()] + ' ') !== -1; };
+    // The block with its class around the place it stood.
+    function hostOf(scene) {
+        const name = scene.dataset.host, from = scene.wpbnSpot && scene.wpbnSpot.parentNode ? scene.wpbnSpot.parentNode : scene.parentElement;
+        try { return from && from.closest ? from.closest('.' + (window.CSS && CSS.escape ? CSS.escape(name) : name)) : null; } catch (e) { return null; }
+    }
     function place() {
-        document.querySelectorAll('.wpbn-scene[data-host]:not(.wpbn-scene--fill)').forEach(function (scene) {
-            const name = scene.dataset.host, parent = scene.parentElement;
-            let host = null;
-            try { host = parent && parent.closest('.' + (window.CSS && CSS.escape ? CSS.escape(name) : name)); } catch (e) { return; }
-            if (!host) return;
-            scene.classList.add('wpbn-scene--fill');
-            host.classList.add('wpbn-host');
-            if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
-            host.insertBefore(scene, host.firstChild);
+        document.querySelectorAll('.wpbn-scene[data-host]').forEach(function (scene) {
+            const placed = scene.classList.contains('wpbn-scene--fill');
+            if (wants(scene) && !placed) {
+                const host = hostOf(scene);
+                if (!host) return;
+                if (!scene.wpbnSpot || !scene.wpbnSpot.parentNode) { scene.wpbnSpot = document.createComment('wpbn'); scene.parentNode.insertBefore(scene.wpbnSpot, scene); }
+                scene.classList.add('wpbn-scene--fill');
+                host.classList.add('wpbn-host');
+                if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                host.insertBefore(scene, host.firstChild);
+            } else if (!wants(scene) && placed && scene.wpbnSpot && scene.wpbnSpot.parentNode) {
+                const host = scene.parentElement, s = scenes.find(item => item.el === scene);
+                // The block's minimum height given for it (fillSize()) let go.
+                if (s && s.minHeight) { host.style.minHeight = ''; s.minHeight = false; }
+                scene.classList.remove('wpbn-scene--fill');
+                if (host && host !== scene.wpbnSpot.parentNode && !host.querySelector(':scope > .wpbn-scene--fill')) host.classList.remove('wpbn-host');
+                scene.wpbnSpot.parentNode.insertBefore(scene, scene.wpbnSpot);
+            }
+        });
+    }
+    // Placed or put back since it was last sized: its observers and pointer area follow.
+    function replaced() {
+        scenes.forEach(function (s) {
+            const fill = s.el.classList.contains('wpbn-scene--fill');
+            if (fill === s.fill) return;
+            s.fill = fill;
+            if (s.resize) { s.resize.disconnect(); s.resize = null; }
+            if (!fill) s.el.style.height = '';
+            resizeWatch(s);
         });
     }
 
@@ -49,9 +77,11 @@
     // Follow the mouse: the pointer's place over the scene (over its block, placed by class: the block's content is in front of it).
     function follow(s) {
         if (!s.layers.some(layer => Number(layer.m.mouse))) return;
-        const area = s.fill ? s.el.parentElement : s.el;
+        // Placed by class on some screens: the block (it holds the scene on the others too); there, only over the scene itself.
+        const area = s.el.dataset.host ? (s.fill ? s.el.parentElement : hostOf(s.el)) || s.el : s.el;
         area.addEventListener('pointermove', function (event) {
             if (!mouse.matches || reduced.matches || event.pointerType === 'touch') return;
+            if (!s.fill && area !== s.el && !s.el.contains(event.target)) { if (s.tx || s.ty) { s.tx = 0; s.ty = 0; schedule(); } return; }
             const r = s.el.getBoundingClientRect();
             if (!r.width || !r.height) return;
             s.tx = clamp((event.clientX - r.left) / r.width * 2 - 1, -1, 1);
@@ -222,6 +252,8 @@
     // scene's height as its minimum, so the scene still shows.
     function fillSize(s) {
         const host = s.el.parentElement;
+        // A height given while it was a block of its own (size()): the block's now.
+        s.el.style.height = '';
         if (s.minHeight) { host.style.minHeight = ''; s.minHeight = false; }
         if (host.getBoundingClientRect().height < FILL_MIN) {
             const value = getComputedStyle(s.el).getPropertyValue(['--wpbn-height', '--wpbn-tablet-height', '--wpbn-mobile-height'][device()]).trim();
@@ -289,6 +321,9 @@
     function watch(s) {
         if (near) near.observe(s.el);
         if (seen) seen.observe(s.el); else s.el.classList.add('wpbn-scene--seen');
+        resizeWatch(s);
+    }
+    function resizeWatch(s) {
         if (!('ResizeObserver' in window)) return;
         // Placed by class: sized again whenever the block changes size.
         // Kept on the scene (s.resize) so wpbnRefresh() lets it go with the scene.
@@ -315,7 +350,7 @@
             if (scenes[i].resize) scenes[i].resize.disconnect();
             scenes.splice(i, 1);
         }
-        place(); bind(); sizeAll(); schedule();
+        place(); replaced(); bind(); sizeAll(); schedule();
     };
     // WPBakery's frontend editor draws an element again on each change: its scenes bound as they come (once a frame).
     if (/[?&]vc_editable=true/.test(location.search) || (document.body && document.body.classList.contains('vc_editor')) || window.vc_iframe) {
@@ -324,14 +359,14 @@
             if (pending) return;
             pending = requestAnimationFrame(function () {
                 pending = 0;
-                if (document.querySelector('.wpbn-scene:not([data-wpbn-ready]), .wpbn-scene[data-host]:not(.wpbn-scene--fill)') || scenes.some(s => !s.el.isConnected)) window.wpbnRefresh();
+                if (document.querySelector('.wpbn-scene:not([data-wpbn-ready])') || Array.prototype.some.call(document.querySelectorAll('.wpbn-scene[data-host]:not(.wpbn-scene--fill)'), wants) || scenes.some(s => !s.el.isConnected)) window.wpbnRefresh();
             });
         }).observe(document.body, {childList: true, subtree: true});
     }
     addEventListener('scroll', function () { previewProgress = null; schedule(); }, {passive: true});
     // Resizing fires many events a frame: the scenes are sized once, in the next frame.
     let sizing = 0;
-    const changed = () => { if (!sizing) sizing = requestAnimationFrame(function () { sizing = 0; sizeAll(); schedule(); }); };
+    const changed = () => { if (!sizing) sizing = requestAnimationFrame(function () { sizing = 0; place(); replaced(); sizeAll(); schedule(); }); };
     addEventListener('resize', changed);
     if (reduced.addEventListener) reduced.addEventListener('change', changed);
     addEventListener('load', changed);

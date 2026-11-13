@@ -185,10 +185,11 @@ body.wpbn-sorting,body.wpbn-sorting *{cursor:grabbing!important}
 /* An overlay's fill: Color or Gradient, two buttons across the card, styled as the preview's devices. */
 .wpbn-fill-choice{display:flex;gap:4px;margin-bottom:14px;padding:3px;border:1px solid #dcdcde;border-radius:6px;background:#fff}
 .wpbn-fill-choice .wpbn-device-button{flex:1 1 0;min-height:32px}
-#wpbn-rotate,#wpbn-dark,#wpbn-dev{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
+#wpbn-rotate,#wpbn-dark,#wpbn-dev,#wpbn-move{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px;padding:0 6px;line-height:1}
 #wpbn-rotate svg{display:block;width:22px;height:auto}
 #wpbn-dark svg,#wpbn-dev svg{display:block;width:20px;height:20px}
-#wpbn-rotate[aria-pressed=true],#wpbn-dark[aria-pressed=true],#wpbn-dev[aria-pressed=true]{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
+#wpbn-move .dashicons{display:block;width:20px;height:20px;font-size:20px;line-height:1}
+#wpbn-rotate[aria-pressed=true],#wpbn-dark[aria-pressed=true],#wpbn-dev[aria-pressed=true],#wpbn-move[aria-pressed=true]{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
 #wpbn-refresh{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;line-height:1}
 #wpbn-refresh .dashicons{width:16px;height:16px;font-size:16px;line-height:1;vertical-align:middle;color:inherit}
 #wpbn-app #wpbn-refresh.is-stale{border-color:var(--wpbn-accent);background:var(--wpbn-accent);color:#fff}
@@ -221,6 +222,20 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-modal__layer{color:#646970;font-weight:400}
 .wpbn-modal__close{display:flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;border-radius:4px;background:none;color:#50575e;cursor:pointer}
 .wpbn-modal__close:hover,.wpbn-modal__close:focus{background:#f0f0f1;color:#1d2327}
+/* The Position window's device (2026-11-13): buttons in its head, the one shown pressed; a green dot where it has a place of its own. */
+.wpbn-pos-devices,.wpbn-segment{display:inline-flex;flex:0 0 auto;gap:2px;padding:2px;border:1px solid #dcdcde;border-radius:6px;background:#f6f7f7}
+.wpbn-pos-device,.wpbn-segment__btn{position:relative;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border:0;border-radius:4px;background:none;color:#50575e;font:inherit;font-size:13px;line-height:1;cursor:pointer}
+.wpbn-pos-device .dashicons,.wpbn-segment__btn .dashicons{width:16px;height:16px;font-size:16px}
+.wpbn-pos-device:hover:not(:disabled),.wpbn-segment__btn:hover{background:#fff;color:#1d2327}
+.wpbn-pos-device.is-active,.wpbn-segment__btn[aria-pressed="true"]{background:#fff;color:var(--wpbn-accent,#2271b1);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.wpbn-pos-device:disabled{color:#a7aaad;cursor:default}
+.wpbn-pos-device:focus-visible,.wpbn-segment__btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--wpbn-accent,#2271b1)}
+.wpbn-pos-device.has-value:after{content:"";position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#00a32a}
+@media(max-width:600px){.wpbn-pos-device__name{display:none}}
+/* Show on (2026-11-13): the devices a layer shows on, pressed; one it is hidden on greyed and struck through. */
+.wpbn-segment{max-width:100%}
+.wpbn-segment__btn[aria-pressed="false"]{color:#a7aaad}
+.wpbn-segment__btn[aria-pressed="false"] .wpbn-segment__name{text-decoration:line-through}
 .wpbn-modal__body{padding:20px;overflow:auto;min-height:0}
 .wpbn-modal__body>.description{margin:0 0 12px}
 .wpbn-modal__foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid #dcdcde}
@@ -312,6 +327,12 @@ body.wpbn-modal-open{overflow:hidden}
 /* The device icons (the drawn icon, not its button's padding) line up with the number's right edge; Reset in a column of its own beside it. */
 .wpbn-field:has(.wpbn-reset) .wpbn-field__head .wpbn-devices{margin-right:15px}
 .wpbn-field__row .wpbn-reset svg{width:15px;height:15px}
+/* A per-device switch (Fill the scene): Reset in its head row, after the device icons (tablet / mobile: follow the larger screen). */
+.wpbn-field--resp-check .wpbn-field__head .wpbn-devices{margin-right:0}
+.wpbn-field__head .wpbn-reset{flex:0 0 17px;width:17px;color:#50575e}
+.wpbn-field__head .wpbn-reset:hover{color:var(--wpbn-accent)}
+.wpbn-field__head .wpbn-reset:disabled{color:#dcdcde}
+.wpbn-field__head .wpbn-reset svg{width:15px;height:15px}
 /* A setting that does not apply now: greyed, its value kept (as in WP Swiper). */
 .wpbn-field.is-disabled{opacity:.5}
 .wpbn-field.is-disabled *{cursor:not-allowed}
@@ -562,3 +583,7 @@ body.wpbn-modal-open{overflow:hidden}
 /* A Shape layer placed in the Position window (a Custom size): its drawing at its size. */
 .wpbn-position-shape svg{display:block;width:100%;height:100%;overflow:visible}
 .wpbn-position-shape .wpbn-shape-object{fill:rgba(34,113,177,.55)}
+
+/* The Position window: an axis with no room (the layer takes all of its container that way): greyed (admin.js positionAxes()). */
+.wpbn-axis.is-fixed{opacity:.45}
+.wpbn-axis.is-fixed input{cursor:not-allowed}

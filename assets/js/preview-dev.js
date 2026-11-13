@@ -100,7 +100,9 @@
             .filter(el => el.getClientRects().length)
             .map(function (el) {
                 const kind = kindOf(el), shape = kind === 'shape' ? drawing(el) : null;
-                return {el, index:indexOf(el), kind, object:el.classList.contains('wpbn-layer--object') || !!(shape && shape.custom), box:within(shape ? shape.rect : shown(el).getBoundingClientRect(), origin)};
+                // An image an object on some devices only (Fill the scene per device): on this one?
+                const own = motionOf(el).object, object = Array.isArray(own) ? !!own[device()] : el.classList.contains('wpbn-layer--object');
+                return {el, index:indexOf(el), kind, object:object || !!(shape && shape.custom), box:within(shape ? shape.rect : shown(el).getBoundingClientRect(), origin)};
             });
         const chosen = items.find(i => i.index === info.selected) || null;
         // Nothing moved since the last frame (nor the scale, the layer chosen, the names): the boxes drawn stand.

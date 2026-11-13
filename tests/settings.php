@@ -201,7 +201,21 @@ check(WPBN_Settings::sanitize(array('by_class'=>true,'target'=>'old'))['target']
 $hm=WPBN_Render::markup($pc, array('host'=>$pc['target']));
 check(strpos($hm,'data-host="herorowscript"')!==false && strpos($hm,'<script>(function(s){')!==false,'A scene placed by class carries its class and the script that makes it the background');
 check(strpos(WPBN_Render::markup($pc),'data-host')===false,'Without a host, no placement script');
-check(WPBN_Settings::placed_by_class($pc) && !WPBN_Settings::placed_by_class(array_merge($pc,array('height_unit'=>'px'))),'Placement by class only with the desktop Height on Auto');
+check(WPBN_Settings::placed_by_class($pc) && $pc['as_background']===true && $pc['as_background_tablet']===null,'Placed by class: Background of the block on, tablet and mobile following');
+// Background of the block per device (2026-11-13): scenes saved before it as then (only with the desktop Height on Auto, every device).
+$oldPx=WPBN_Settings::sanitize(array('target'=>'hero','height_unit'=>'px','height'=>600));
+check(!WPBN_Settings::placed_by_class($oldPx) && $oldPx['as_background']===false && $oldPx['target']==='hero','Saved before, with a fixed Height: not placed, as then (the class kept)');
+check(WPBN_Settings::placed_on(WPBN_Settings::sanitize(array('target'=>'hero','height_unit'=>'auto')))===array('desktop'=>true,'tablet'=>true,'mobile'=>true),'Saved before, with Height Auto: on every device, as then');
+$perDev=WPBN_Settings::sanitize(array('target'=>'hero','height_unit'=>'px','height'=>600,'as_background'=>true,'as_background_tablet'=>'','as_background_mobile'=>false,'mobile_height'=>400,'mobile_height_unit'=>'px'));
+check(WPBN_Settings::placed_on($perDev)===array('desktop'=>true,'tablet'=>true,'mobile'=>false) && $perDev['as_background_tablet']===null,'Per device: the background on desktop and tablet, a block of its own on mobile; any Height');
+check(WPBN_Settings::placed_on(array_merge($perDev,array('target'=>'')))===array('desktop'=>false,'tablet'=>false,'mobile'=>false),'No class: nowhere');
+$pdHtml=WPBN_Render::markup($perDev, array('host'=>$perDev['target'],'host_on'=>WPBN_Settings::placed_on($perDev)));
+check(strpos($pdHtml,'data-host="hero" data-host-on="desktop tablet"')!==false && strpos($pdHtml,'data-host-on')!==false && strpos($pdHtml,'wpbnSpot')!==false,'Its markup: the devices it is the background on; the script leaves its place marked');
+$pdPrev=WPBN_Admin::preview_markup($perDev);
+check(strpos($pdPrev,'class="wpbn-preview-host hero"')!==false && strpos($pdPrev,'data-host-on="desktop tablet"')!==false && strpos($pdPrev,'class="wpbn-scene wpbn-scene--fill')===false,'The preview: in a block with its class, placed by frontend.js per screen');
+check(strpos(WPBN_Admin::preview_markup($pc),'<div class="wpbn-host" style="position:relative;height:100vh">')!==false,'The preview, placed on every device: as before');
+$fjs=file_get_contents(__DIR__.'/../assets/js/frontend.js');
+check(strpos($fjs,'data-host-on')!==false && strpos($fjs,'scene.wpbnSpot.parentNode.insertBefore(scene, scene.wpbnSpot)')!==false,'frontend.js puts it back where it stood on a screen it is not placed on');
 check(WPBN_Settings::sanitize(array_merge($pc,array('height_unit'=>'px')))['target']==='herorowscript','With another height the class is kept, just not used');
 
 // Per-device values and older scenes.
@@ -363,6 +377,36 @@ check(strpos($objHtml,'&quot;fill&quot;:[false,false,false]')!==false,'Not grown
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($img)))),'wpbn-layer--object')===false,'Filling: as before');
 check($lay(array('type'=>'overlay','height_unit'=>'auto'))['height_unit']==='%','An overlay has no Auto height');
 check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{height:var(--wpbn-oh,auto)}')!==false,'Its height on the site');
+// An image object's Width Auto (2026-11-13): as wide as the image at its Height, e.g. the scene's whole height.
+$autoW=$lay(array('type'=>'image','image'=>3,'fill_scene'=>false,'overlay_width_unit'=>'auto','height'=>100,'height_unit'=>'%','mobile_overlay_width'=>80,'mobile_overlay_width_unit'=>'%','mobile_height_unit'=>'auto'));
+check($autoW['overlay_width_unit']==='auto' && $lay(array('type'=>'overlay','overlay_width_unit'=>'auto'))['overlay_width_unit']==='%','Width Auto: an image object\'s only');
+$autoHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($autoW))));
+check(strpos($autoHtml,'--wpbn-width:max-content;--wpbn-width-t:max-content;--wpbn-width-m:80%;')!==false && strpos($autoHtml,'--wpbn-oh:100%;--wpbn-oh-t:100%;--wpbn-oh-m:auto;')!==false && strpos($autoHtml,'--wpbn-iw:auto;--wpbn-mw:100%;--wpbn-fit:contain;--wpbn-iw-t:auto;--wpbn-mw-t:100%;--wpbn-fit-t:contain;--wpbn-iw-m:100%;--wpbn-mw-m:none;')!==false,'Rendered: its image as wide as its height makes it, never wider than its container (then contained), per device');
+check(WPBN_Settings::object_sizes($lay(array('type'=>'image','fill_scene'=>false,'overlay_width_unit'=>'auto','height_unit'=>'auto')))['desktop'][1]===array(100,'%'),'Both Auto: the scene\'s height');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($objL)))),'--wpbn-iw')===false,'No Width Auto: as before');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw,none)}'."\n".'.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw,100%);max-width:100%}')!==false,'Its image\'s width on the site, never wider than its container');
+// Show on (2026-11-13): a layer hidden on some devices only.
+check($img['hide_desktop']===false && $img['hide_tablet']===false && $img['hide_mobile']===false,'Show on: every device by default');
+$hideM=$lay(array('type'=>'text','text'=>'Hi','hide_mobile'=>1,'hide_tablet'=>'false'));
+check($hideM['hide_mobile']===true && $hideM['hide_tablet']===false,'Show on: kept per device');
+$hideHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($hideM))));
+check(strpos($hideHtml,'class="wpbn-layer wpbn-layer--text wpbn-layer--hide-m"')!==false,'Hidden on mobile: its class');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'text','text'=>'Hi','hide_desktop'=>1,'hide_tablet'=>1,'hide_mobile'=>1)))))),'wpbn-layer--text')===false,'Hidden on every device: not drawn');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'@media(max-width:767px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-m{display:none!important}}')!==false,'Hidden there on the site');
+// Fill the scene per device (2026-11-13): tablet and mobile null follow the larger screen.
+check($img['fill_scene_tablet']===null && $img['fill_scene_mobile']===null && WPBN_Settings::fills_on($img)===array('desktop'=>true,'tablet'=>true,'mobile'=>true) && !WPBN_Settings::object($img),'Per device: inherited by default');
+check($lay(array('type'=>'image','fill_scene_tablet'=>'','fill_scene_mobile'=>'0'))['fill_scene_mobile']===false && $lay(array('type'=>'image','fill_scene_tablet'=>''))['fill_scene_tablet']===null && $lay(array('type'=>'image','fill_scene_mobile'=>true))['fill_scene_mobile']===true,'Per device: saved as on, off or empty (inherit)');
+$mix=$lay(array('type'=>'image','image'=>3,'fill_scene_mobile'=>false,'overlay_width'=>60,'height_unit'=>'auto','x'=>50,'y'=>50,'x_mobile'=>130,'y_mobile'=>20,'use_padding'=>1,'padding_top'=>8));
+check(WPBN_Settings::fills_on($mix)===array('desktop'=>true,'tablet'=>true,'mobile'=>false) && WPBN_Settings::object($mix) && !WPBN_Settings::object($mix,'desktop') && WPBN_Settings::object($mix,'mobile') && WPBN_Settings::anchored($mix),'Mixed: fills on desktop and tablet, an object on mobile');
+$mixE=WPBN_Settings::effective($mix);
+check($mixE['x']==50 && $mixE['x_mobile']==100 && $mixE['y_mobile']==20,'Mixed: its Position within its container only where it is an object');
+check(WPBN_Settings::paddings($mix)===array('desktop'=>'0px 0px 0px 0px','tablet'=>'0px 0px 0px 0px','mobile'=>'8px 0px 0px 0px'),'Mixed: Padding only where it is an object');
+$mixHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($mix))));
+check(strpos($mixHtml,'wpbn-layer--object')!==false && strpos($mixHtml,'--wpbn-oh:100%;--wpbn-oh-t:100%;--wpbn-oh-m:auto;')!==false && strpos($mixHtml,'--wpbn-width:100%;--wpbn-width-t:100%;--wpbn-width-m:60%;')!==false,'Mixed: the scene\'s size where it fills it, its own on mobile');
+check(strpos($mixHtml,'--wpbn-anx:0.5;--wpbn-anx-t:0.5;--wpbn-anx-m:1;')!==false,'Mixed: centred where it fills, placed as a title on mobile');
+check(strpos($mixHtml,'&quot;fill&quot;:[true,true,false]')!==false && strpos($mixHtml,'&quot;object&quot;:[false,false,true]')!==false,'Mixed: grown to hide its edges only where it fills the scene; where it is an object (Dev mode)');
+$flip=WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'fill_scene'=>false,'fill_scene_tablet'=>true)))));
+check(WPBN_Settings::fills_on($flip['layers'][0])===array('desktop'=>false,'tablet'=>true,'mobile'=>true),'An object on desktop, filling the scene on tablet and mobile (they follow tablet)');
 // Scene settings, Attributes: its own id and classes on its block.
 $attr=WPBN_Settings::sanitize(array('css_id'=>' #offer-1 ','css_class'=>'.hero  big-banner, hero bad"class <x>'));
 check($attr['css_id']==='offer-1' && $attr['css_class']==='hero big-banner badclass x','Element ID and Extra class name cleaned ('.$attr['css_class'].')');
