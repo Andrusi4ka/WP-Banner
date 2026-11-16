@@ -851,7 +851,7 @@ const server=http.createServer((req,res)=>{
         assert.equal(await tip.evaluate(el=>getComputedStyle(el,'::after').visibility),'visible','Help on a dark tooltip on hover');
         assert.equal(await tip.evaluate(el=>getComputedStyle(el,'::after').backgroundColor),'rgb(29, 35, 39)');
         // Per device: the block's background on Desktop, a block of its own on Mobile (in the preview: put back where it stood).
-        const bgDevice=d=>page.click('.wpbn-field--resp-check [data-field-device="'+d+'"]');
+        const bgDevice=d=>page.click('.wpbn-field--resp-check[data-base="as_background"] [data-field-device="'+d+'"]');
         await bgDevice('mobile');
         await page.click('label[for="wpbn-f-as_background_mobile"]');
         const bg=await data();
@@ -867,8 +867,24 @@ const server=http.createServer((req,res)=>{
         await bgDevice('mobile');
         await frame().waitForFunction(()=>!document.querySelector('.wpbn-scene').classList.contains('wpbn-scene--fill'));
         assert.equal(await placedNow(),'false false','Narrowed again: put back where it stood');
-        await page.click('.wpbn-field--resp-check [data-reset]');
+        await page.click('.wpbn-field--resp-check[data-base="as_background"] [data-reset]');
         assert.equal((await data()).as_background_mobile,null,'Reset: Mobile follows the larger screen');
+        // Clip layers to the banner (2026-11-16): on by default; off on Mobile only, the preview's scene lets its layers out above and below.
+        await bgDevice('desktop');
+        assert.ok(await page.locator('#wpbn-f-clip').isChecked() && (await data()).clip===true,'Clip layers to the banner: on by default');
+        await bgDevice('mobile');
+        await page.click('label[for="wpbn-f-clip_mobile"]');
+        const cl=await data();
+        assert.ok(cl.clip===true && cl.clip_tablet==null && cl.clip_mobile===false,'Clip off on Mobile only');
+        await update();
+        const overflow=()=>frame().evaluate(()=>{const s=getComputedStyle(document.querySelector('.wpbn-scene'));return s.overflowX+' '+s.overflowY;});
+        assert.equal(await overflow(),'clip visible','Mobile: the layers may go above and below, the sides stay cut');
+        await bgDevice('desktop');
+        await frame().waitForFunction(()=>getComputedStyle(document.querySelector('.wpbn-scene')).overflowY==='clip');
+        assert.equal(await overflow(),'clip clip','Desktop: cut at every edge');
+        await bgDevice('mobile');
+        await page.click('.wpbn-field--resp-check[data-base="clip"] [data-reset]');
+        assert.equal((await data()).clip_mobile,null,'Clip reset: Mobile follows the larger screen');
         await bgDevice('desktop');
         await page.selectOption('[data-key="height_unit"]','vh');
         assert.ok(!(await page.locator('#wpbn-f-target').isDisabled()) && (await data()).target==='hero','Another height: still placed by its class');
@@ -1175,6 +1191,20 @@ const server=http.createServer((req,res)=>{
         await tp.click('#wpbn-refresh');await tp.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         const pdSite=await tp.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--text').evaluate(el=>{const c=getComputedStyle(el),w=el.closest('.wpbn-scene').getBoundingClientRect().width;return c.paddingTop+' '+Math.round(parseFloat(c.paddingLeft)/w*100);});
         assert.equal(pdSite,'20px 5','On the site: 20px, the left 5 percent of the banner width');
+        // Margin (2026-11-16): the box around Padding's, its own link; linked, one side sets all four; on the site the layer keeps that
+        // room from its container's edges (its left margin at 0%, its right one at 100%, between in proportion: frontend.css).
+        assert.equal(await tp.locator('.wpbn-spacing [data-margin-side]').count(),4,'Margin: four sides around Padding\'s');
+        assert.equal(await tp.locator('.wpbn-spacing [data-margin-link]').getAttribute('aria-pressed'),'true','Its own link, on by default');
+        await tp.fill('#wpbn-f-margin_top','30');
+        pd=await padOf();
+        assert.ok(['top','right','bottom','left'].every(s=>pd['margin_'+s]===30) && pd.padding_top===20 && pd.padding_left===5,'Margin linked: one side sets all four; Padding unchanged');
+        await tp.click('[data-margin-link]');await tp.fill('#wpbn-f-margin_right','10');
+        pd=await padOf();
+        assert.ok(pd.margin_linked===false && pd.margin_right===10 && pd.margin_left===30,'Margin unlinked: the right side on its own');
+        await tp.click('#wpbn-refresh');await tp.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const mgSite=await tp.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--text').evaluate(el=>{const c=getComputedStyle(el),ax=parseFloat(c.getPropertyValue('--wpbn-ax')),ay=parseFloat(c.getPropertyValue('--wpbn-ay'));
+            return [el.classList.contains('wpbn-layer--margin'),Math.abs(parseFloat(c.marginLeft)-(30*(1-ax)-10*ax))<0.6,Math.abs(parseFloat(c.marginTop)-(30*(1-ay)-30*ay))<0.6].join(' ');});
+        assert.equal(mgSite,'true true true','On the site: its Margin moves it within its container as its Position says');
         await tp.click('[data-select="0"]');
         // An image layer's device note is an "i" beside Image on every device, not the note above its blocks; a title keeps the note (not on desktop).
         assert.match(await tp.locator('[data-base="image"] .wpbn-field__head .wpbn-tip').getAttribute('data-tip'),/^Desktop values. Tablet and mobile follow them/,'Image on desktop: its tip too');

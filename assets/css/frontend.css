@@ -340,3 +340,15 @@
 @media(min-width:1025px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-d{display:none!important}}
 @media(min-width:768px) and (max-width:1024px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-t{display:none!important}}
 @media(max-width:767px){.wpbn-scene .wpbn-layer.wpbn-layer--hide-m{display:none!important}}
+/* Clip layers to the banner off (2026-11-16, user's request; Scene settings, Size, per device: WPBN_Render::unclipped()):
+the layers may go above and below the banner, its sides stay cut (no page scroll sideways; overflow-x:clip keeps the other
+axis visible, hidden would not). A browser without clip shows them sideways too. */
+@media(min-width:1025px){.wpbn-scene.wpbn-scene--free-d{overflow:visible;overflow-x:clip}}
+@media(min-width:768px) and (max-width:1024px){.wpbn-scene.wpbn-scene--free-t{overflow:visible;overflow-x:clip}}
+@media(max-width:767px){.wpbn-scene.wpbn-scene--free-m{overflow:visible;overflow-x:clip}}
+/* Margin (2026-11-16, user's request; WPBN_Settings::margins()): the room a layer keeps from its container's edges, per device
+(--wpbn-mgt, -mgr, -mgb, -mgl; -t, -m). Its Position is a share of the room left: at 0% its left (top) edge stands its left (top)
+margin from the container's, at 100% its right (bottom) edge its right (bottom) margin, between in proportion (ax, ay: its point). */
+.wpbn-scene .wpbn-layer.wpbn-layer--margin{margin:0;margin-left:calc(var(--wpbn-mgl) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb) * var(--wpbn-ay))}
+@media(max-width:1024px){.wpbn-scene .wpbn-layer.wpbn-layer--margin{margin-left:calc(var(--wpbn-mgl-t) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr-t) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt-t) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb-t) * var(--wpbn-ay))}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer.wpbn-layer--margin{margin-left:calc(var(--wpbn-mgl-m) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr-m) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt-m) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb-m) * var(--wpbn-ay))}}

@@ -444,8 +444,34 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-unit-pick button+button{border-top:1px solid #e4e4e4}
 .wpbn-unit-pick button:hover{color:var(--wpbn-accent)}
 .wpbn-unit-pick button[aria-pressed=true]{color:#1d2327;font-weight:700}
-/* Padding: Border's box, each side's number with px / % beside it; the spaces green inside the frame (as a browser's inspector). */
-.wpbn-pad-box__frame{right:96px;left:96px;border:0 solid rgba(147,196,125,.65);background:#fff;box-sizing:border-box}
+/* Padding/Margin (2026-11-16, the user's drawing): Margin's box around Padding's, each side's number with px / % beside it, in a
+   5 × 5 grid (Margin's sides on the outer rows and columns, Padding's next to the middle); Padding's link in the middle, Margin's in
+   its top right corner. The rings' sides show the spaces set (green Padding, orange Margin, as a browser's inspector). */
+.wpbn-spacing{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,68px));grid-template-rows:repeat(5,34px);gap:6px;justify-content:center;margin:6px 0 2px;padding:8px}
+.wpbn-spacing__ring{position:relative;box-sizing:border-box;border-style:solid;border-width:0;border-radius:3px}
+.wpbn-spacing__ring--margin{grid-area:1/1/6/6;margin:-8px;border-color:rgba(249,204,157,.95);background:#f6f7f7;box-shadow:inset 0 0 0 1px #dcdcde}
+.wpbn-spacing__ring--padding{grid-area:2/2/5/5;margin:-3px;border-color:rgba(147,196,125,.75);background:#ececed;box-shadow:inset 0 0 0 1px #dcdcde}
+.wpbn-spacing__core{grid-area:3/3;border-radius:2px;background:#fff}
+.wpbn-spacing__name{z-index:1;align-self:start;justify-self:start;padding:2px 0 0 2px;color:#8c8f94;font-size:10px;font-weight:600;line-height:1.2;letter-spacing:.04em;text-transform:uppercase;pointer-events:none}
+.wpbn-spacing__name--margin{grid-area:1/1}
+.wpbn-spacing__name--padding{grid-area:2/2/3/3}
+.wpbn-spacing .wpbn-radius-input{position:relative;z-index:1;width:auto;height:34px}
+.wpbn-spacing .wpbn-unit-pick{flex-basis:24px}
+.wpbn-spacing__side--margin-top{grid-area:1/3/2/4}
+.wpbn-spacing__side--padding-top{grid-area:2/3/3/4}
+.wpbn-spacing__side--padding-bottom{grid-area:4/3/5/4}
+.wpbn-spacing__side--margin-bottom{grid-area:5/3/6/4}
+.wpbn-spacing__side--margin-left{grid-area:3/1}
+.wpbn-spacing__side--padding-left{grid-area:3/2}
+.wpbn-spacing__side--padding-right{grid-area:3/4}
+.wpbn-spacing__side--margin-right{grid-area:3/5}
+.wpbn-spacing .wpbn-spacing__link{position:relative;z-index:1;top:auto;left:auto;width:28px;height:28px;transform:none;align-self:center;justify-self:center}
+.wpbn-spacing__link--padding{grid-area:3/3}
+.wpbn-spacing__link--margin{grid-area:1/5;justify-self:end!important;align-self:start!important}
+.wpbn-spacing .wpbn-spacing__link svg{width:14px;height:14px}
+/* A narrow column: smaller numbers and units, so 500 still fits. */
+.wpbn-field--padding{container-type:inline-size}
+@container(max-width:300px){.wpbn-spacing{gap:4px;padding:6px}.wpbn-spacing__ring--margin{margin:-6px}.wpbn-spacing .wpbn-unit-pick{flex-basis:15px}.wpbn-spacing .wpbn-unit-pick button{font-size:9px}#wpbn-app .wpbn-spacing .wpbn-radius-input input[type=number]{padding:0 1px;font-size:12px}.wpbn-spacing__name{font-size:9px;letter-spacing:0}.wpbn-spacing .wpbn-spacing__link{width:24px;height:24px}}
 .wpbn-border-box__link:hover{border-color:var(--wpbn-accent);color:var(--wpbn-accent)}
 .wpbn-border-box__link[aria-pressed=true]{border-color:var(--wpbn-accent);background:#f0f6fc;color:var(--wpbn-accent)}
 .wpbn-shadow{gap:0 8px}

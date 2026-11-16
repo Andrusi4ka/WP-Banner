@@ -128,15 +128,18 @@
         const d = device();
         s.attached.forEach(function (layer) {
             const a = layer.to.el, p = layer.m.anchor.at[d], st = layer.el.style;
-            if (!Array.isArray(p) || !a.getClientRects().length || !layer.el.getClientRects().length) { st.left = st.top = ''; layer.lever = [0, 0]; layer.on = false; return; }
+            if (!Array.isArray(p) || !a.getClientRects().length || !layer.el.getClientRects().length) { st.left = st.top = st.marginLeft = st.marginTop = ''; layer.lever = [0, 0]; layer.on = false; return; }
             const cs = getComputedStyle(a), w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0, k = prop(cs, '--wpbn-s', 1);
-            const cx = (parseFloat(cs.left) || 0) + w / 2 - prop(cs, '--wpbn-ax', .5) * w, cy = (parseFloat(cs.top) || 0) + h / 2 - prop(cs, '--wpbn-ay', .5) * h;
+            // Its Margin moves its box from its left / top (frontend.css): counted in.
+            const cx = (parseFloat(cs.left) || 0) + (parseFloat(cs.marginLeft) || 0) + w / 2 - prop(cs, '--wpbn-ax', .5) * w, cy = (parseFloat(cs.top) || 0) + (parseFloat(cs.marginTop) || 0) + h / 2 - prop(cs, '--wpbn-ay', .5) * h;
             // An image: its picture as drawn in its frame (Contain: smaller, where Image position puts it), not the frame.
             const pic = window.wpbnPicture(a, cs, w, h);
             // Per axis: its point of that layer plus an offset in px, or (p[4], p[5]: on a picture) a share of the picture from its start.
             const share = i => Number(p[4 + i]) === 1;
             layer.lever = [0, 1].map(i => (pic[i] + (share(i) ? (Number(p[2 + i]) || 0) / 100 * pic[2 + i] - pic[2 + i] / 2 : (clamp(Number(p[i]) || 0, 0, 1) - .5) * pic[2 + i])) * k);
             layer.on = true;
+            // Placed by that layer: its own Margin (the room from its container's edges) does not apply.
+            st.marginLeft = st.marginTop = '0px';
             st.left = (cx + layer.lever[0] + (share(0) ? 0 : Number(p[2]) || 0)).toFixed(2) + 'px';
             st.top = (cy + layer.lever[1] + (share(1) ? 0 : Number(p[3]) || 0)).toFixed(2) + 'px';
         });

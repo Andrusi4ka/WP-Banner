@@ -145,6 +145,12 @@ class WPBN_Render {
         $text = WPBN_Settings::title_text($text);
         return nl2br(str_replace(array('&lt;u&gt;', '&lt;/u&gt;'), array('<u>', '</u>'), esc_html($text)), false);
     }
+    // The devices where "Clip layers to the banner" is off: wpbn-scene--free-d, -t, -m (frontend.css).
+    public static function unclipped($s) {
+        $out = '';
+        foreach (WPBN_Settings::clips_on($s) as $device=>$on) { if (!$on) { $out .= ' wpbn-scene--free-'.$device[0]; } }
+        return $out;
+    }
     // $context  fill: the scene fills the element it is put into (no height of its own; the editor's preview);
     //           host: the class of the block it becomes the background of, if it stands inside one (HOST_SCRIPT);
     //           eager: load its images at once (default: only the page's first scene does);
@@ -158,7 +164,7 @@ class WPBN_Render {
         $auto = array();
         foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
         // Its own id and classes (Scene settings).
-        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
+        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').self::unclipped($s).($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
         // first: the page's first scene (its images load at once); loaded: an image drawn already (only the first gets
         // fetchpriority); links: the Google fonts' <link>s the layers need.
         // anchors: the uids of the layers drawn that others drawn are attached to (data-uid on them; frontend.js attach()).
@@ -310,6 +316,19 @@ class WPBN_Render {
             $box .= ' wpbn-layer--padding';
             $css .= '--wpbn-pad:'.$padding['desktop'].';--wpbn-pad-t:'.$padding['tablet'].';--wpbn-pad-m:'.$padding['mobile'].';';
         }
+        // Its Margin (2026-11-16; WPBN_Settings::margins(); frontend.css): on the layer itself, the room it keeps from its container's
+        // edges, per device; a title, text or button as wide as its container less its left and right margins at most.
+        $margin = WPBN_Settings::margins($l);
+        if ($margin) {
+            $classes .= ' wpbn-layer--margin';
+            foreach ($margin as $device=>$m) {
+                $sfx = self::SUFFIX[$device];
+                foreach (array('t', 'r', 'b', 'l') as $n=>$side) { $css .= '--wpbn-mg'.$side.$sfx.':'.$m[$n].';'; }
+                if (WPBN_Settings::textual($l) && !WPBN_Settings::sized($l)) {
+                    $css .= '--wpbn-width'.$sfx.':calc('.($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%').' - '.$m[1].' - '.$m[3].');';
+                }
+            }
+        }
         // Its Radius (WPBN_Settings::radii(); frontend.css): on the same as its Border, per device.
         $radius = WPBN_Settings::radii($l);
         if ($radius) {
@@ -448,8 +467,10 @@ class WPBN_Render {
                     foreach ($sizes as $device=>$wh) {
                         $auto = !$fills[$device] && $wh[0][1] === 'auto';
                         // Never wider than its container (--wpbn-mw); narrower there, its image shrinks to fit (Contain, whatever its Image fit).
+                        $room = $container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%';
+                        if ($margin) { $room = 'calc('.$room.' - '.$margin[$device][1].' - '.$margin[$device][3].')'; }
                         $css .= '--wpbn-iw'.self::SUFFIX[$device].':'.($auto ? 'auto' : '100%').';--wpbn-mw'.self::SUFFIX[$device].':'
-                            .($auto ? ($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%') : 'none').';'
+                            .($auto ? $room : 'none').';'
                             .($auto ? '--wpbn-fit'.self::SUFFIX[$device].':contain;' : '');
                     }
                 }

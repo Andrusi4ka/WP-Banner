@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,10 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.2.0 =
+* Clip layers to the banner, per device (Scene settings → Size): switched off, the layers may go above and below the banner, over the blocks around it — e.g. a title moving out with the scroll. Its sides stay cut, so the page never scrolls sideways.
+* Padding/Margin: the Padding field is now two boxes, one in the other. Margin is the room a layer keeps from its container's edges, per side and device, in px or %; its Position moves it within what is left. Each box has its own link; one switch turns both on.
 
 = 1.1.0 =
 * Attached to: a layer can follow another one. Place it where you want it and choose the layer: it stays there, and from then on it moves with that layer — as it scrolls, zooms, follows the mouse or grows taller (a title wrapping onto more lines). On a picture it keeps its spot on it, so a marker stays on its town however large the map is drawn.

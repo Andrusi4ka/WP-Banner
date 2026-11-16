@@ -10,7 +10,21 @@ class WPBN_Settings {
         return array('height'=>720, 'tablet_height'=>null, 'mobile_height'=>null, 'height_unit'=>'auto', 'tablet_height_unit'=>null, 'mobile_height_unit'=>null,
             // as_background: per device (2026-11-13, user's request), the scene the background of the block with the class
             // there; off, a block of its own where the element stands. Tablet and mobile null: the larger screen's.
-            'target'=>'', 'as_background'=>true, 'as_background_tablet'=>null, 'as_background_mobile'=>null, 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
+            'target'=>'', 'as_background'=>true, 'as_background_tablet'=>null, 'as_background_mobile'=>null,
+            // clip: per device (2026-11-16, user's request), the layers cut at the banner's edges; off, they may go
+            // above and below it (its sides stay cut: no page scroll sideways). Tablet and mobile null: the larger screen's.
+            'clip'=>true, 'clip_tablet'=>null, 'clip_mobile'=>null, 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
+    }
+    // Clip layers to the banner, per device: true where the layers are cut at its edges.
+    public static function clips_on($s) {
+        $out = array();
+        $last = !array_key_exists('clip', $s) || !empty($s['clip']);
+        foreach (array('desktop'=>'', 'tablet'=>'_tablet', 'mobile'=>'_mobile') as $device=>$suffix) {
+            $own = $suffix === '' ? null : ($s['clip'.$suffix] ?? null);
+            $last = $own === null ? $last : (bool) $own;
+            $out[$device] = $last;
+        }
+        return $out;
     }
     // The scene's own id and classes (Scene settings, Attributes), on its <section>, as WPBakery's "Element ID" and
     // "Extra class name": an id (a letter first; letters, digits, - and _), classes separated by spaces (a dot dropped).
@@ -175,15 +189,24 @@ class WPBN_Settings {
     public static function padded($l) { return self::textual($l) || self::object($l); }
     // A layer's Padding per device as CSS padding ("T R B L"), '' where it has none or none anywhere.
     public static function paddings($l) {
+        $sides = self::spaces($l, 'padding');
+        return $sides ? array_map(function ($s) { return implode(' ', $s); }, $sides) : '';
+    }
+    // Its Margin per device (2026-11-16, user's request; behind the same switch as Padding: "Padding/Margin"): the room it keeps
+    // from its container's edges, [top, right, bottom, left] per device, '' where it has none anywhere (frontend.css: at X 0% its
+    // left edge stands its left margin from the container's, at 100% its right edge its right margin, between in proportion).
+    public static function margins($l) { return self::spaces($l, 'margin'); }
+    // Padding or Margin ($kind) per device, each side with its unit; '' with the switch off, a layer without one or all 0.
+    private static function spaces($l, $kind) {
         if (empty($l['use_padding']) || !self::padded($l)) { return ''; }
         $out = array();
         $any = false;
         foreach (array('desktop', 'tablet', 'mobile') as $device) {
             // An image filling the scene on this device: none there.
-            if ($l['type'] === 'image' && self::fills($l, $device)) { $out[$device] = '0px 0px 0px 0px'; continue; }
+            if ($l['type'] === 'image' && self::fills($l, $device)) { $out[$device] = array('0px', '0px', '0px', '0px'); continue; }
             $sides = array();
-            foreach (self::BORDER_SIDES as $side) { $p = self::resolved($l, 'padding_'.$side)[$device]; $any = $any || $p > 0; $sides[] = $p.$l['padding_'.$side.'_unit']; }
-            $out[$device] = implode(' ', $sides);
+            foreach (self::BORDER_SIDES as $side) { $p = self::resolved($l, $kind.'_'.$side)[$device] ?? 0; $any = $any || $p > 0; $sides[] = $p.($l[$kind.'_'.$side.'_unit'] ?? 'px'); }
+            $out[$device] = $sides;
         }
         return $any ? $out : '';
     }
@@ -288,6 +311,11 @@ class WPBN_Settings {
             'padding_top_unit'=>'px', 'padding_right_unit'=>'px', 'padding_bottom_unit'=>'px', 'padding_left_unit'=>'px',
             'padding_top_tablet'=>null, 'padding_right_tablet'=>null, 'padding_bottom_tablet'=>null, 'padding_left_tablet'=>null,
             'padding_top_mobile'=>null, 'padding_right_mobile'=>null, 'padding_bottom_mobile'=>null, 'padding_left_mobile'=>null,
+            // Margin (2026-11-16): as Padding's keys, behind its switch.
+            'margin_linked'=>true, 'margin_top'=>0, 'margin_right'=>0, 'margin_bottom'=>0, 'margin_left'=>0,
+            'margin_top_unit'=>'px', 'margin_right_unit'=>'px', 'margin_bottom_unit'=>'px', 'margin_left_unit'=>'px',
+            'margin_top_tablet'=>null, 'margin_right_tablet'=>null, 'margin_bottom_tablet'=>null, 'margin_left_tablet'=>null,
+            'margin_top_mobile'=>null, 'margin_right_mobile'=>null, 'margin_bottom_mobile'=>null, 'margin_left_mobile'=>null,
             // An overlay's Shadow Inside its edges (a vignette) instead of around it.
             'shadow_inset'=>false,
             // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
@@ -544,6 +572,12 @@ class WPBN_Settings {
             $v = $input['as_background'.$suffix] ?? null;
             $out['as_background'.$suffix] = $v === null || $v === '' ? null : !empty($v) && $v !== 'false';
         }
+        // Clip layers to the banner, per device. Scenes saved before it: on (as then).
+        $out['clip'] = !array_key_exists('clip', $input) || (!empty($input['clip']) && $input['clip'] !== 'false');
+        foreach (array('_tablet', '_mobile') as $suffix) {
+            $v = $input['clip'.$suffix] ?? null;
+            $out['clip'.$suffix] = $v === null || $v === '' ? null : !empty($v) && $v !== 'false';
+        }
         foreach (array_slice(is_array($input['layers'] ?? null) ? $input['layers'] : array(), 0, self::MAX_LAYERS) as $raw) {
             if (!is_array($raw)) { continue; }
             $l = self::layer();
@@ -589,9 +623,10 @@ class WPBN_Settings {
             $l['border_linked'] = array_key_exists('border_linked', $raw) ? !empty($raw['border_linked']) : true;
             $l['border_style'] = self::choice($raw['border_style'] ?? null, self::BORDER_STYLES, 'solid');
             $l['border_color'] = self::color($raw['border_color'] ?? null, '#ffffff');
-            $l['padding_linked'] = array_key_exists('padding_linked', $raw) ? !empty($raw['padding_linked']) : true;
+            foreach (array('padding', 'margin') as $kind) {
+            $l[$kind.'_linked'] = array_key_exists($kind.'_linked', $raw) ? !empty($raw[$kind.'_linked']) : true;
             foreach (self::BORDER_SIDES as $side) {
-                $key = 'padding_'.$side;
+                $key = $kind.'_'.$side;
                 $unit = self::choice($raw[$key.'_unit'] ?? null, array_keys(self::PADDING_MAX), 'px');
                 $l[$key.'_unit'] = $unit;
                 $l[$key] = (int) round(self::number($raw[$key] ?? null, 0, 0, self::PADDING_MAX[$unit]));
@@ -599,6 +634,7 @@ class WPBN_Settings {
                     $value = $raw[$key.$suffix] ?? null;
                     $l[$key.$suffix] = self::device_number($value, 0, 0, self::PADDING_MAX[$unit], 'int');
                 }
+            }
             }
             // Its switch (2026-11-09); a layer saved before it: on where some side, on some device, has a space.
             $l['use_padding'] = array_key_exists('use_padding', $raw) ? !empty($raw['use_padding']) : (bool) array_filter(array_intersect_key($l, array_flip(array_merge(...array_map(function ($side) { return array('padding_'.$side, 'padding_'.$side.'_tablet', 'padding_'.$side.'_mobile'); }, self::BORDER_SIDES)))));

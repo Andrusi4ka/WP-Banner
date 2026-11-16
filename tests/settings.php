@@ -214,6 +214,15 @@ check(strpos($pdHtml,'data-host="hero" data-host-on="desktop tablet"')!==false &
 $pdPrev=WPBN_Admin::preview_markup($perDev);
 check(strpos($pdPrev,'class="wpbn-preview-host hero"')!==false && strpos($pdPrev,'data-host-on="desktop tablet"')!==false && strpos($pdPrev,'class="wpbn-scene wpbn-scene--fill')===false,'The preview: in a block with its class, placed by frontend.js per screen');
 check(strpos(WPBN_Admin::preview_markup($pc),'<div class="wpbn-host" style="position:relative;height:100vh">')!==false,'The preview, placed on every device: as before');
+// Clip layers to the banner per device (2026-11-16): on by default and for scenes saved before it; off, a class per device.
+$clipOld=WPBN_Settings::sanitize(array('height_unit'=>'px','height'=>600));
+check($clipOld['clip']===true && $clipOld['clip_tablet']===null && $clipOld['clip_mobile']===null && WPBN_Settings::clips_on($clipOld)===array('desktop'=>true,'tablet'=>true,'mobile'=>true),'Clip layers to the banner: on everywhere by default (scenes saved before it as then)');
+check(strpos(WPBN_Render::markup($clipOld),'wpbn-scene--free')===false,'Clipped: no class');
+$clipDev=WPBN_Settings::sanitize(array('clip'=>'false','clip_tablet'=>'1','clip_mobile'=>''));
+check(WPBN_Settings::clips_on($clipDev)===array('desktop'=>false,'tablet'=>true,'mobile'=>true) && $clipDev['clip_mobile']===null,'Per device: off on desktop, on on tablet, mobile follows tablet');
+check(strpos(WPBN_Render::markup($clipDev),'class="wpbn-scene wpbn-scene--free-d"')!==false,'Its markup: the devices it is off on');
+check(WPBN_Settings::clips_on(WPBN_Settings::sanitize(array('clip'=>true,'clip_mobile'=>false)))===array('desktop'=>true,'tablet'=>true,'mobile'=>false),'Off on mobile only');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene.wpbn-scene--free-m{overflow:visible;overflow-x:clip}')!==false,'frontend.css: off, only the sides stay cut');
 $fjs=file_get_contents(__DIR__.'/../assets/js/frontend.js');
 check(strpos($fjs,'data-host-on')!==false && strpos($fjs,'scene.wpbnSpot.parentNode.insertBefore(scene, scene.wpbnSpot)')!==false,'frontend.js puts it back where it stood on a screen it is not placed on');
 check(WPBN_Settings::sanitize(array_merge($pc,array('height_unit'=>'px')))['target']==='herorowscript','With another height the class is kept, just not used');
@@ -540,6 +549,16 @@ check($pd['padding_right']===500 && $pd['padding_left']===50 && $pd['padding_bot
 check($lay(array('type'=>'text','padding_left'=>10))['use_padding']===true && $lay(array('type'=>'text'))['use_padding']===false && WPBN_Settings::paddings($lay(array('type'=>'text','use_padding'=>0,'padding_top'=>20)))==='','Its switch: saved before it, on where a side has space; off: none');
 check(WPBN_Settings::paddings($pd)===array('desktop'=>'20px 500px 0px 50%','tablet'=>'20px 500px 0px 50%','mobile'=>'8px 500px 0px 50%') && WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'overlay','padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'text')))==='','Its sides per device; none for a photo filling the scene, an overlay, or at 0');
 check(WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'fill_scene'=>0,'use_padding'=>1,'padding_top'=>6)))['desktop']==='6px 0px 0px 0px','An image object has one');
+// Margin (2026-11-16): behind the same switch, its own sides, units and link; layers saved before it: none, linked.
+$mg=$lay(array('type'=>'text','use_padding'=>1,'margin_top'=>20,'margin_right'=>9000,'margin_left'=>10,'margin_left_unit'=>'%','margin_bottom_unit'=>'em','margin_top_mobile'=>4,'container'=>'full'));
+check($mg['margin_right']===500 && $mg['margin_left']===10 && $mg['margin_bottom_unit']==='px' && $mg['margin_linked']===true && WPBN_Settings::layer()['margin_top']===0,'Margin: bounded by its unit, linked by default');
+check(WPBN_Settings::margins($mg)===array('desktop'=>array('20px','500px','0px','10%'),'tablet'=>array('20px','500px','0px','10%'),'mobile'=>array('4px','500px','0px','10%')),'Margin per device, each side in its unit');
+check(WPBN_Settings::margins($lay(array('type'=>'text','padding_top'=>8)))==='' && WPBN_Settings::margins($lay(array('type'=>'text','use_padding'=>0,'margin_top'=>8)))==='' && WPBN_Settings::margins($lay(array('type'=>'image','image'=>3,'use_padding'=>1,'margin_top'=>8)))==='','None at 0, with the switch off, or for a photo filling the scene');
+$mgm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','text'=>'M','use_padding'=>1,'margin_top'=>20,'margin_right'=>9000,'margin_left'=>10,'margin_left_unit'=>'%','margin_top_mobile'=>4,'container'=>'full')))));
+check(strpos($mgm,'wpbn-layer--margin')!==false && strpos($mgm,'--wpbn-mgt:20px;--wpbn-mgr:500px;--wpbn-mgb:0px;--wpbn-mgl:10%;')!==false && strpos($mgm,'--wpbn-mgt-m:4px;')!==false,'Its markup: the sides per device');
+check(strpos($mgm,'--wpbn-width:calc(100% - 500px - 10%);')!==false,'A title: at most its container less its left and right Margin');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'margin-left:calc(var(--wpbn-mgl) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr) * var(--wpbn-ax))')!==false,'frontend.css: the left margin at 0%, less the right one towards 100%');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','text'=>'M','use_padding'=>1,'padding_top'=>5))))),'wpbn-layer--margin')===false,'Padding alone: no Margin class');
 $pdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($pd))));
 check(strpos($pdm,'wpbn-layer--padding')!==false && strpos($pdm,'--wpbn-pad:20px 500px 0px 50%;--wpbn-pad-t:20px 500px 0px 50%;--wpbn-pad-m:8px 500px 0px 50%;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--padding{box-sizing:border-box;padding:var(--wpbn-pad)}')!==false,'Rendered per device');
 // A title's or a Text layer's Width: Auto (as before), % of its container, px or vw, per device.

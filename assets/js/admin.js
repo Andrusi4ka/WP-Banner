@@ -501,13 +501,13 @@
     app.addEventListener('input', event => { if (fontBox && event.target.classList.contains('wpbn-font__search')) listFonts(); });
     // A side's padding typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
     app.addEventListener('input', event => {
-        const input = event.target.closest && event.target.closest('[data-pad-side]'), l = input && current();
+        const input = event.target.closest && event.target.closest('[data-pad-side], [data-margin-side]'), l = input && current();
         if (!l) return;
-        const d = device(), s0 = input.dataset.padSide;
+        const kind = input.dataset.marginSide ? 'margin' : 'padding', d = device(), s0 = input.dataset.marginSide || input.dataset.padSide;
         let value = null;
         if (input.value === '') { if (d === 'desktop') return; }
-        else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(PADDING_MAX[l['padding_' + s0 + '_unit']] || 500, Math.round(n))); }
-        (l.padding_linked ? BORDER_SIDES : [s0]).forEach(s => { l[dkey('padding_' + s, d)] = value; });
+        else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(PADDING_MAX[l[kind + '_' + s0 + '_unit']] || 500, Math.round(n))); }
+        (l[kind + '_linked'] ? BORDER_SIDES : [s0]).forEach(s => { l[dkey(kind + '_' + s, d)] = value; });
         refreshPadding(); changed();
     });
     // A corner's radius typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
@@ -628,38 +628,49 @@
             + '<button type="button" class="wpbn-border-box__link" data-radius-link aria-pressed="' + linked + '" aria-label="' + link + '" title="' + link + '">' + icons.link + '</button></div></div>';
     }
     /*
-     * Padding (Size, 2026-11-09, user's request): its switch, as Border's; on, a box as Border's, each side's space beside it (per
-     * device: tablet / mobile empty follow the larger screen), px or % (of the banner's width) picked beside its number, one
-     * unit per side for every device; the link in the middle. The box shows the spaces green, as a browser's inspector does.
+     * Padding/Margin (Size): one switch (use_padding, 2026-11-09; Margin joined it on 2026-11-16 at the user's request, from their
+     * drawing): two boxes one in the other, as a browser's inspector draws them: Margin outside (the room the layer keeps from its
+     * container's edges; WPBN_Settings::margins()), Padding inside (the space inside its box). Each side's number per device (tablet /
+     * mobile empty follow the larger screen), px or % (of the banner's width) picked beside it, one unit per side for every device;
+     * each box its own link (Padding's in the middle, Margin's in its corner). The rings show the spaces set, green and orange.
      */
     const PADDING_MAX = {px:500, '%':50};
     const SIDE_NAMES = {top:'Top', right:'Right', bottom:'Bottom', left:'Left'};
-    const padOwn = (l, dv) => BORDER_SIDES.some(s => dv === 'desktop' ? !isStandard(l, 'padding_' + s) || !isStandard(l, 'padding_' + s + '_unit') : l['padding_' + s + '_' + dv] != null);
+    const SPACES = {padding:{name:'Padding', attr:'pad'}, margin:{name:'Margin', attr:'margin'}};
+    const spaceOwn = (l, kind, dv) => BORDER_SIDES.some(s => dv === 'desktop' ? !isStandard(l, kind + '_' + s) || !isStandard(l, kind + '_' + s + '_unit') : l[kind + '_' + s + '_' + dv] != null);
+    const padOwn = (l, dv) => spaceOwn(l, 'padding', dv) || spaceOwn(l, 'margin', dv);
     function paddingField(l) {
         // Its switch (user's request, 2026-11-09), with the help beside it; on, its sides.
-        const toggle = withTip(check('use_padding', 'Padding'), 'Space inside the layer\'s box: its content keeps away from its edges, e.g. a title from the edge of the screen on a phone (its lines wrap inside it). % is of the banner\'s width.');
+        const toggle = withTip(check('use_padding', 'Padding/Margin'), 'Margin (outside): the room the layer keeps from its container\'s edges, e.g. a title kept 20px from the edge of the screen on a phone; its Position moves it within what is left. Padding (inside): space inside the layer\'s box, its content keeps away from its edges (its lines wrap inside it). % is of the banner\'s width.');
         if (!l.use_padding) return toggle;
         const d = device();
-        const side = s => {
-            const v = l[dkey('padding_' + s, d)], unit = l['padding_' + s + '_unit'] || 'px';
-            return '<span class="wpbn-radius-input wpbn-border-box__side wpbn-border-box__side--' + s + '"><input type="number" id="wpbn-f-padding_' + s + '" data-pad-side="' + s + '" min="0" max="' + PADDING_MAX[unit] + '" step="1" value="' + (v == null ? '' : escape(v)) + '" placeholder="' + escape(eff(l, 'padding_' + s, d)) + '" aria-label="' + SIDE_NAMES[s] + ' padding (' + unit + ')">'
-                + '<span class="wpbn-unit-pick" role="group" aria-label="' + SIDE_NAMES[s] + ' padding unit">' + Object.keys(PADDING_MAX).map(u => '<button type="button" data-pad-unit="' + s + '" data-unit="' + u + '" aria-pressed="' + (u === unit) + '">' + u + '</button>').join('') + '</span></span>';
+        const side = (kind, s) => {
+            const a = SPACES[kind].attr, v = l[dkey(kind + '_' + s, d)], unit = l[kind + '_' + s + '_unit'] || 'px';
+            return '<span class="wpbn-radius-input wpbn-spacing__side wpbn-spacing__side--' + kind + '-' + s + '"><input type="number" id="wpbn-f-' + kind + '_' + s + '" data-' + a + '-side="' + s + '" min="0" max="' + PADDING_MAX[unit] + '" step="1" value="' + (v == null ? '' : escape(v)) + '" placeholder="' + escape(eff(l, kind + '_' + s, d)) + '" aria-label="' + SIDE_NAMES[s] + ' ' + kind + ' (' + unit + ')">'
+                + '<span class="wpbn-unit-pick" role="group" aria-label="' + SIDE_NAMES[s] + ' ' + kind + ' unit">' + Object.keys(PADDING_MAX).map(u => '<button type="button" data-' + a + '-unit="' + s + '" data-unit="' + u + '" aria-pressed="' + (u === unit) + '">' + u + '</button>').join('') + '</span></span>';
         };
-        const linked = !!l.padding_linked, link = linked ? 'The sides are set together: click to set each on its own' : 'Each side on its own: click to set them together';
+        const link = kind => {
+            const linked = !!l[kind + '_linked'], text = SPACES[kind].name + ': ' + (linked ? 'the sides are set together: click to set each on its own' : 'each side on its own: click to set them together');
+            return '<button type="button" class="wpbn-border-box__link wpbn-spacing__link wpbn-spacing__link--' + kind + '" data-' + SPACES[kind].attr + '-link aria-pressed="' + linked + '" aria-label="' + text + '" title="' + text + '">' + icons.link + '</button>';
+        };
+        const ring = kind => '<span class="wpbn-spacing__ring wpbn-spacing__ring--' + kind + '" aria-hidden="true"></span><span class="wpbn-spacing__name wpbn-spacing__name--' + kind + '" aria-hidden="true">' + SPACES[kind].name + '</span>';
         return toggle + '<div class="wpbn-field wpbn-field--padding"><div class="wpbn-field__head"><span class="wpbn-field__label">Sides</span>' + devices({desktop:padOwn(l, 'desktop'), tablet:padOwn(l, 'tablet'), mobile:padOwn(l, 'mobile')}) + '</div>'
-            + '<div class="wpbn-border-box wpbn-pad-box"><span class="wpbn-border-box__frame wpbn-pad-box__frame" aria-hidden="true"></span>' + BORDER_SIDES.map(side).join('')
-            + '<button type="button" class="wpbn-border-box__link" data-pad-link aria-pressed="' + linked + '" aria-label="' + link + '" title="' + link + '">' + icons.link + '</button></div></div>';
+            + '<div class="wpbn-spacing">' + ring('margin') + ring('padding') + '<span class="wpbn-spacing__core" aria-hidden="true"></span>'
+            + BORDER_SIDES.map(x => side('padding', x)).join('') + link('padding') + BORDER_SIDES.map(x => side('margin', x)).join('') + link('margin') + '</div></div>';
     }
-    // The box's spaces drawn green as they are (px scaled down, % of a 600px banner), the fields' values and the device dots.
+    // The fields' values, the rings' sides drawn as the spaces are set on the device edited (2–6px; none: no line) and the device dots.
     function refreshPadding() {
-        const box = $('settings').querySelector('.wpbn-pad-box'), l = current();
+        const box = $('settings').querySelector('.wpbn-spacing'), l = current();
         if (!box || !l) return;
-        const d = device(), frame = box.querySelector('.wpbn-pad-box__frame');
-        BORDER_SIDES.forEach(s => {
-            const v = Number(eff(l, 'padding_' + s, d)) || 0, px = l['padding_' + s + '_unit'] === '%' ? v * 6 : v, input = box.querySelector('[data-pad-side="' + s + '"]'), own = l[dkey('padding_' + s, d)];
-            frame.style['border' + s[0].toUpperCase() + s.slice(1) + 'Width'] = (px ? Math.min(s === 'top' || s === 'bottom' ? 10 : 24, Math.max(2, px / 4)) : 0) + 'px';
-            if (input && document.activeElement !== input) input.value = own == null ? '' : own;
-            if (input) input.placeholder = eff(l, 'padding_' + s, d);
+        const d = device();
+        Object.keys(SPACES).forEach(kind => {
+            const a = SPACES[kind].attr, ring = box.querySelector('.wpbn-spacing__ring--' + kind);
+            BORDER_SIDES.forEach(s => {
+                const v = Number(eff(l, kind + '_' + s, d)) || 0, px = l[kind + '_' + s + '_unit'] === '%' ? v * 6 : v, input = box.querySelector('[data-' + a + '-side="' + s + '"]'), own = l[dkey(kind + '_' + s, d)];
+                ring.style['border' + s[0].toUpperCase() + s.slice(1) + 'Width'] = (px ? Math.min(6, Math.max(2, px / 8)) : 0) + 'px';
+                if (input && document.activeElement !== input) input.value = own == null ? '' : own;
+                if (input) input.placeholder = eff(l, kind + '_' + s, d);
+            });
         });
         const field = box.closest('.wpbn-field');
         Object.keys(DEVICES).forEach(dv => { const b = field.querySelector('[data-field-device="' + dv + '"]'); if (b) b.classList.toggle('has-value', padOwn(l, dv)); });
@@ -826,6 +837,15 @@
         const t = l.container === 'theme' && boot.themeContainer ? boot.themeContainer : {width:inlineFor(l, 'cwidth', d || 'desktop'), side:30, inner:0};
         const cw = Math.max(1, Math.min(w - t.side, t.width) - t.inner);
         return {left:(w - cw) / 2, width:cw};
+    }
+    // A layer's Margin on a device in px of a scene W px wide (% is of its width, as CSS takes it), as WPBN_Settings::margins():
+    // none with Padding/Margin off, on a layer without one (a photo filling the scene there), or attached there (frontend.js attach()).
+    function marginPx(l, d, W) {
+        const none = {top:0, right:0, bottom:0, left:0};
+        if (!l || !l.use_padding || !(textual(l) || (l.type === 'image' && imageObject(l, d))) || attachedOn(l, d)) return none;
+        const out = {};
+        BORDER_SIDES.forEach(s => { const v = Number(eff(l, 'margin_' + s, d)) || 0; out[s] = l['margin_' + s + '_unit'] === '%' ? v / 100 * W : v; });
+        return out;
     }
     const customWidth = () => current().container === 'custom' || (current().container === 'theme' && !boot.themeContainer);
     function containerSelect(l) {
@@ -1668,7 +1688,9 @@
         let html;
         if (selected < 0) {
             html = legend + blocks([
-                ['size', 'Size', 'editor-expand', card('Size', heightField())],
+                ['size', 'Size', 'editor-expand', card('Size', heightField()
+                    // Per device (2026-11-16, user's request): off, the layers may go above and below the banner (WPBN_Render::unclipped()).
+                    + withTip(respCheck('clip', 'Clip layers to the banner'), 'On: the layers are cut at the banner\'s edges. Off: on this device they may go above and below it, over the blocks around it, e.g. a title moving out with the scroll; its sides stay cut, so the page never scrolls sideways. The icons choose the device.'))],
                 ['placement', 'Placement', 'layout', card('Placement', targetField())],
                 // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name), one under the other.
                 ['attributes', 'Attributes', 'tag', card('Attributes', withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
@@ -1916,7 +1938,7 @@
             // Fill the scene off for the first time (its size still as it starts): half its container, as tall as the image.
             if (/^fill_scene/.test(key) && !input.checked && !wasObject && obj.overlay_width === 100 && obj.overlay_width_unit === '%' && (obj.height_unit === 'auto' || (obj.height_unit === '%' && Number(obj.height) === 100))
                 && ['tablet', 'mobile'].every(dv => obj[WIDTH[dv][1]] == null && obj[HEIGHT[dv][1]] == null)) { obj.overlay_width = 50; obj.height_unit = 'auto'; }
-            if (/^use_/.test(key) || /^fill_scene/.test(key) || /^as_background/.test(key) || key === 'shape_trim') {
+            if (/^use_/.test(key) || /^fill_scene/.test(key) || /^as_background/.test(key) || /^clip(_|$)/.test(key) || key === 'shape_trim') {
                 settings(); const again = $('settings').querySelector('[data-key="' + key + '"]'); if (again) again.focus();
                 list(); changed(); return;
             }
@@ -2021,22 +2043,23 @@
         // the top left's radius and unit on every corner of this device).
         // Padding: a side's unit (every side's while linked; values over 50% brought down to it), and the link (from then on; the
         // top's space and unit on every side of this device).
-        if (button.dataset.padUnit) {
-            const l = current(), unit = button.dataset.unit;
-            (l.padding_linked ? BORDER_SIDES : [button.dataset.padUnit]).forEach(s => {
-                l['padding_' + s + '_unit'] = unit;
-                Object.keys(DEVICES).forEach(dv => { const k = dkey('padding_' + s, dv); if (l[k] != null) l[k] = Math.min(PADDING_MAX[unit], l[k]); });
+        // Margin's alike (data-margin-*).
+        if (button.dataset.padUnit || button.dataset.marginUnit) {
+            const l = current(), unit = button.dataset.unit, kind = button.dataset.marginUnit ? 'margin' : 'padding', a = SPACES[kind].attr, s0 = button.dataset.marginUnit || button.dataset.padUnit;
+            (l[kind + '_linked'] ? BORDER_SIDES : [s0]).forEach(s => {
+                l[kind + '_' + s + '_unit'] = unit;
+                Object.keys(DEVICES).forEach(dv => { const k = dkey(kind + '_' + s, dv); if (l[k] != null) l[k] = Math.min(PADDING_MAX[unit], l[k]); });
             });
             settings(); changed();
-            const again = $('settings').querySelector('[data-pad-unit="' + button.dataset.padUnit + '"][data-unit="' + unit + '"]'); if (again) again.focus();
+            const again = $('settings').querySelector('[data-' + a + '-unit="' + s0 + '"][data-unit="' + unit + '"]'); if (again) again.focus();
             return;
         }
-        if (button.dataset.padLink !== undefined) {
-            const l = current(), d = device();
-            l.padding_linked = !l.padding_linked;
-            if (l.padding_linked) { const v = l[dkey('padding_top', d)], u = l.padding_top_unit; BORDER_SIDES.forEach(s => { l[dkey('padding_' + s, d)] = v; l['padding_' + s + '_unit'] = u; }); }
+        if (button.dataset.padLink !== undefined || button.dataset.marginLink !== undefined) {
+            const l = current(), d = device(), kind = button.dataset.marginLink !== undefined ? 'margin' : 'padding';
+            l[kind + '_linked'] = !l[kind + '_linked'];
+            if (l[kind + '_linked']) { const v = l[dkey(kind + '_top', d)], u = l[kind + '_top_unit']; BORDER_SIDES.forEach(s => { l[dkey(kind + '_' + s, d)] = v; l[kind + '_' + s + '_unit'] = u; }); }
             settings(); changed();
-            const again = $('settings').querySelector('[data-pad-link]'); if (again) again.focus();
+            const again = $('settings').querySelector('[data-' + SPACES[kind].attr + '-link]'); if (again) again.focus();
             return;
         }
         if (button.dataset.radiusUnit) {
@@ -2400,7 +2423,8 @@
         const sceneEl = veil.parentNode, layerEl = sceneEl.querySelector(':scope > .wpbn-layer[data-layer="' + selected + '"]'), d = valuesFor(win.innerWidth);
         const S = sceneEl.getBoundingClientRect(), L = layerEl.getBoundingClientRect(), c = container(S.width, l, d) || {left:0, width:S.width};
         // The room it moves in: its container (its height: the scene) less its own size, as the Position window's (along()).
-        moveDrag = {x:event.clientX, y:event.clientY, from:[eff(l, 'x', d), eff(l, 'y', d)], room:[c.width - L.width, S.height - L.height], c, d, l, layerEl, sceneEl, value:null};
+        const mg = marginPx(l, d, S.width);
+        moveDrag = {x:event.clientX, y:event.clientY, from:[eff(l, 'x', d), eff(l, 'y', d)], room:[c.width - mg.left - mg.right - L.width, S.height - mg.top - mg.bottom - L.height], c, d, l, layerEl, sceneEl, value:null};
         // Attached and placed by its layer here (frontend.js attach() set its left / top): its distance to that layer moves instead.
         const to = layerEl.style.left !== '' && attachedOn(l, d) ? sceneEl.querySelector(':scope > .wpbn-layer[data-uid="' + l.anchor + '"]') : null;
         if (to) moveDrag.att = {to, left:parseFloat(layerEl.style.left) || 0, top:parseFloat(layerEl.style.top) || 0, moved:false};
@@ -2479,7 +2503,7 @@
     function restBox(win, el, picture) {
         const cs = win.getComputedStyle(el), num = (name, fallback) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
         const W = parseFloat(cs.width) || 0, H = parseFloat(cs.height) || 0, k = num('--wpbn-s', 1);
-        const bx = (parseFloat(cs.left) || 0) - num('--wpbn-ax', .5) * W + W / 2, by = (parseFloat(cs.top) || 0) - num('--wpbn-ay', .5) * H + H / 2;
+        const bx = (parseFloat(cs.left) || 0) + (parseFloat(cs.marginLeft) || 0) - num('--wpbn-ax', .5) * W + W / 2, by = (parseFloat(cs.top) || 0) + (parseFloat(cs.marginTop) || 0) - num('--wpbn-ay', .5) * H + H / 2;
         const [ox, oy, w, h] = picture && win.wpbnPicture ? win.wpbnPicture(el, cs, W, H) : [0, 0, W, H];
         return {bx, by, ox, oy, w, h, k, image:!!picture && el.classList.contains('wpbn-layer--image'), left:bx + (ox - w / 2) * k, right:bx + (ox + w / 2) * k, top:by + (oy - h / 2) * k, bottom:by + (oy + h / 2) * k};
     }
@@ -2815,6 +2839,10 @@
     // A Shape's drawing fitted by Cover, Contain or Stretch (2026-11-10): placed so too, as background-position places a picture
     // (0% flush left / top, 100% right / bottom; WPBN_Shape::fit_css()); a Custom size by its middle.
     const pointPlaced=(layer,d)=>anchored(layer,d||positionDevice) || (layer.type==='shape' && eff(layer,'shape_fit',d||positionDevice)!=='custom');
+    // Its Margin as frontend.css draws it: margin-left / -top as shares of the scene's width (a margin in % is of the containing block's
+    // width, the frame's here), the left / top margin at 0%, less the right / bottom one towards 100% (2026-11-16).
+    const marginPct=(layer,d)=>{const w=sceneWidth(d), m=marginPx(layer,d,w);return {top:m.top/w*100,right:m.right/w*100,bottom:m.bottom/w*100,left:m.left/w*100};};
+    const marginStyle=(layer,d,x,y)=>{if(!pointPlaced(layer,d))return {marginLeft:'',marginTop:''};const m=marginPct(layer,d), ax=x/100, ay=y/100;return {marginLeft:(m.left*(1-ax)-m.right*ax)+'%',marginTop:(m.top*(1-ay)-m.bottom*ay)+'%'};};
     const anchorAt=(layer,x,y,scale,d)=>'translate('+(pointPlaced(layer,d) ? -x : -50)+'%,'+(pointPlaced(layer,d) ? -y : -50)+'%) scale('+scale+')';
     const focusImage=positionModal.querySelector('.wpbn-focus__image');
     // The layer as it would be with the draft applied: an image's point in view, or the text's place on the device being edited.
@@ -2908,7 +2936,7 @@
         positionModal.querySelectorAll('.wpbn-position-canvas').forEach(canvas=>{
             const target=canvas.querySelector('.wpbn-position-target'), d=canvasDevice(canvas);
             if(target && focusMode()){const img=target.querySelector('img');if(img)img.style.objectPosition=x+'% '+y+'%';}
-            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),layer.type==='shape' ? 1 : eff(layer,'scale',d)/100,d);placeLabel(target,eff(layer,'y',d));}
+            else if(target){target.style.left=inScene(layer,d,eff(layer,'x',d))+'%';target.style.top=eff(layer,'y',d)+'%';Object.assign(target.style,marginStyle(layer,d,eff(layer,'x',d),eff(layer,'y',d)));target.style.transform=anchorAt(layer,eff(layer,'x',d),eff(layer,'y',d),layer.type==='shape' ? 1 : eff(layer,'scale',d)/100,d);placeLabel(target,eff(layer,'y',d));}
             drawGaps(canvas);
         });
         warn();positionDots();positionAxes();
@@ -2923,8 +2951,8 @@
         const target=focusStage.querySelector('.wpbn-position-target'), r=focusStage.getBoundingClientRect();
         positionFixed=[false,false];
         if(!focusMode() && target && r.width && pointPlaced(positionLayer,positionDevice)){
-            const t=target.getBoundingClientRect(), cw=boxOf(positionDevice,positionLayer).width/100*r.width;
-            positionFixed=[Math.abs(cw-t.width)<1,Math.abs(r.height-t.height)<1];
+            const t=target.getBoundingClientRect(), m=marginPct(positionLayer,positionDevice), cw=(boxOf(positionDevice,positionLayer).width-m.left-m.right)/100*r.width;
+            positionFixed=[Math.abs(cw-t.width)<1,Math.abs(r.height-(m.top+m.bottom)/100*r.width-t.height)<1];
         }
         const image=positionLayer && positionLayer.type==='image';
         positionInputs.forEach((input,i)=>{
@@ -2970,9 +2998,9 @@
                 const v=key=>eff(layer,key,device);
                 const item=document.createElement('span');item.className='wpbn-position-item'+(layer===positionLayer?' wpbn-position-target':' is-other');item.dataset.layer=String(scene.layers.indexOf(layer));
                 const box=boxOf(device,layer);
-                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100,device)+' rotate('+(Number(v('rotate'))||0)+'deg)'});
-                // A title: as wide as its text, at most its container (frontend.css).
-                if(textual(layer))Object.assign(item.style,{width:'max-content',maxWidth:box.width+'%'});
+                Object.assign(item.style,{left:(box.left+v('x')*box.width/100)+'%',top:v('y')+'%',width:(v('width')*box.width/100)+'%',opacity:v('opacity')/100,transform:anchorAt(layer,v('x'),v('y'),v('scale')/100,device)+' rotate('+(Number(v('rotate'))||0)+'deg)'},marginStyle(layer,device,v('x'),v('y')));
+                // A title: as wide as its text, at most its container less its left and right Margin (frontend.css).
+                if(textual(layer)){const m=marginPct(layer,device);Object.assign(item.style,{width:'max-content',maxWidth:(box.width-m.left-m.right)+'%'});}
                 // Its own Width: as wide as set, its lines wrapping there; aligned within it as on the site (a title centred).
                 const own=textWidth(layer,device);
                 if(own!==null)Object.assign(item.style,{width:own+'%',textAlign:layer.type==='text'?'center':'left'});
@@ -3072,11 +3100,15 @@
         // The room a title moves in: its container (its height: the scene) less its own size. Larger than that (a slider
         // taller than the scene): less than none, so it follows the pointer the other way round in its values (0% shows its
         // top, 100% its bottom). As large (Width 100% of its container): no room: that way it stays as it is.
-        const roomX=title ? share*r.width-dragging.size[0] : r.width*share, roomY=title ? r.height-dragging.size[1] : r.height;
+        // Its Margin (2026-11-16): the room less its sides; a click puts its point where it would stand.
+        const m=text ? marginPct(positionLayer,d) : {top:0,right:0,bottom:0,left:0}, mx=(m.left+m.right)/100*r.width, my=(m.top+m.bottom)/100*r.width;
+        const roomX=title ? share*r.width-mx-dragging.size[0] : r.width*share-mx, roomY=title ? r.height-my-dragging.size[1] : r.height-my;
+        const clickX=x=>{const b=boxOf(d,positionLayer), w=b.width-m.left-m.right;return w>0.5 ? (x-b.left-m.left)/w*100 : fromScene(positionLayer,d,x);};
+        const clickY=y=>{const top=m.top/100*r.width/r.height*100, h=100-(m.top+m.bottom)/100*r.width/r.height*100;return h>0.5 ? (y-top)/h*100 : y;};
         const along=(from,moved,room)=>Math.abs(room)<2 ? from : percent(from+moved/room*100);
         positionDraft=dragging && dragging.move
             ? [along(dragging.from[0],event.clientX-dragging.x,roomX),along(dragging.from[1],event.clientY-dragging.y,roomY)]
-            : [percent(text ? fromScene(positionLayer,d,(event.clientX-r.left)/r.width*100) : (event.clientX-r.left)/r.width*100),percent((event.clientY-r.top)/r.height*100)];
+            : [percent(text ? clickX((event.clientX-r.left)/r.width*100) : (event.clientX-r.left)/r.width*100),percent(text ? clickY((event.clientY-r.top)/r.height*100) : (event.clientY-r.top)/r.height*100)];
         // An axis with no room (positionAxes()): its value stays.
         if(text)positionFixed.forEach((fixed,i)=>{if(fixed)positionDraft[i]=dragging && dragging.from ? dragging.from[i] : positionDraft[i];});
         showPosition();
