@@ -707,7 +707,13 @@ const server=http.createServer((req,res)=>{
         assert.ok((await scOf()).type==='shortcode' && (await scOf()).container==='theme' && /^Shortcode \d+$/.test((await scOf()).name) && await page.locator('[data-select="'+scIndex+'"] .wpbn-layer-thumb--shortcode').count()===1,'A new shortcode layer, in the theme container, its icon in the list');
         assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation','Follow the mouse'],'Its cards (Filters: 2026-11-10)');
         assert.ok(await page.locator('#wpbn-block-effect #wpbn-f-use_shadow').count()===1 && await page.locator('#wpbn-block-filters #wpbn-f-f_grayscale').count()===1,'A shortcode: Shadow in Effect, the Filters');
-        assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale, #wpbn-f-height').count()===0,'Its Width; no Scale, no Height');
+        assert.ok(await page.locator('#wpbn-f-overlay_width').count()===1 && await page.locator('#wpbn-f-use_scale').count()===0,'Its Width; no Scale');
+        // Its Height (2026-11-17, the user's request): Auto by default (its content's), or px / vh / % (the content stretched to it).
+        assert.ok(await page.locator('#wpbn-f-height').count()===1 && await page.locator('#wpbn-f-height').isDisabled() && (await scOf()).height_unit==='auto' && (await scOf()).shortcode_height===true,'Its Height: Auto by default');
+        assert.deepEqual(await page.locator('[data-key="height_unit"] option').evaluateAll(o=>o.map(x=>x.value)),['auto','%','px','vh'],'Its Height units: Auto, %, px, vh');
+        await page.selectOption('[data-key="height_unit"]','%');
+        assert.ok((await scOf()).height_unit==='%' && !(await page.locator('#wpbn-f-height').isDisabled()),'A Height of its own: kept, its number editable');
+        await page.selectOption('[data-key="height_unit"]','auto');
         await page.fill('#wpbn-f-shortcode','[wp_swiper id="12"]');
         await page.fill('#wpbn-f-overlay_width','60');
         assert.ok((await scOf()).shortcode==='[wp_swiper id="12"]' && (await scOf()).overlay_width===60,'Kept in the layer');

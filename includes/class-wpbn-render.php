@@ -124,7 +124,9 @@ class WPBN_Render {
         // Its alt text from the media library; a copy seen through a Shape layer's object (WPBN_Shape::inner()) none: the layer itself is read out.
         // (A Decorative switch, alt="" for any image, was removed on 2026-11-09 at the user's request.)
         $alt = empty($l['copy']) ? trim((string) get_post_meta($ids['desktop'], '_wp_attachment_image_alt', true)) : '';
-        $img = '<img src="'.esc_url($url).'" alt="'.esc_attr($alt).'"'.$attrs;
+        // .wpbn-img: frontend.css styles this picture only, never the images inside a Shortcode layer's content (2026-11-17,
+        // the user's report: a 150px icon of an HTML block was stretched to the layer, 1570 × 1570).
+        $img = '<img class="wpbn-img" src="'.esc_url($url).'" alt="'.esc_attr($alt).'"'.$attrs;
         $srcset = self::srcset($ids['desktop']);
         if ($srcset) {
             $all = $one ? '(max-width:767px) '.$sizes('mobile', $ids['desktop']).', (max-width:1024px) '.$sizes('tablet', $ids['desktop']).', '.$sizes('desktop', $ids['desktop']) : $sizes('desktop', $ids['desktop']);
@@ -370,8 +372,15 @@ class WPBN_Render {
             if (WPBN_Settings::shadow($l) !== '') { $box .= ' wpbn-layer--boxshadow'; $css .= '--wpbn-lsh:'.(!empty($l['shadow_inset']) ? 'inset ' : '').WPBN_Settings::shadow($l).';'; }
             $content_filter = WPBN_Settings::filter_vars($l, '--wpbn-cf');
             if ($content_filter !== '') { $box .= ' wpbn-layer--cfilter'; $css .= $content_filter; }
+            // Its Height per device (2026-11-17, the user's request): Auto, its content's (as before); px, vh or % of the scene,
+            // its content stretched to it (frontend.css .wpbn-layer--sheight). Only where some device has one.
+            $heights = WPBN_Settings::heights($l);
+            if (array_filter($heights, function ($h) { return $h[1] !== 'auto'; })) {
+                $classes .= ' wpbn-layer--sheight';
+                foreach ($heights as $device=>$h) { $css .= '--wpbn-sh'.self::SUFFIX[$device].':'.($h[1] === 'auto' ? 'auto' : $h[0].$h[1]).';'; }
+            }
             self::$in_shortcode = true;
-            $inner = do_shortcode($l['shortcode']);
+            $inner = '<div class="wpbn-shortcode">'.do_shortcode($l['shortcode']).'</div>';
             self::$in_shortcode = false;
         } elseif ($l['type'] === 'button') {
             // A button: its colours and its Size's padding, height and font size per device (frontend.css), a link

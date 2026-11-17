@@ -101,7 +101,8 @@
      * them): a layer's as a new one of its kind has them (addLayer() takes them from here), the scene's as a new scene's; a Loop
      * animation's start and end its kind's own.
      */
-    const TYPE_NEW = {text:{container:'theme'}, button:{container:'theme'}, shortcode:{container:'theme'}, overlay:{color:boot.overlayColor || 'rgba(0,0,0,0.4)'},
+    // A shortcode's Height (2026-11-17): Auto, its content's, as before; shortcode_height says it has one (WPBN_Settings::sanitize()).
+    const TYPE_NEW = {text:{container:'theme'}, button:{container:'theme'}, shortcode:{container:'theme', height_unit:'auto', shortcode_height:true}, overlay:{color:boot.overlayColor || 'rgba(0,0,0,0.4)'},
         richtext:{content:'<p>Your text here.</p>', font_size:18, font_weight:400, container:'theme'}};
     const standard = o => o === scene ? (boot.sceneDefaults || {})
         // A Shape object: as a new one (WPBN_Shape::object_defaults()).
@@ -1535,7 +1536,9 @@
         // fits in it by Image fit, or is it with Auto.
         image:{auto:'The frame as tall as the picture at the frame\'s width: the frame is the picture, nothing is cropped.', '%':'The frame\'s height, a share of the scene\'s: 100 is all of it. The picture fits in it by Image fit.', px:'The frame\'s height, fixed. The picture fits in it by Image fit.', vh:'The frame\'s height, a share of the screen height. The picture fits in it by Image fit.'},
         // Its Width (2026-11-13): Auto, the image's own proportions at its Height (Height 100%: the whole height of the scene).
-        imagewidth:{auto:'The frame as wide as the picture at the frame\'s height, at most its container: e.g. Frame height 100% for the whole height of the scene.', '%':'The frame\'s width, a share of its container: 100 is all of it. The picture fits in it by Image fit.', px:'The frame\'s width, fixed. The picture fits in it by Image fit.', vw:'The frame\'s width, a share of the screen width. The picture fits in it by Image fit.'}
+        imagewidth:{auto:'The frame as wide as the picture at the frame\'s height, at most its container: e.g. Frame height 100% for the whole height of the scene.', '%':'The frame\'s width, a share of its container: 100 is all of it. The picture fits in it by Image fit.', px:'The frame\'s width, fixed. The picture fits in it by Image fit.', vw:'The frame\'s width, a share of the screen width. The picture fits in it by Image fit.'},
+        // A Shortcode layer's Height (2026-11-17, the user's request): Auto, its content's; otherwise its content stretched to it.
+        shortcode:{auto:'As tall as its content, as on a page.', '%':'A share of the scene\'s height: 100 is all of it. The content is stretched to it (e.g. a row and its background).', px:'A fixed height. The content is stretched to it.', vh:'A share of the screen height: 100 is the whole screen. The content is stretched to it.'}
     };
     // The scene's Height, or (obj: an overlay) the layer's Height or Width (kind), as the scene's Height: the number,
     // its unit, Inherit on tablet / mobile.
@@ -1549,8 +1552,8 @@
         const dots = heightDots(o, k);
         return '<div class="wpbn-field wpbn-field--height">' + head(id, label, (layer ? '' : heightTip()) + devices(dots)) + '<div class="wpbn-field__row">'
             + '<input id="' + id + '" data-height="' + d + '" data-size="' + k + '" type="number" min="' + min + '" max="' + max + '" step="1" value="' + (own ? escape(number) : '') + '" placeholder="' + escape(number) + '"' + (off ? ' disabled' : '') + '>'
-            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? (o.type === 'image' && (k === 'height' || k === 'width') ? ['auto'].concat(LAYER_UNITS[k]) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
-            + '</div>' + (layer ? '<p class="description">' + LAYER_UNIT_HELP[o.type === 'image' && k === 'height' ? 'image' : o.type === 'image' && k === 'width' ? 'imagewidth' : k][unit] + '</p>' : '<p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p>') + '</div>';
+            + '<select data-key="' + unitKey + '"' + (d === 'desktop' ? '' : ' data-inherit="' + k + '"') + ' aria-label="' + label + ' unit">' + inherit + (layer ? ((o.type === 'image' && (k === 'height' || k === 'width')) || (o.type === 'shortcode' && k === 'height') ? ['auto'].concat(LAYER_UNITS[k]) : LAYER_UNITS[k]) : ['auto', 'px', 'vh', '%']).map(u => '<option value="' + u + '"' + (own && u === unit ? ' selected' : '') + '>' + UNIT_NAMES[u] + '</option>').join('') + '</select>'
+            + '</div>' + (layer ? '<p class="description">' + LAYER_UNIT_HELP[o.type === 'image' && k === 'height' ? 'image' : o.type === 'image' && k === 'width' ? 'imagewidth' : o.type === 'shortcode' && k === 'height' ? 'shortcode' : k][unit] + '</p>' : '<p class="description" id="wpbn-height-note"' + (filling() ? ' hidden' : '') + '>' + UNIT_HELP[unit] + '</p>') + '</div>';
     }
     // With a class to fill blocks by: where this height is used, behind an "i" beside Height (its unit's help, under it, gives way).
     function heightTip() {
@@ -1770,7 +1773,7 @@
                         // Attached to another layer (2026-11-13).
                         + (attachable(l) ? attachField(l) : '')
                         // An image object: its Width and Height, then Image fit and the point of its photo in view (greyed with Height Auto).
-                        + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') : '')
+                        + (imageObject(l) ? heightField(l, 'width') + heightField(l) + needs(fitPositionField(l), 'cropbox') : l.type === 'image' ? fitPositionField(l) : '') + (l.type === 'shortcode' ? heightField(l, 'width') + heightField(l) : '')
                         // A title or a Text layer: its Width (Auto: its text's), where its lines wrap.
                         + (l.type === 'text' || l.type === 'richtext' ? heightField(l, 'textwidth') : '')
                         // Padding (2026-11-09): a title's, a text's, a button's, a shortcode's or an image object's.

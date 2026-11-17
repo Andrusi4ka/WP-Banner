@@ -320,6 +320,9 @@ class WPBN_Settings {
             'shadow_inset'=>false,
             // An overlay's Height per device, as the scene's (heights()): 100% of the scene; tablet and mobile follow the larger screen.
             'height'=>100, 'height_unit'=>'%', 'tablet_height'=>null, 'tablet_height_unit'=>null, 'mobile_height'=>null, 'mobile_height_unit'=>null,
+            // A Shortcode layer whose Height is its own (2026-11-17): before that, its height keys were unused (its content's
+            // height); saved without this, it reads as Auto, so a banner already on a page does not change.
+            'shortcode_height'=>false,
             // Its Blur (px, per device as Font size): the layers under it blurred (backdrop-filter); 0: none.
             'backdrop_blur'=>0, 'backdrop_blur_tablet'=>null, 'backdrop_blur_mobile'=>null,
             // Its Width per device, kept as its Height (widths()): 100% of its container.
@@ -764,11 +767,18 @@ class WPBN_Settings {
                 $l['fill_scene'.$suffix] = $v === null || $v === '' ? null : !empty($v) && $v !== 'false';
             }
             // An overlay's Height: px, vh or % of the scene (no Auto); tablet and mobile without a unit follow the larger screen.
-            // An image object's too, or Auto (as tall as the image at its width), its default.
-            $height_units = $l['type'] === 'image' ? array_merge(array('auto'), self::LAYER_UNITS) : self::LAYER_UNITS;
+            // An image object's too, or Auto (as tall as the image at its width), its default. A Shortcode layer's too (2026-11-17,
+            // the user's request), or Auto (its content's height), its default; one saved before it had one: Auto everywhere.
+            $auto_height = $l['type'] === 'image' || $l['type'] === 'shortcode';
+            $height_raw = $raw;
+            if ($l['type'] === 'shortcode' && empty($raw['shortcode_height'])) {
+                foreach (self::HEIGHTS as $keys) { unset($height_raw[$keys[1]]); }
+            }
+            $l['shortcode_height'] = $l['type'] === 'shortcode';
+            $height_units = $auto_height ? array_merge(array('auto'), self::LAYER_UNITS) : self::LAYER_UNITS;
             foreach (self::HEIGHTS as $device=>$keys) {
                 list($key, $unit) = $keys;
-                $l[$unit] = in_array($raw[$unit] ?? null, $height_units, true) ? $raw[$unit] : ($device === 'desktop' ? ($l['type'] === 'image' ? 'auto' : '%') : null);
+                $l[$unit] = in_array($height_raw[$unit] ?? null, $height_units, true) ? $height_raw[$unit] : ($device === 'desktop' ? ($auto_height ? 'auto' : '%') : null);
                 if ($l[$unit] === null) { $l[$key] = null; continue; }
                 $range = array('%'=>array(100, 100), 'vh'=>array(100, 200), 'px'=>array(300, 2400), 'auto'=>array(100, 2400));
                 $l[$key] = self::number($raw[$key] ?? null, $range[$l[$unit]][0], 1, $range[$l[$unit]][1]);

@@ -91,6 +91,14 @@ const looks=(p,selector)=>p.evaluate(sel=>Array.from(document.querySelectorAll(s
                 await p.waitForFunction(b=>getComputedStyle(document.querySelector('.wpbn-layer--image')).getPropertyValue('--wpbn-dy').trim()!==b,before,{timeout:3000}).catch(()=>{});
                 const after=await travel();
                 assert.ok(after!=='' && after!==before,say('the photo travels with the scroll ('+before+' -> '+after+')'));
+                // No half pixel of the page at the sides (2026-11-17, the user's report): at an odd width, with nothing moving
+                // (reduced motion, no room for motion), the photo filling the scene still reaches 1px past each edge (bleed()).
+                await p.emulateMedia({reducedMotion:'reduce'});
+                await p.setViewportSize({width:1203,height:800});
+                await p.waitForTimeout(400);
+                const past=await p.evaluate(()=>{const s=document.querySelector('.wpbn-scene').getBoundingClientRect(),l=document.querySelector('.wpbn-layer--image').getBoundingClientRect();
+                    return [s.left-l.left,l.right-s.right,s.top-l.top,l.bottom-s.bottom].map(v=>Math.round(v*100)/100);});
+                assert.ok(past.every(v=>v>=0.9),say('the photo reaches past every edge of the scene, left right top bottom: '+past.join(', ')));
                 assert.deepEqual(errors,[],say('no script errors'));
                 checked.push(name);
             } finally { await browser.close(); }

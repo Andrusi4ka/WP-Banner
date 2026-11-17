@@ -295,12 +295,14 @@
             const m = layer.m, st = layer.el.style;
             ['--wpbn-k', '--wpbn-kx', '--wpbn-ky'].forEach(name => st.removeProperty(name));
             // m.fill: per device [desktop, tablet, mobile] (a single value in markup from before).
-            if (!(Array.isArray(m.fill) ? m.fill[d] : m.fill) || reduced.matches || !W || !H || !layer.el.getClientRects().length) return;
+            if (!(Array.isArray(m.fill) ? m.fill[d] : m.fill) || !W || !H || !layer.el.getClientRects().length) return;
             const at = key => Number((m[key] || [])[d]) || 0;
             const scale = at('box_scale') / 100, cx = at('box_x') / 100 * W, cy = at('box_y') / 100 * H;
             const hw = at('box_width') / 100 * W * scale / 2, hh = H * scale / 2;
             // Only a layer that covers the scene before it moves (a background, a cutout of it).
             if (cx - hw > 1 || cx + hw < W - 1 || cy - hh > 1 || cy + hh < H - 1) return;
+            // Nothing moves (reduced motion): only the edge below (no room for motion).
+            if (reduced.matches) { fills.push([st, cx - W / 2, cy - H / 2]); return; }
             // extra: how far it may also go either way, at any point of the scroll (following the mouse, an Animation's slide).
             const need = (c, half, C, move, extra) => {
                 let want = 1;
@@ -318,8 +320,12 @@
             k = Math.max(k, Math.max(need(cx, hw, W / 2, at('move_x'), follows + (Number(slack[0][d]) || 0)), need(cy, hh, H / 2, at('move_y'), follows + (Number(slack[1][d]) || 0))) * turned);
             fills.push([st, cx - W / 2, cy - H / 2]);
         });
-        k = Math.min(MAX_BLEED, k);
-        if (k <= 1.0005) return;
+        if (!fills.length) return;
+        // Always 1px past each edge (2026-11-17, the user's report: half a pixel of the page showed at the sides). The layer
+        // is centred by translate(-50%, -50%), a fraction of a pixel when the scene's width or height is odd (a 17px scrollbar:
+        // 1903px) or at 125% / 150% screen scaling; Chrome then draws it half a pixel off and its edge column blends with the
+        // page (measured 151,170,159 against 48,87,65 inside). Grown by 2px across, invisibly (0.1% at 1903px), it still covers.
+        k = Math.min(MAX_BLEED, Math.max(k, (W + 2) / W, (H + 2) / H));
         fills.forEach(function ([st, ax, ay]) {
             st.setProperty('--wpbn-k', k.toFixed(4));
             st.setProperty('--wpbn-kx', (ax * (k - 1)).toFixed(2) + 'px');

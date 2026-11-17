@@ -393,7 +393,28 @@ $autoHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($aut
 check(strpos($autoHtml,'--wpbn-width:max-content;--wpbn-width-t:max-content;--wpbn-width-m:80%;')!==false && strpos($autoHtml,'--wpbn-oh:100%;--wpbn-oh-t:100%;--wpbn-oh-m:auto;')!==false && strpos($autoHtml,'--wpbn-iw:auto;--wpbn-mw:100%;--wpbn-fit:contain;--wpbn-iw-t:auto;--wpbn-mw-t:100%;--wpbn-fit-t:contain;--wpbn-iw-m:100%;--wpbn-mw-m:none;')!==false,'Rendered: its image as wide as its height makes it, never wider than its container (then contained), per device');
 check(WPBN_Settings::object_sizes($lay(array('type'=>'image','fill_scene'=>false,'overlay_width_unit'=>'auto','height_unit'=>'auto')))['desktop'][1]===array(100,'%'),'Both Auto: the scene\'s height');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($objL)))),'--wpbn-iw')===false,'No Width Auto: as before');
-check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw,none)}'."\n".'.wpbn-scene .wpbn-layer--object img{width:var(--wpbn-iw,100%);max-width:100%}')!==false,'Its image\'s width on the site, never wider than its container');
+check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'.wpbn-scene .wpbn-layer--object{max-width:var(--wpbn-mw,none)}'."\n".'.wpbn-scene .wpbn-layer--object img.wpbn-img{width:var(--wpbn-iw,100%);max-width:100%}')!==false,'Its image\'s width on the site, never wider than its container');
+// A Shortcode layer's Height (2026-11-17, the user's request): Auto (its content's) by default and for layers saved before
+// it had one (their unused height keys said 100%); px, vh or % per device, the content stretched to it (frontend.css).
+$scOld=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','height'=>100,'height_unit'=>'%'))))['layers'][0];
+check($scOld['height_unit']==='auto' && $scOld['shortcode_height']===true,'A Shortcode layer saved before its Height: Auto, as it looked');
+$scOldHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','height_unit'=>'%')))));
+check(strpos($scOldHtml,'wpbn-layer--sheight')===false && strpos($scOldHtml,'--wpbn-sh')===false && strpos($scOldHtml,'<div class="wpbn-shortcode">')!==false,'Auto: no height of its own on the page, its content in .wpbn-shortcode');
+$scNew=WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode'=>'[demo]','shortcode_height'=>true,'height'=>100,'height_unit'=>'%','mobile_height'=>400,'mobile_height_unit'=>'px'))));
+check($scNew['layers'][0]['height_unit']==='%' && $scNew['layers'][0]['mobile_height_unit']==='px','Its Height kept once it has one');
+$scHtml=WPBN_Render::markup($scNew);
+check(strpos($scHtml,'wpbn-layer--sheight')!==false && strpos($scHtml,'--wpbn-sh:100%;--wpbn-sh-t:100%;--wpbn-sh-m:400px;')!==false,'Rendered: its height per device');
+check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','shortcode_height'=>true,'height_unit'=>'auto'))))['layers'][0]['height_unit']==='auto'
+    && WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'overlay','height_unit'=>'auto'))))['layers'][0]['height_unit']==='%','Auto: a Shortcode layer\'s (and an image\'s), not an overlay\'s');
+$scCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
+check(strpos($scCss,'.wpbn-scene .wpbn-layer--sheight{display:flex;flex-direction:column;height:var(--wpbn-sh,auto)}')!==false && strpos($scCss,'height:var(--wpbn-sh-m,var(--wpbn-sh-t,var(--wpbn-sh,auto)))')!==false,'Its height per device in frontend.css, the content stretched');
+check(strpos($scCss,'.wpbn-shortcode>:not(style,script,link,template,noscript,:empty){display:flex')!==false && strpos($scCss,'.wpbn-shortcode>*{display')===false,'Only what shows is stretched: never the content\'s <style> (display:flex would show its text) or an empty helper');
+// A Shortcode layer's content keeps its own images (2026-11-17, the user's report: a 150px icon of an HTML block was
+// stretched to the layer): frontend.css styles only the layer's own picture, img.wpbn-img, never any img inside a layer.
+$css=file_get_contents(__DIR__.'/../assets/css/frontend.css');
+preg_match_all('/[^{}]*\.wpbn-layer[^{}]* img(?!\.wpbn-img)[^{]*\{/',$css,$loose);
+check(array_filter($loose[0],function($sel){return strpos($sel,'wpbn-button__icon img')===false;})===array(),'No frontend.css rule styles every img inside a layer: '.implode(' | ',$loose[0]));
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'image','image'=>3))))),'<img class="wpbn-img" ')!==false,'The layer\'s own picture is img.wpbn-img');
 // Attached to another layer (2026-11-13): its place per device chosen by the editor, kept to another layer of the scene, no circles.
 $tA=array('type'=>'text','text'=>'Title','uid'=>'ttl1');
 $bA=array('type'=>'button','button_text'=>'Go','uid'=>'btn1','anchor'=>'ttl1','anchor_desktop'=>array(50,100,50,0,0,24),'anchor_tablet'=>array(7,100,50,0,'x',2),'anchor_mobile'=>array(0,100,0,0,10,9000));
@@ -524,7 +545,7 @@ check(WPBN_Settings::effective($rot['layers'][1])['rotate']===0 && strpos($animC
 // An image's Shadow (the title's keys): drop-shadow along its outline, only with its switch on.
 $sh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'image','image'=>3,'use_shadow'=>1,'shadow_x'=>4,'shadow_y'=>12,'shadow_blur'=>24,'shadow_color'=>'rgba(0,0,0,0.4)')),$lay(array('type'=>'image','image'=>3,'shadow_y'=>12))))));
 check(substr_count($sh,'wpbn-layer--shadow')===1 && strpos($sh,'--wpbn-ds:4px 12px 24px rgba(0,0,0,0.4);')!==false,'Image Shadow: its values, only with its switch on');
-check(strpos($animCss,'.wpbn-scene .wpbn-layer--shadow img{filter:drop-shadow(var(--wpbn-ds))}')!==false,'Drawn along the outline of the image');
+check(strpos($animCss,'.wpbn-scene .wpbn-layer--shadow img.wpbn-img{filter:drop-shadow(var(--wpbn-ds))}')!==false,'Drawn along the outline of the image');
 // An overlay's Shadow: around its box, or Inside it (a vignette); only with its switch on.
 $osh=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_shadow'=>1,'shadow_y'=>8,'shadow_blur'=>30)),$lay(array('type'=>'overlay','use_shadow'=>1,'shadow_inset'=>1,'shadow_blur'=>120,'shadow_color'=>'rgba(0,0,0,0.6)')),$lay(array('type'=>'overlay','shadow_inset'=>1))))));
 check(strpos($osh,'box-shadow:0px 8px 30px rgba(0,0,0,0.5);')!==false && strpos($osh,'box-shadow:inset 0px 2px 120px rgba(0,0,0,0.6);')!==false && substr_count($osh,'box-shadow')===2,'Overlay Shadow: around it or Inside, only with its switch on');
@@ -536,13 +557,13 @@ $bd=$lay(array('type'=>'image','image'=>3,'use_border'=>1,'border_top'=>4,'borde
 check($bd['border_right']===100 && $bd['border_left']===0 && $bd['border_style']==='solid' && $bd['border_linked']===true && $bd['border_top_mobile']===null && WPBN_Settings::layer()['use_border']===false,'Border: widths bounded, unknown line solid, linked by default, off for a new layer');
 check(WPBN_Settings::borders($bd)===array('desktop'=>'4px 100px 0px 0px','tablet'=>'4px 100px 0px 8px','mobile'=>'4px 100px 0px 8px') && WPBN_Settings::borders($lay(array('use_border'=>0)))==='' && WPBN_Settings::borders($lay(array('use_border'=>1,'border_top'=>0,'border_right'=>0,'border_bottom'=>0,'border_left'=>0)))==='','Its widths per device (following the larger screen); off or none: no border');
 $bdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($bd))));
-check(strpos($bdm,'wpbn-layer--border')!==false && strpos($bdm,'--wpbn-brw:4px 100px 0px 0px;--wpbn-brw-t:4px 100px 0px 8px;--wpbn-brw-m:4px 100px 0px 8px;--wpbn-brs:solid;--wpbn-brc:#ff0000;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--border.wpbn-layer--image img')!==false,'Rendered: on the picture, per device');
+check(strpos($bdm,'wpbn-layer--border')!==false && strpos($bdm,'--wpbn-brw:4px 100px 0px 0px;--wpbn-brw-t:4px 100px 0px 8px;--wpbn-brw-m:4px 100px 0px 8px;--wpbn-brs:solid;--wpbn-brc:#ff0000;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--border.wpbn-layer--image img.wpbn-img')!==false,'Rendered: on the picture, per device');
 // Radius (Effect, 2026-11-09): behind its switch; per corner and device, px or % (one unit per corner), bounded by its unit.
 $rd=$lay(array('type'=>'image','image'=>3,'use_radius'=>1,'radius_tl'=>24,'radius_tr'=>5000,'radius_br'=>80,'radius_br_unit'=>'%','radius_bl'=>0,'radius_bl_unit'=>'em','radius_tl_mobile'=>8));
 check($rd['radius_tr']===1000 && $rd['radius_br']===50 && $rd['radius_bl_unit']==='px' && $rd['radius_linked']===true && WPBN_Settings::layer()['use_radius']===false,'Radius: bounded by its unit (px 1000, % 50), unknown unit px, linked by default, off for a new layer');
 check(WPBN_Settings::radii($rd)===array('desktop'=>'24px 1000px 50% 0px','tablet'=>'24px 1000px 50% 0px','mobile'=>'8px 1000px 50% 0px') && WPBN_Settings::radii($lay(array('use_radius'=>0)))==='','Its corners per device (following the larger screen); off: none');
 $rdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($rd))));
-check(strpos($rdm,'wpbn-layer--radius')!==false && strpos($rdm,'--wpbn-brr:24px 1000px 50% 0px;--wpbn-brr-t:24px 1000px 50% 0px;--wpbn-brr-m:8px 1000px 50% 0px;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img')!==false,'Rendered: on the picture, per device');
+check(strpos($rdm,'wpbn-layer--radius')!==false && strpos($rdm,'--wpbn-brr:24px 1000px 50% 0px;--wpbn-brr-t:24px 1000px 50% 0px;--wpbn-brr-m:8px 1000px 50% 0px;')!==false && strpos($animCss,'.wpbn-scene .wpbn-layer--radius.wpbn-layer--image img.wpbn-img')!==false,'Rendered: on the picture, per device');
 // Padding (Size, 2026-11-09): a title, a text, a button, a shortcode or an image object; per side and device, px or % (bounded).
 $pd=$lay(array('type'=>'text','use_padding'=>1,'padding_top'=>20,'padding_right'=>9000,'padding_left'=>80,'padding_left_unit'=>'%','padding_bottom_unit'=>'em','padding_top_mobile'=>8));
 check($pd['padding_right']===500 && $pd['padding_left']===50 && $pd['padding_bottom_unit']==='px' && $pd['padding_linked']===true && WPBN_Settings::layer()['padding_top']===0 && WPBN_Settings::layer()['use_padding']===false,'Padding: bounded by its unit (px 500, % 50), unknown unit px, linked, off and 0 by default');
