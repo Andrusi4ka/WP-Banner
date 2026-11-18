@@ -613,3 +613,7 @@ body.wpbn-modal-open{overflow:hidden}
 /* The Position window: an axis with no room (the layer takes all of its container that way): greyed (admin.js positionAxes()). */
 .wpbn-axis.is-fixed{opacity:.45}
 .wpbn-axis.is-fixed input{cursor:not-allowed}
+/* Custom CSS (2026-11-17): the code editor (CodeMirror) or the plain box, monospace, room for a few rules. */
+.wpbn-field--css textarea{width:100%;min-height:240px;font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.5}
+.wpbn-field--css .CodeMirror{height:320px;border:1px solid #8c8f94;border-radius:4px;font-size:13px}
+.wpbn-field--css .CodeMirror-focused{border-color:var(--wpbn-accent);box-shadow:0 0 0 1px var(--wpbn-accent)}

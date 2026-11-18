@@ -409,6 +409,15 @@ check(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shortcode','s
 $scCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
 check(strpos($scCss,'.wpbn-scene .wpbn-layer--sheight{display:flex;flex-direction:column;height:var(--wpbn-sh,auto)}')!==false && strpos($scCss,'height:var(--wpbn-sh-m,var(--wpbn-sh-t,var(--wpbn-sh,auto)))')!==false,'Its height per device in frontend.css, the content stretched');
 check(strpos($scCss,'.wpbn-shortcode>:not(style,script,link,template,noscript,:empty){display:flex')!==false && strpos($scCss,'.wpbn-shortcode>*{display')===false,'Only what shows is stretched: never the content\'s <style> (display:flex would show its text) or an empty helper');
+// Custom CSS (2026-11-17, the user's request): kept as written but without "<" (no way out of its <style>), at most CSS_MAX
+// characters; printed before the scene with "selector" made this banner (a class of its own); none: no <style>, no class.
+check(WPBN_Settings::defaults()['custom_css']==='','No Custom CSS by default');
+check(WPBN_Settings::custom_css("selector a > b { color: red; }</style><script>alert(1)</script>\r\n")==="selector a > b { color: red; }/style>script>alert(1)/script>",'Custom CSS: no "<" left, line ends plain, ">" kept');
+check(mb_strlen(WPBN_Settings::custom_css(str_repeat('a', WPBN_Settings::CSS_MAX + 50)))===WPBN_Settings::CSS_MAX,'Custom CSS: at most CSS_MAX characters');
+$cssHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('custom_css'=>"selector .x{top:0}\n.selectors, selector-ish {color:red}",'layers'=>array(array('type'=>'text','text'=>'Hi')))));
+preg_match('/<style class="wpbn-custom-css">(.*?)<\/style><section[^>]* class="wpbn-scene (wpbn-css-\d+)[ "]/s',$cssHtml,$cssM);
+check($cssM && strpos($cssM[1],'.wpbn-scene.'.$cssM[2].' .x{top:0}')===0 && strpos($cssM[1],'.selectors, selector-ish')!==false,'Custom CSS printed before its scene, "selector" (a whole word only) made this banner');
+check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','text'=>'Hi'))))),'wpbn-custom-css')===false,'No Custom CSS: no <style>');
 // A Shortcode layer's content keeps its own images (2026-11-17, the user's report: a 150px icon of an HTML block was
 // stretched to the layer): frontend.css styles only the layer's own picture, img.wpbn-img, never any img inside a layer.
 $css=file_get_contents(__DIR__.'/../assets/css/frontend.css');

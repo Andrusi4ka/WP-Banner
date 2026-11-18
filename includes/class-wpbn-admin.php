@@ -1,6 +1,8 @@
 <?php
 defined('ABSPATH') || exit;
 class WPBN_Admin {
+    // The code editor's settings for Custom CSS (assets(), given to admin.js as boot.cssEditor); false: a plain box.
+    private static $css_editor = false;
     public static function init() {
         add_action('add_meta_boxes_wpbn_scene', array(__CLASS__, 'boxes'));
         add_action('save_post_wpbn_scene', array(__CLASS__, 'save'));
@@ -38,6 +40,9 @@ class WPBN_Admin {
         wp_enqueue_media();
         // The Text layer's editor (WordPress's, wp.editor: admin.js startEditor()).
         wp_enqueue_editor();
+        // Custom CSS (2026-11-17): WordPress's code editor (CodeMirror, as Additional CSS; admin.js startCss()). false where
+        // the user turned syntax highlighting off: then the plain box.
+        self::$css_editor = wp_enqueue_code_editor(array('type'=>'text/css'));
         // Pickr 1.9.1 (MIT), as in WP Swiper: every color field's picker (admin.js colorField()).
         wp_enqueue_style('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/classic.min.css', array(), '1.9.1');
         wp_enqueue_script('wpbn-pickr', WPBN_URL.'assets/vendor/pickr/pickr.min.js', array(), '1.9.1', true);
@@ -57,7 +62,7 @@ class WPBN_Admin {
                 if ($image && !isset($images[$image])) { $images[$image] = wp_get_attachment_image_url($image,'large'); $info[$image] = self::image_info($image); }
             }
         }
-        $boot = array('scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'overlayColor'=>WPBN_Settings::OVERLAY_COLOR, 'textColors'=>WPBN_Palette::tinymce_map(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID,
+        $boot = array('cssEditor'=>self::$css_editor, 'canCss'=>current_user_can('unfiltered_html'), 'scene'=>$s, 'layer'=>WPBN_Settings::layer(), 'overlayColor'=>WPBN_Settings::OVERLAY_COLOR, 'textColors'=>WPBN_Palette::tinymce_map(), 'images'=>$images, 'imageInfo'=>$info,'assetBase'=>WPBN_URL, 'endpoint'=>admin_url('admin-ajax.php'), 'nonce'=>wp_create_nonce('wpbn_preview'), 'postId'=>$post->ID,
             // The color fields' palette: the theme's colors, black, white and greys.
             'palette'=>WPBN_Palette::colors(), 'primary'=>WPBN_Palette::primary(),
             // The Font list (Woodmart's fonts, with each one's weights); null without Woodmart: a text field.
@@ -147,8 +152,17 @@ class WPBN_Admin {
         $data = json_decode($json, true);
         if (!is_array($data)) { self::save_error('invalid'); return; }
         if (is_array($data['layers'] ?? null) && count($data['layers']) > WPBN_Settings::MAX_LAYERS) { self::save_error('too_many'); }
-        update_post_meta($id, WPBN_Settings::META, wp_slash(WPBN_Settings::sanitize($data)));
+        $clean = WPBN_Settings::sanitize($data);
+        // Custom CSS: only those WordPress lets write their own code (unfiltered_html: administrators) change it; for the
+        // others the scene keeps what it had.
+        if (!current_user_can('unfiltered_html')) { $clean['custom_css'] = self::saved_css($id); }
+        update_post_meta($id, WPBN_Settings::META, wp_slash($clean));
         WPBN_Settings::forget($id);
+    }
+    // The Custom CSS a scene has saved ('' for none).
+    public static function saved_css($id) {
+        $saved = get_post_meta($id, WPBN_Settings::META, true);
+        return is_array($saved) ? WPBN_Settings::custom_css($saved['custom_css'] ?? '') : '';
     }
     // The scene's settings as sent, at most (admin.js checks it before the form is sent).
     const MAX_DATA = 500000;

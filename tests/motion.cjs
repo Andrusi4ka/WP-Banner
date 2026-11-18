@@ -1176,7 +1176,16 @@ const server=http.createServer((req,res)=>{
         await tp.fill('#wpbn-f-move_y','0');
         assert.ok(await tp.locator('#wpbn-menu .wpbn-menu-item__dot').count()===0 && (await menuState())[6]==='Scroll animation*','No dot once nothing animates; the block kept');
         await tp.click('#wpbn-scene-settings');
-        assert.deepEqual(await menuState(),['Size*','Placement','Attributes'],'The scene\'s blocks');
+        assert.deepEqual(await menuState(),['Size*','Placement','Attributes','Custom CSS'],'The scene\'s blocks');
+        // Custom CSS (2026-11-17, the user's request): typed into the scene's data ("selector" for this banner), shown in the preview.
+        await tp.click('[data-block="css"]');
+        await tp.fill('#wpbn-f-custom_css','selector .wpbn-layer { outline: 3px solid red; }');
+        assert.equal(JSON.parse(await tp.locator('#wpbn-data').inputValue()).custom_css,'selector .wpbn-layer { outline: 3px solid red; }','Custom CSS in the scene\'s data');
+        await tp.click('#wpbn-refresh');
+        await tp.waitForFunction(()=>{const s=document.querySelector('#wpbn-frame').contentDocument?.querySelector('style.wpbn-custom-css');return s&&/^\.wpbn-scene\.wpbn-css-\d+ \.wpbn-layer \{/.test(s.textContent);});
+        assert.ok(await tp.frameLocator('#wpbn-frame').locator('.wpbn-scene .wpbn-layer').first().evaluate(el=>getComputedStyle(el).outlineStyle==='solid'),'The preview applies it, "selector" made this banner');
+        await tp.fill('#wpbn-f-custom_css','');
+        await tp.click('#wpbn-scene-settings');
         await tp.click('#wpbn-add-toggle');await tp.click('.wpbn-modal--add [data-add="text"]');
         assert.deepEqual(await menuState(),['Content*','Title style','Size','Effect','Entrance animation','Text animation','Loop animation','Scroll animation','Follow the mouse'],'A new title opens on Content');
         await tp.click('[data-block="scroll"]');

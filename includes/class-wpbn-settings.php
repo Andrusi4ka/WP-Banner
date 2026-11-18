@@ -13,7 +13,16 @@ class WPBN_Settings {
             'target'=>'', 'as_background'=>true, 'as_background_tablet'=>null, 'as_background_mobile'=>null,
             // clip: per device (2026-11-16, user's request), the layers cut at the banner's edges; off, they may go
             // above and below it (its sides stay cut: no page scroll sideways). Tablet and mobile null: the larger screen's.
-            'clip'=>true, 'clip_tablet'=>null, 'clip_mobile'=>null, 'css_id'=>'', 'css_class'=>'', 'layers'=>array());
+            'clip'=>true, 'clip_tablet'=>null, 'clip_mobile'=>null, 'css_id'=>'', 'css_class'=>'',
+            // Custom CSS (2026-11-17, the user's request): the scene's own styles; "selector" stands for this banner (WPBN_Render).
+            'custom_css'=>'', 'layers'=>array());
+    }
+    // Custom CSS: kept as written, without "<" (it is printed inside a <style>: no way out of it into HTML or a script),
+    // at most CSS_MAX characters, Windows line ends made plain. Who may change it: WPBN_Admin::save() (unfiltered_html).
+    const CSS_MAX = 20000;
+    public static function custom_css($value) {
+        $css = is_string($value) ? str_replace(array("\r\n", "\r", '<'), array("\n", "\n", ''), $value) : '';
+        return trim(function_exists('mb_substr') ? mb_substr($css, 0, self::CSS_MAX) : substr($css, 0, self::CSS_MAX));
     }
     // Clip layers to the banner, per device: true where the layers are cut at its edges.
     public static function clips_on($s) {
@@ -567,6 +576,7 @@ class WPBN_Settings {
         $out['target'] = self::css_class($input['target'] ?? '');
         $out['css_id'] = self::css_id($input['css_id'] ?? '');
         $out['css_class'] = self::css_classes($input['css_class'] ?? '');
+        $out['custom_css'] = self::custom_css($input['custom_css'] ?? '');
         // Scenes saved with the former "Insert into blocks by class" switch off: no class.
         if (array_key_exists('by_class', $input) && empty($input['by_class'])) { $out['target'] = ''; }
         // Background of the block, per device. Scenes saved before it: on every device only with the desktop Height on Auto (as then).

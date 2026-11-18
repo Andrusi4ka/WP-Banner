@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,10 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.4.0 =
+* Custom CSS for each scene (Scene settings → Custom CSS), in WordPress's code editor: write "selector" for the banner itself and the styles apply to this banner only, on the page and in the preview. Only administrators (those WordPress lets write their own code) can change it.
+* A Shortcode layer covering the whole banner (Full width, Height 100%) no longer shows a thin line of the page at its edge: it reaches just past them, as a photo filling the banner does.
 
 = 1.3.0 =
 * Shortcode layers have a Height, per device (Size): Auto, as tall as their content (as before, and for layers saved before), or px, vh or % of the banner, the content stretched to it — e.g. an HTML block's row and its background filling the whole banner.

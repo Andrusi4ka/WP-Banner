@@ -320,6 +320,16 @@
             k = Math.max(k, Math.max(need(cx, hw, W / 2, at('move_x'), follows + (Number(slack[0][d]) || 0)), need(cy, hh, H / 2, at('move_y'), follows + (Number(slack[1][d]) || 0))) * turned);
             fills.push([st, cx - W / 2, cy - H / 2]);
         });
+        // A Shortcode layer with a Height of its own that covers the scene (Full width, 100% × 100%: e.g. a featured image as the
+        // banner's background; 2026-11-17, the user's report of a line at its left): 1px past each edge too, as a photo filling
+        // it, for the same half pixel. Its box as laid out (offsetWidth / offsetHeight: no transform, no motion in them).
+        if (W && H) {
+            const past = Math.max((W + 2) / W, (H + 2) / H).toFixed(4);
+            s.layers.forEach(function (layer) {
+                const el = layer.el;
+                if (el.classList.contains('wpbn-layer--sheight') && el.getClientRects().length && el.offsetWidth >= W - 1 && el.offsetHeight >= H - 1) el.style.setProperty('--wpbn-k', past);
+            });
+        }
         if (!fills.length) return;
         // Always 1px past each edge (2026-11-17, the user's report: half a pixel of the page showed at the sides). The layer
         // is centred by translate(-50%, -50%), a fraction of a pixel when the scene's width or height is odd (a 17px scrollbar:

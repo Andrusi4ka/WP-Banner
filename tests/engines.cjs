@@ -25,7 +25,9 @@ const SCENE={height:600,height_unit:'px',layers:[
         use_anim:true,anim_type:'slide-x',anim_duration:4,anim_repeat:'alternate',anim_easing:'linear'},
     // A title whose letters drop in one after another (Text animation), in a Gradient, an accent word in its own colour.
     {type:'text',text:'Lettered <u>title</u>',y:80,use_text_gradient:true,gradient:'linear;left;#ff0000@0;#0000ff@100',
-        use_text_anim:true,text_anim_type:'drop',text_anim_start:'load',text_anim_duration:1.5,text_anim_stagger:0.1,text_anim_blur:8,text_anim_distance:60}
+        use_text_anim:true,text_anim_type:'drop',text_anim_start:'load',text_anim_duration:1.5,text_anim_stagger:0.1,text_anim_blur:8,text_anim_distance:60},
+    // A Shortcode layer over the whole scene (Full width, Height 100%: e.g. a featured image as the background; 2026-11-17).
+    {type:'shortcode',shortcode:'[demo]',container:'full',shortcode_height:true,height:100,height_unit:'%'}
 ]};
 const page=()=>execFileSync(php,[path.join(__dirname,'settings.php'),'--preview'],{encoding:'utf8',input:JSON.stringify(SCENE)});
 const server=http.createServer((req,res)=>{
@@ -99,6 +101,10 @@ const looks=(p,selector)=>p.evaluate(sel=>Array.from(document.querySelectorAll(s
                 const past=await p.evaluate(()=>{const s=document.querySelector('.wpbn-scene').getBoundingClientRect(),l=document.querySelector('.wpbn-layer--image').getBoundingClientRect();
                     return [s.left-l.left,l.right-s.right,s.top-l.top,l.bottom-s.bottom].map(v=>Math.round(v*100)/100);});
                 assert.ok(past.every(v=>v>=0.9),say('the photo reaches past every edge of the scene, left right top bottom: '+past.join(', ')));
+                // So does a Shortcode layer covering the scene (the user's report of a line at its left, 2026-11-17).
+                const scPast=await p.evaluate(()=>{const s=document.querySelector('.wpbn-scene').getBoundingClientRect(),l=document.querySelector('.wpbn-layer--shortcode').getBoundingClientRect();
+                    return [s.left-l.left,l.right-s.right,s.top-l.top,l.bottom-s.bottom].map(v=>Math.round(v*100)/100);});
+                assert.ok(scPast.every(v=>v>=0.9),say('a Shortcode layer covering the scene reaches past every edge too: '+scPast.join(', ')));
                 assert.deepEqual(errors,[],say('no script errors'));
                 checked.push(name);
             } finally { await browser.close(); }

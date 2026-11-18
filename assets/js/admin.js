@@ -1226,7 +1226,7 @@
         $('menu').querySelectorAll('[data-block]').forEach(b => b.setAttribute('aria-current', String(b.dataset.block === k)));
         $('settings').querySelectorAll('.wpbn-block').forEach(p => { p.hidden = p.dataset.blockPane !== k; });
         // The pickers belong to the block left; the text editor starts once its block shows.
-        closePicker(); closeFonts(); startEditor(); refreshFontSample(); drawGradient();
+        closePicker(); closeFonts(); startEditor(); startCss(); refreshFontSample(); drawGradient();
     }
     // A layer's name (the layer list shows it), the top field of its settings.
     const nameField = () => '<div class="wpbn-field">' + head('wpbn-f-name', 'Name') + '<input id="wpbn-f-name" class="widefat" data-key="name" type="text" maxlength="80" value="' + escape(current().name || '') + '"></div>' + showOnField();
@@ -1636,6 +1636,30 @@
         });
     }
     /*
+     * Custom CSS (2026-11-17, the user's request): the scene's own styles in WordPress's code editor (CodeMirror, as Additional
+     * CSS: boot.cssEditor; without it, the plain box, data-key custom_css). "selector" stands for this banner. Only those who
+     * may write their own code (boot.canCss: unfiltered_html) change it; for the others it is read only (WPBN_Admin::save()
+     * keeps it too). Started when its block shows, as the Text layer's editor.
+     */
+    const CSS_ID = 'wpbn-f-custom_css';
+    let cssEditor = null;
+    function cssField() {
+        const help = 'Your own CSS for this banner. Write selector for the banner itself, e.g. "selector .my-image { object-fit: cover; }": it applies to this banner only. Applied on the page and in the preview (Update).';
+        return '<div class="wpbn-field wpbn-field--css">' + head(CSS_ID, 'CSS', tip(help))
+            + '<textarea id="' + CSS_ID + '" data-key="custom_css" rows="12" spellcheck="false"' + (boot.canCss ? '' : ' readonly') + ' placeholder="selector .my-class {&#10;    &#10;}">' + escape(scene.custom_css || '') + '</textarea>'
+            + (boot.canCss ? '' : note('Only administrators (those WordPress lets write their own code) can change it.')) + '</div>';
+    }
+    function startCss() {
+        const box = document.getElementById(CSS_ID);
+        if (!box || box.closest('[hidden]') || (cssEditor && cssEditor.codemirror.getTextArea() === box)) return;
+        cssEditor = null;
+        if (!boot.cssEditor || !window.wp || !window.wp.codeEditor) return;
+        const settings = Object.assign({}, boot.cssEditor, {codemirror:Object.assign({}, boot.cssEditor.codemirror || {}, {readOnly:!boot.canCss, lineWrapping:true})});
+        cssEditor = window.wp.codeEditor.initialize(box, settings);
+        // Typed: into the scene, as the plain box's input would (the menu's dot, Update, the unsaved-changes warning).
+        cssEditor.codemirror.on('change', cm => { box.value = cm.getValue(); box.dispatchEvent(new Event('input', {bubbles:true})); });
+    }
+    /*
      * Add element (user's request, 2026-11-09): a window with the kinds of element (ELEMENTS); choosing one adds that
      * layer in front of the others and selects it; Close, the backdrop or Esc leave the scene as it was. In the page's
      * body, as the Position window (the editor box is a size container: it would hold a fixed window inside it).
@@ -1697,7 +1721,9 @@
                 ['placement', 'Placement', 'layout', card('Placement', targetField())],
                 // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name), one under the other.
                 ['attributes', 'Attributes', 'tag', card('Attributes', withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
-                    + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class in Placement, which places the banner in a block.'))]]);
+                    + withTip(field('css_class', 'Extra class name'), 'Classes for the banner\'s block, to style it in your CSS; several separated by spaces, without dots. Not the class in Placement, which places the banner in a block.'))],
+                // Custom CSS (2026-11-17, the user's request): the scene's own styles, "selector" this banner (WPBN_Render::custom_css()).
+                ['css', 'Custom CSS', 'editor-code', card('Custom CSS', cssField()), String(scene.custom_css || '').trim() !== '']]);
         } else if (scene.layers[selected].type === 'shape') {
             html = shapeSettings(scene.layers[selected]);
         } else {
@@ -1817,7 +1843,7 @@
         targetWarning();
         refreshFontSample();
         drawGradient();
-        startEditor();
+        startEditor(); startCss();
         $('scene-settings').setAttribute('aria-current', String(selected < 0));
         // Move in the preview follows the layer chosen (and its place, changed here).
         moveState();

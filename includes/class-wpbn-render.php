@@ -157,6 +157,12 @@ class WPBN_Render {
     //           host: the class of the block it becomes the background of, if it stands inside one (HOST_SCRIPT);
     //           eager: load its images at once (default: only the page's first scene does);
     //           id: the scene's (the id of the <link> that loads its Google font).
+    // A scene's Custom CSS as printed: "selector" (a whole word: not part of a class like .selectors or selector-x, a hyphen
+    // belongs to a CSS name) made this banner, `.wpbn-scene.<its class>`. Already without "<" (WPBN_Settings::custom_css()),
+    // so it cannot end its <style>.
+    public static function custom_css($css, $scope) {
+        return preg_replace('/(?<![\w-])selector(?![\w-])/', '.wpbn-scene.'.$scope, WPBN_Settings::custom_css($css));
+    }
     public static function markup($s, $context = array()) {
         $fill = !empty($context['fill']);
         $first = isset($context['eager']) ? (bool) $context['eager'] : self::$count === 0;
@@ -165,8 +171,10 @@ class WPBN_Render {
         $style = '--wpbn-height:'.$h['desktop'].';--wpbn-tablet-height:'.$h['tablet'].';--wpbn-mobile-height:'.$h['mobile'].';';
         $auto = array();
         foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
+        // Its Custom CSS (2026-11-17, the user's request): "selector" stands for this banner, a class of its own on the page.
+        $scope = ($s['custom_css'] ?? '') !== '' ? 'wpbn-css-'.self::$count : '';
         // Its own id and classes (Scene settings).
-        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($fill ? ' wpbn-scene--fill' : '').self::unclipped($s).($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
+        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($scope !== '' ? ' '.$scope : '').($fill ? ' wpbn-scene--fill' : '').self::unclipped($s).($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
         // first: the page's first scene (its images load at once); loaded: an image drawn already (only the first gets
         // fetchpriority); links: the Google fonts' <link>s the layers need.
         // anchors: the uids of the layers drawn that others drawn are attached to (data-uid on them; frontend.js attach()).
@@ -174,7 +182,7 @@ class WPBN_Render {
         foreach ($s['layers'] as $i=>$l) {
             if (self::drawn($l)) { $html .= self::layer($s, $l, $i, $context, $state); }
         }
-        $html = $state['links'].$html.'</section>';
+        $html = $state['links'].($scope !== '' ? '<style class="wpbn-custom-css">'.self::custom_css($s['custom_css'], $scope).'</style>' : '').$html.'</section>';
         return empty($context['host']) ? $html : $html.'<script>'.self::HOST_SCRIPT.'</script>';
     }
     // Whether a layer is drawn at all.
