@@ -741,7 +741,8 @@
      */
     const ANIM = boot.animations || null;
     // An overlay's kinds: those that move its box. Not Fade: a fading box around it would cut its Filters off from the layers behind.
-    const OVERLAY_ANIMS = ['zoom', 'slide-x', 'slide-y'];
+    // Pulse (2026-11-19): a coloured circle growing and fading out (a service area); its Blur sees nothing while it runs.
+    const OVERLAY_ANIMS = ['zoom', 'slide-x', 'slide-y', 'pulse'];
     // Follow the mouse (Motion): its switch; on, how far the layer moves with the pointer at the scene's edge. One value for every
     // device: only devices with a mouse have it. Layers in front moving further than those behind gives depth.
     // Follow the mouse: no switch (user's request, 2026-11-09): 0 does not move. Its help: the tip beside the section's title.
@@ -801,7 +802,9 @@
     // obj: a Shape object's (WPBN_Shape::loop()).
     function animationCard(l, obj) {
         if (!ANIM) return '';
-        const types = l.type === 'overlay' ? Object.fromEntries(Object.entries(ANIM.types).filter(([k]) => OVERLAY_ANIMS.includes(k))) : ANIM.types;
+        // A Shape layer or object: only the kinds its own loops have (not Pulse: WPBN_Animation::for_shape()).
+        const types = l.type === 'overlay' ? Object.fromEntries(Object.entries(ANIM.types).filter(([k]) => OVERLAY_ANIMS.includes(k)))
+            : (obj || l.type === 'shape') ? Object.fromEntries(Object.entries(ANIM.types).filter(([, t]) => t.shape !== false)) : ANIM.types;
         const kinds = Object.keys(types), type = types[l.anim_type] || types[kinds[0]];
         // Its Type, None first (no switch: user's request, 2026-11-09), the help behind an "i" beside it.
         const toggle = kindSelect('anim', l, Object.fromEntries(Object.entries(types).map(([k, t]) => [k, t.label])), !obj && l.type === 'shape'
@@ -809,7 +812,7 @@
             : obj
             ? 'Runs by itself, after its Entrance animation: the window drifting to and fro over what it shows (Slide), the object slowly growing and shrinking (Zoom) or fading in and out (Fade; on glass its blur and tint). Give each object its own Delay to set them moving one after another.'
             : l.type === 'overlay'
-            ? 'Runs by itself, on top of the scroll animation: the overlay slowly zooming, or sliding to and fro. For an overlay smaller than the scene (Size); one that fills it would show its edges. How it comes in: Entrance animation.'
+            ? 'Runs by itself, on top of the scroll animation: the overlay slowly zooming, sliding to and fro, or pulsing (growing from its middle and fading out, e.g. a circle with Radius 50% as a service area on a map). For an overlay smaller than the scene (Size); one that fills it would show its edges. How it comes in: Entrance animation.'
             : 'Runs by itself, on top of the scroll animation, e.g. a photo slowly zooming in and out. How a layer comes in: Entrance animation.');
         // Reset takes the kind's own start and end.
         [DEFAULTS.anim_from, DEFAULTS.anim_to] = type.def;
@@ -1995,6 +1998,8 @@
             [obj.anim_from, obj.anim_to] = ANIM.types[obj.anim_type].def;
             // And its usual Repeat: a fade or a slide plays once (it comes in), a zoom goes back and forth.
             obj.anim_repeat = ANIM.types[obj.anim_type].repeat || obj.anim_repeat;
+            // A pulse slows down as it spreads.
+            if (ANIM.types[obj.anim_type].easing) obj.anim_easing = ANIM.types[obj.anim_type].easing;
             ['tablet', 'mobile'].forEach(dv => { obj[dkey('anim_from', dv)] = null; obj[dkey('anim_to', dv)] = null; });
             settings(); changed(); return;
         }
@@ -2039,6 +2044,7 @@
             if (value !== 'none' && o.anim_type !== value && ANIM && ANIM.types[value]) {
                 o.anim_type = value; [o.anim_from, o.anim_to] = ANIM.types[value].def;
                 o.anim_repeat = ANIM.types[value].repeat || o.anim_repeat;
+                if (ANIM.types[value].easing) o.anim_easing = ANIM.types[value].easing;
                 ['tablet', 'mobile'].forEach(dv => { o[dkey('anim_from', dv)] = null; o[dkey('anim_to', dv)] = null; });
             }
         }

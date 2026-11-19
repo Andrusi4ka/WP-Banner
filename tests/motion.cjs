@@ -584,7 +584,13 @@ const server=http.createServer((req,res)=>{
         // Since 2026-11-10: Filters (its Blur and tones), a Loop animation and travel and zoom with the scroll.
         assert.deepEqual(await page.locator('#wpbn-menu .wpbn-menu-item__title').allTextContents(),['Content','Fill','Size','Effect','Filters','Entrance animation','Loop animation','Scroll animation'],'Content (its name), Fill, Size, Effect, Filters, Entrance, Loop and Scroll animation');
         assert.ok(await page.locator('#wpbn-f-move_y, #wpbn-f-zoom, #wpbn-f-end_opacity').count()===3 && await page.locator('#wpbn-f-use_scroll').count()===0 && await page.locator(POS).count()===1,'Travel, zoom and Opacity at the end; Position');
-        assert.ok(await page.locator('#wpbn-f-backdrop_blur, #wpbn-f-f_grayscale').count()===2 && await page.locator('#wpbn-f-anim_type option').allTextContents().then(t=>t.join()==='None,Zoom,Slide sideways,Slide up or down'),'Its Filters; its Loop animation without Fade');
+        assert.ok(await page.locator('#wpbn-f-backdrop_blur, #wpbn-f-f_grayscale').count()===2 && await page.locator('#wpbn-f-anim_type option').allTextContents().then(t=>t.join()==='None,Zoom,Slide sideways,Slide up or down,Pulse'),'Its Filters; its Loop animation without Fade, with Pulse');
+        // Pulse (2026-11-19, a service area on a map): chosen, it grows from 1% to its size, from the start again, slowing down.
+        await page.selectOption('#wpbn-f-anim_type','pulse');
+        const pulsed=await overlay();
+        assert.ok(pulsed.use_anim===true && pulsed.anim_type==='pulse' && pulsed.anim_from===1 && pulsed.anim_to===100 && pulsed.anim_repeat==='loop' && pulsed.anim_easing==='ease-out','Pulse: its start, end, Loop and Slowing down ('+JSON.stringify([pulsed.anim_from,pulsed.anim_to,pulsed.anim_repeat,pulsed.anim_easing])+')');
+        await page.selectOption('#wpbn-f-anim_type','none');
+        assert.equal((await overlay()).use_anim,false,'None again: no Loop animation');
         await update();
         const covers=async()=>frame().locator('.wpbn-layer--overlay').evaluate(el=>{const s=el.closest('.wpbn-scene').getBoundingClientRect(),r=el.getBoundingClientRect();return {same:Math.abs(r.left-s.left)<1&&Math.abs(r.top-s.top)<1&&Math.abs(r.width-s.width)<1&&Math.abs(r.height-s.height)<1,bg:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundColor,image:getComputedStyle(el.querySelector(".wpbn-overlay")).backgroundImage,z:Number(getComputedStyle(el).zIndex)};});
         let shade=await covers();
@@ -1288,6 +1294,7 @@ const server=http.createServer((req,res)=>{
         // Its blocks in the layers' order; an Entrance animation of its own kinds; its box measured for it.
         assert.deepEqual(await sh.locator('#wpbn-menu [data-block]').evaluateAll(b=>b.map(x=>x.dataset.block)),['content','fill','effect','filters','entrance','loop','scroll'],'An object\'s blocks in the layers\' order');
         await sh.click('#wpbn-menu [data-block="loop"]');
+        assert.ok(!(await sh.locator('#wpbn-f-anim_type option').allTextContents()).includes('Pulse'),'No Pulse for a Shape object (its loops are its own)');
         await sh.selectOption('#wpbn-f-anim_type','slide-x');
         assert.ok((await shData()).layers[1].shape_objects[0].use_anim && (await shData()).layers[1].shape_objects[0].anim_type==='slide-x','An object\'s Loop animation');
         await sh.click('#wpbn-menu [data-block="entrance"]');

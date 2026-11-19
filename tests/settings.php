@@ -533,8 +533,20 @@ check(strpos($slideHtml,'--wpbn-a0-d:-60px;--wpbn-a1-d:0px;')!==false && motion_
 $overAnim=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_anim'=>1,'anim_type'=>'slide-x','backdrop_blur'=>6))))));
 check(preg_match('/class="wpbn-anim wpbn-anim--slide-x[^"]*"[^>]*><div class="wpbn-overlay wpbn-layer--blur/',$overAnim)===1,'An overlay slides, its blurring box inside');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($lay(array('type'=>'overlay','use_anim'=>1,'anim_type'=>'fade')))))),'wpbn-anim')===false,'No Fade for an overlay');
+// Pulse (2026-11-19, user's request: a service area on a map): an overlay (a circle, Radius 50%) grows from its middle and
+// fades out, again and again; a scale from 1% at least; not for a Shape layer or object (their loops are their own).
+$pulse=$lay(array('type'=>'overlay','use_anim'=>1,'anim_type'=>'pulse','anim_from'=>0,'anim_to'=>100,'anim_repeat'=>'loop','anim_easing'=>'ease-out','use_radius'=>1,'radius_tl'=>50,'radius_tl_unit'=>'%'));
+$pulseHtml=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($pulse))));
+check(preg_match('/class="wpbn-anim wpbn-anim--pulse wpbn-anim--loop" style="--wpbn-a0-d:0.01;--wpbn-a1-d:1;[^"]*animation-timing-function:ease-out;"><div class="wpbn-overlay/',$pulseHtml)===1,'Pulse: an overlay grows from 1% to its size, Loop ('.$pulseHtml.')');
+$pulseTypes=WPBN_Animation::types();
+check($pulseTypes['pulse']['repeat']==='loop' && $pulseTypes['pulse']['easing']==='ease-out' && WPBN_Animation::editor()['types']['pulse']['shape']===false && WPBN_Animation::editor()['types']['zoom']['shape']===true,'Pulse: Loop and Slowing down to start with, not offered for Shapes');
+check(WPBN_Animation::grow($lay(array('type'=>'image','image'=>3,'fill_scene'=>0,'use_anim'=>1,'anim_type'=>'pulse','anim_from'=>10,'anim_to'=>150)),'desktop')==1.5,'An image that pulses: its sizes allow for the growing');
+$pulseShape=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'shape','shape'=>900,'use_anim'=>1,'anim_type'=>'pulse','shape_objects'=>array(array('key'=>'o1','fill'=>'color','use_anim'=>1,'anim_type'=>'pulse')))))));
+check(strpos($pulseShape,'wpbn-anim--pulse')===false && strpos($pulseShape,'wpbn-shape-loop')===false,'No Pulse on a Shape layer or object');
 $animCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
-foreach (array('zoom','fade','slide-x','slide-y') as $kind) { check(strpos($animCss,'.wpbn-scene .wpbn-anim--'.$kind.'{animation-name:wpbn-'.$kind.'}')!==false && strpos($animCss,'@keyframes wpbn-'.$kind.'{')!==false,'Keyframes for '.$kind); }
+check(strpos($animCss,'@keyframes wpbn-pulse{from{transform:scale(var(--wpbn-a0,.01));opacity:1}to{transform:scale(var(--wpbn-a1,1));opacity:0}}')!==false
+    && strpos($animCss,'@keyframes wpbn-pulse{from{transform:perspective(1000px) translateZ(')!==false,'Pulse: it grows and fades out; in perspective in Firefox');
+foreach (array('zoom','fade','slide-x','slide-y','pulse') as $kind) { check(strpos($animCss,'.wpbn-scene .wpbn-anim--'.$kind.'{animation-name:wpbn-'.$kind.'}')!==false && strpos($animCss,'@keyframes wpbn-'.$kind.'{')!==false,'Keyframes for '.$kind); }
 check(strpos($animCss,"@supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}")!==false && strpos($animCss,'will-change:')===false && strpos($animCss,'rotate(.01deg)')===false,'Smooth slow zooms in Firefox: drawn in perspective (no snapping to whole pixels), no layer hints');
 check(strpos($animCss,'.wpbn-scene:not(.wpbn-scene--seen) .wpbn-anim--visible,.wpbn-scene.wpbn-scene--away .wpbn-anim{animation-play-state:paused}')!==false && strpos($animCss,'.wpbn-scene .wpbn-anim{animation:none}')!==false,'Waits until in view, paused off the screen, none with reduced motion');

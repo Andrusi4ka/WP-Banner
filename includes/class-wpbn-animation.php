@@ -41,6 +41,12 @@ class WPBN_Animation {
                 'from'=>__('Start offset (px)', 'wp-banner'), 'to'=>__('End offset (px)', 'wp-banner'),
                 'unit'=>'px', 'div'=>1, 'min'=>-1000, 'max'=>1000, 'span'=>array(-300, 300), 'def'=>array(60, 0), 'repeat'=>'once', 'fill_min'=>null,
                 'note'=>__('From its place; negative: up. 60 → 0 once: it rises into place.', 'wp-banner')),
+            // Pulse (2026-11-19, user's request: a service area on a map, an overlay with Radius 50%): it grows from its
+            // middle and fades out as it does, then again from the start (Loop). Not for a Shape (its own loops: shape false).
+            'pulse'=>array('label'=>__('Pulse', 'wp-banner'), 'switch'=>__('Auto pulse', 'wp-banner'), 'origin'=>true, 'shape'=>false,
+                'from'=>__('Start size (%)', 'wp-banner'), 'to'=>__('End size (%)', 'wp-banner'),
+                'unit'=>'', 'div'=>100, 'min'=>1, 'max'=>300, 'span'=>array(1, 200), 'def'=>array(1, 100), 'repeat'=>'loop', 'easing'=>'ease-out', 'fill_min'=>null,
+                'note'=>__('100%: its size as set above. It grows from the start size to the end size and fades out on the way, then begins again (Repeat: Loop). Two copies with different Delays: waves one after another.', 'wp-banner')),
         );
     }
     // Direction: the point of the layer it grows from (and shrinks towards), as CSS transform-origin takes it;
@@ -80,17 +86,25 @@ class WPBN_Animation {
     }
 
     // An overlay's kinds (2026-11-10, user's request): those that move its box, for an overlay smaller than the scene. Not
-    // Fade: a fading box around it would cut its Filters (backdrop-filter) off from the layers behind.
-    const OVERLAY = array('zoom', 'slide-x', 'slide-y');
+    // Fade: a fading box around it would cut its Filters (backdrop-filter) off from the layers behind. Pulse (2026-11-19)
+    // fades too, but is meant for a coloured circle: its Blur sees nothing while it runs.
+    const OVERLAY = array('zoom', 'slide-x', 'slide-y', 'pulse');
+
+    // Whether a kind may run on a Shape layer or object (their loops are their own: WPBN_Shape).
+    public static function for_shape($type) {
+        $types = self::types();
+        return isset($types[$type]) && ($types[$type]['shape'] ?? true);
+    }
 
     // Whether the layer is animated: its switch on, a kind it may have.
     public static function active($l) {
-        return !empty($l['use_anim']) && isset(self::types()[$l['anim_type']]) && ($l['type'] !== 'overlay' || in_array($l['anim_type'], self::OVERLAY, true));
+        return !empty($l['use_anim']) && isset(self::types()[$l['anim_type']]) && ($l['type'] !== 'overlay' || in_array($l['anim_type'], self::OVERLAY, true))
+            && ($l['type'] !== 'shape' || self::for_shape($l['anim_type']));
     }
 
     // The most the layer grows by (1: not at all), on a device: the image's sizes (WPBN_Render::size_for()) allow for it.
     public static function grow($l, $device) {
-        if (!self::active($l) || $l['anim_type'] !== 'zoom') { return 1; }
+        if (!self::active($l) || !in_array($l['anim_type'], array('zoom', 'pulse'), true)) { return 1; }
         $v = self::values($l, $device);
         return max(1, $v[0], $v[1]);
     }
@@ -147,7 +161,8 @@ class WPBN_Animation {
         $types = array();
         foreach (self::types() as $key=>$type) {
             $types[$key] = array('label'=>$type['label'], 'switch'=>$type['switch'], 'origin'=>!empty($type['origin']), 'from'=>$type['from'], 'to'=>$type['to'], 'min'=>$type['min'], 'max'=>$type['max'],
-                'span'=>$type['span'], 'def'=>$type['def'], 'repeat'=>$type['repeat'], 'fillMin'=>$type['fill_min'], 'note'=>$type['note']);
+                'span'=>$type['span'], 'def'=>$type['def'], 'repeat'=>$type['repeat'], 'easing'=>$type['easing'] ?? null, 'shape'=>$type['shape'] ?? true,
+                'fillMin'=>$type['fill_min'], 'note'=>$type['note']);
         }
         return array('types'=>$types, 'duration'=>self::DURATION, 'delay'=>self::DELAY,
             // Short: they fit the select (the point it grows from, and which way).

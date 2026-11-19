@@ -214,6 +214,9 @@
 @keyframes wpbn-slide-x{from{transform:translateX(var(--wpbn-a0,0px))}to{transform:translateX(var(--wpbn-a1,0px))}}
 .wpbn-scene .wpbn-anim--slide-y{animation-name:wpbn-slide-y}
 @keyframes wpbn-slide-y{from{transform:translateY(var(--wpbn-a0,0px))}to{transform:translateY(var(--wpbn-a1,0px))}}
+/* Pulse (2026-11-19): it grows from the start size to the end size and fades out on the way (a wave, a service area on a map). */
+.wpbn-scene .wpbn-anim--pulse{animation-name:wpbn-pulse}
+@keyframes wpbn-pulse{from{transform:scale(var(--wpbn-a0,.01));opacity:1}to{transform:scale(var(--wpbn-a1,1));opacity:0}}
 /* Firefox snaps a slowly scaled or moved flat layer to whole pixels: a slow zoom trembles. Drawn in perspective it
    does not: the zoom as the box coming closer, by exactly its scale (P / (P - z) = s with z = P - P / s; P = 1000px),
    around the same point (Direction: transform-origin); a slide the same way. Compared by eye in Firefox (2026-11-09):
@@ -221,6 +224,7 @@
    Only there: other browsers draw the in-between positions already. */
 @supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}to{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a1,1)))}}
+@keyframes wpbn-pulse{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,.01)));opacity:1}to{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a1,1)));opacity:0}}
 @keyframes wpbn-slide-x{from{transform:perspective(1000px) translateX(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateX(var(--wpbn-a1,0px))}}
 @keyframes wpbn-slide-y{from{transform:perspective(1000px) translateY(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateY(var(--wpbn-a1,0px))}}
 }

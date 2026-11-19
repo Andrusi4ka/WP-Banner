@@ -207,7 +207,7 @@ class WPBN_Shape {
         'top-left'=>array(0, 0), 'top-right'=>array(1, 0), 'bottom-left'=>array(0, 1), 'bottom-right'=>array(1, 1));
     private static function loop($o) {
         $types = WPBN_Animation::types();
-        if (empty($o['use_anim']) || !isset($types[$o['anim_type']])) { return array('', ''); }
+        if (empty($o['use_anim']) || !WPBN_Animation::for_shape($o['anim_type'])) { return array('', ''); }
         $type = $types[$o['anim_type']];
         $css = '';
         foreach (array('desktop'=>'-d', 'tablet'=>'-t', 'mobile'=>'-m') as $device=>$suffix) {

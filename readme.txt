@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,9 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.5.0 =
+* A new Loop animation, Pulse: the layer grows from its middle and fades out as it does, then begins again — e.g. an overlay with Radius 50% as a service area on a map. Its start and end size and duration per device; two copies with different Delays make waves one after another. For every layer but Shapes.
 
 = 1.4.0 =
 * Custom CSS for each scene (Scene settings → Custom CSS), in WordPress's code editor: write "selector" for the banner itself and the styles apply to this banner only, on the page and in the preview. Only administrators (those WordPress lets write their own code) can change it.
