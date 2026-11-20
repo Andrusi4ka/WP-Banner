@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,9 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.5.1 =
+* Pulse in Firefox: the layer now grows evenly from its start size to its end size, as in Chrome and Safari. Before, it stayed small almost all the way and grew only once it had faded out, so the wave hardly showed.
 
 = 1.5.0 =
 * A new Loop animation, Pulse: the layer grows from its middle and fades out as it does, then begins again — e.g. an overlay with Radius 50% as a service area on a map. Its start and end size and duration per device; two copies with different Delays make waves one after another. For every layer but Shapes.

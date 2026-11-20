@@ -221,10 +221,11 @@
    does not: the zoom as the box coming closer, by exactly its scale (P / (P - z) = s with z = P - P / s; P = 1000px),
    around the same point (Direction: transform-origin); a slide the same way. Compared by eye in Firefox (2026-11-09):
    this and a 0.1° turn were smooth, the turn tilted the photo; a plain scale, will-change or a 0.01° turn trembled.
-   Only there: other browsers draw the in-between positions already. */
+   Only there: other browsers draw the in-between positions already. Not Pulse (2026-11-20, user's report: it hardly showed in
+   Firefox): translateZ goes evenly, the size it gives does not; from 1% to 100% it stayed 2% at half way, 9% at 90%, and grew
+   only once faded out. A Pulse is quick and fades, so the flat scale's whole-pixel steps do not show. */
 @supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}to{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a1,1)))}}
-@keyframes wpbn-pulse{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,.01)));opacity:1}to{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a1,1)));opacity:0}}
 @keyframes wpbn-slide-x{from{transform:perspective(1000px) translateX(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateX(var(--wpbn-a1,0px))}}
 @keyframes wpbn-slide-y{from{transform:perspective(1000px) translateY(var(--wpbn-a0,0px))}to{transform:perspective(1000px) translateY(var(--wpbn-a1,0px))}}
 }

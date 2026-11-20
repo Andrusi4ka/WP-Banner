@@ -545,7 +545,7 @@ $pulseShape=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(ar
 check(strpos($pulseShape,'wpbn-anim--pulse')===false && strpos($pulseShape,'wpbn-shape-loop')===false,'No Pulse on a Shape layer or object');
 $animCss=file_get_contents(__DIR__.'/../assets/css/frontend.css');
 check(strpos($animCss,'@keyframes wpbn-pulse{from{transform:scale(var(--wpbn-a0,.01));opacity:1}to{transform:scale(var(--wpbn-a1,1));opacity:0}}')!==false
-    && strpos($animCss,'@keyframes wpbn-pulse{from{transform:perspective(1000px) translateZ(')!==false,'Pulse: it grows and fades out; in perspective in Firefox');
+    && strpos($animCss,'@keyframes wpbn-pulse{from{transform:perspective(1000px)')===false,'Pulse: it grows and fades out; flat in Firefox too (in perspective it grew only once faded out, 2026-11-20)');
 foreach (array('zoom','fade','slide-x','slide-y','pulse') as $kind) { check(strpos($animCss,'.wpbn-scene .wpbn-anim--'.$kind.'{animation-name:wpbn-'.$kind.'}')!==false && strpos($animCss,'@keyframes wpbn-'.$kind.'{')!==false,'Keyframes for '.$kind); }
 check(strpos($animCss,"@supports (-moz-appearance:none){
 @keyframes wpbn-zoom{from{transform:perspective(1000px) translateZ(calc(1000px - 1000px / var(--wpbn-a0,1)))}")!==false && strpos($animCss,'will-change:')===false && strpos($animCss,'rotate(.01deg)')===false,'Smooth slow zooms in Firefox: drawn in perspective (no snapping to whole pixels), no layer hints');

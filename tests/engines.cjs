@@ -27,7 +27,10 @@ const SCENE={height:600,height_unit:'px',layers:[
     {type:'text',text:'Lettered <u>title</u>',y:80,use_text_gradient:true,gradient:'linear;left;#ff0000@0;#0000ff@100',
         use_text_anim:true,text_anim_type:'drop',text_anim_start:'load',text_anim_duration:1.5,text_anim_stagger:0.1,text_anim_blur:8,text_anim_distance:60},
     // A Shortcode layer over the whole scene (Full width, Height 100%: e.g. a featured image as the background; 2026-11-17).
-    {type:'shortcode',shortcode:'[demo]',container:'full',shortcode_height:true,height:100,height_unit:'%'}
+    {type:'shortcode',shortcode:'[demo]',container:'full',shortcode_height:true,height:100,height_unit:'%'},
+    // A Pulse: a 200px circle growing from 1% to 100% (2026-11-20, the user's report: in Firefox it grew only once faded out).
+    {type:'overlay',color:'#ff0000',overlay_width:200,overlay_width_unit:'px',height:200,height_unit:'px',
+        use_anim:true,anim_type:'pulse',anim_from:1,anim_to:100,anim_duration:2,anim_repeat:'loop',anim_easing:'linear'}
 ]};
 const page=()=>execFileSync(php,[path.join(__dirname,'settings.php'),'--preview'],{encoding:'utf8',input:JSON.stringify(SCENE)});
 const server=http.createServer((req,res)=>{
@@ -86,6 +89,10 @@ const looks=(p,selector)=>p.evaluate(sel=>Array.from(document.querySelectorAll(s
                     for (let i=0;i<3;i++) { samples.push(await looks(p,selector)); await p.waitForTimeout(300); }
                     assert.ok(samples[0]!=='' && samples[0]!==samples[1] && samples[1]!==samples[2],say(what+' runs smoothly: '+samples.map(s=>s.slice(0,60)).join(' / ')));
                 }
+                // A Pulse grows evenly: at half its time, linear, half its size (in perspective Firefox drew 2%).
+                const half=await p.evaluate(()=>{const el=document.querySelector('.wpbn-anim--pulse'),a=el&&el.getAnimations()[0];if(!a)return -1;
+                    a.pause();a.currentTime=1000;return el.getBoundingClientRect().width/el.offsetWidth;});
+                assert.ok(half>0.45 && half<0.55,say('a Pulse at half its time is half its size ('+half.toFixed(3)+')'));
                 // The scroll: the photo travels as the scene passes (frontend.js sets --wpbn-dy on the layer).
                 const travel=()=>p.evaluate(()=>getComputedStyle(document.querySelector('.wpbn-layer--image')).getPropertyValue('--wpbn-dy').trim());
                 const before=await travel();
