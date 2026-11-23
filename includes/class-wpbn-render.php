@@ -171,10 +171,22 @@ class WPBN_Render {
         $style = '--wpbn-height:'.$h['desktop'].';--wpbn-tablet-height:'.$h['tablet'].';--wpbn-mobile-height:'.$h['mobile'].';';
         $auto = array();
         foreach (WPBN_Settings::heights($s) as $device=>$h) { if (!$fill && $h[1] === 'auto') { $auto[] = $device; } }
+        // Its Margin (2026-11-23, user's request): the room around the banner, per device (frontend.css .wpbn-scene--margin).
+        $margin = WPBN_Settings::scene_spaces($s, 'margin');
+        $spaced = '';
+        if ($margin) {
+            $spaced = ' wpbn-scene--margin';
+            foreach ($margin as $device=>$m) { $style .= '--wpbn-smg'.self::SUFFIX[$device].':'.implode(' ', $m).';'; }
+        }
+        // Its Padding (the layers' safe area, folded into their margins): on its block too, for Developer mode (preview-dev.js).
+        $padding = WPBN_Settings::scene_spaces($s, 'padding');
+        if ($padding) { foreach ($padding as $device=>$p) { $style .= '--wpbn-spd'.self::SUFFIX[$device].':'.implode(' ', $p).';'; } }
+        // An overlay whose top or bottom Margin is in % (of the banner's width): its height is kept within it in cqw.
+        foreach ($s['layers'] as $l) { if (($l['type'] ?? '') === 'overlay' && WPBN_Settings::margins($l) && (($l['margin_top_unit'] ?? 'px') === '%' || ($l['margin_bottom_unit'] ?? 'px') === '%')) { $spaced .= ' wpbn-scene--cq'; break; } }
         // Its Custom CSS (2026-11-17, the user's request): "selector" stands for this banner, a class of its own on the page.
         $scope = ($s['custom_css'] ?? '') !== '' ? 'wpbn-css-'.self::$count : '';
         // Its own id and classes (Scene settings).
-        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($scope !== '' ? ' '.$scope : '').($fill ? ' wpbn-scene--fill' : '').self::unclipped($s).($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
+        $html = '<section'.($s['css_id'] !== '' ? ' id="'.esc_attr($s['css_id']).'"' : '').' class="wpbn-scene'.($scope !== '' ? ' '.$scope : '').($fill ? ' wpbn-scene--fill' : '').$spaced.self::unclipped($s).($s['css_class'] !== '' ? ' '.esc_attr($s['css_class']) : '').'" style="'.esc_attr($style).'"'.($auto ? ' data-auto="'.esc_attr(implode(' ', $auto)).'"' : '').(!empty($context['host']) ? ' data-host="'.esc_attr($context['host']).'"'.(isset($context['host_on']) ? ' data-host-on="'.esc_attr(implode(' ', array_keys(array_filter($context['host_on'])))).'"' : '') : '').'>';
         // first: the page's first scene (its images load at once); loaded: an image drawn already (only the first gets
         // fetchpriority); links: the Google fonts' <link>s the layers need.
         // anchors: the uids of the layers drawn that others drawn are attached to (data-uid on them; frontend.js attach()).
@@ -329,6 +341,20 @@ class WPBN_Render {
         // Its Margin (2026-11-16; WPBN_Settings::margins(); frontend.css): on the layer itself, the room it keeps from its container's
         // edges, per device; a title, text or button as wide as its container less its left and right margins at most.
         $margin = WPBN_Settings::margins($l);
+        // The scene's Padding (2026-11-23, user's request: a safe area): a title, text, button, shortcode or image object keeps at
+        // least that far from the banner's edges on each device, its own Margin when larger: max(own, padding less the room its
+        // container leaves there). Not where an image fills the scene, nor on an overlay, a Shape or a copy in a Shape's window.
+        $safe = WPBN_Settings::padded($l) && empty($l['copy']) ? WPBN_Settings::scene_spaces($s, 'padding') : '';
+        if ($safe) {
+            $own = $margin;
+            $margin = array();
+            foreach ($safe as $device=>$p) {
+                $m = $own ? $own[$device] : array('0px', '0px', '0px', '0px');
+                if ($fills[$device]) { $margin[$device] = $m; continue; }
+                $inset = $container !== '' ? '(100% - '.self::CW[$device].') / 2' : '0px';
+                $margin[$device] = array('max('.$m[0].', '.$p[0].')', 'max('.$m[1].', '.$p[1].' - '.$inset.')', 'max('.$m[2].', '.$p[2].')', 'max('.$m[3].', '.$p[3].' - '.$inset.')');
+            }
+        }
         if ($margin) {
             $classes .= ' wpbn-layer--margin';
             foreach ($margin as $device=>$m) {
@@ -336,6 +362,12 @@ class WPBN_Render {
                 foreach (array('t', 'r', 'b', 'l') as $n=>$side) { $css .= '--wpbn-mg'.$side.$sfx.':'.$m[$n].';'; }
                 if (WPBN_Settings::textual($l) && !WPBN_Settings::sized($l)) {
                     $css .= '--wpbn-width'.$sfx.':calc('.($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%').' - '.$m[1].' - '.$m[3].');';
+                }
+                // An overlay (2026-11-23): never larger than the room its Margin leaves (a 100% overlay framed by it); a % top or
+                // bottom is of the banner's width, as CSS takes a margin (cqw: .wpbn-scene--cq).
+                if ($l['type'] === 'overlay') {
+                    $v = function ($n) use ($l, $m) { $side = array('top', 'right', 'bottom', 'left')[$n]; return ($l['margin_'.$side.'_unit'] ?? 'px') === '%' ? ((float) $m[$n]).'cqw' : $m[$n]; };
+                    $css .= '--wpbn-omw'.$sfx.':calc('.($container !== '' ? sprintf(self::IN_CONTAINER['width'], self::CW[$device], 1) : '100%').' - '.$m[1].' - '.$m[3].');--wpbn-omh'.$sfx.':calc(100% - '.$v(0).' - '.$v(2).');';
                 }
             }
         }

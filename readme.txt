@@ -4,7 +4,7 @@ Tags: parallax, layers, scroll, animation, wpbakery
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.1
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,15 @@ Bundles [Plugin Update Checker](https://github.com/YahnisElsts/plugin-update-che
 Deleting the plugin under Plugins removes its scenes and settings; the images stay in the media library.
 
 == Changelog ==
+
+= 1.6.0 =
+* Padding and Margin for the whole scene (Scene settings → Size): Margin is room around the banner on the page; Padding is a safe area that titles, texts, buttons, shortcodes and image objects keep from the banner's edges, while photos filling it, overlays and shapes still go edge to edge. Per device.
+* Overlays have Padding and Margin too: Margin moves the overlay's box (a 100% overlay becomes a frame), Padding draws its colour or gradient inside it.
+* Developer mode shows Padding and Margin as a browser's inspector does: Padding green, Margin peach, with their sizes; the scene's safe area and Margin. Only what is chosen: the scene's data with Scene settings open, a layer's own when it is chosen.
+* WPBakery's Backend editor marks a WP Banner element that is the background of its row or column (yellow, "background of .class").
+* Placement: a "Generate and copy" button beside the class field gives the scene a class of its own and copies it; "Copy" once there is one.
+* Padding, Margin, Border and Radius fields: emptied with Backspace they mean 0 (on tablet and mobile: the larger screen's), no need to type 0.
+* "Clip layers to the banner" is now called "Overflow: hidden".
 
 = 1.5.1 =
 * Pulse in Firefox: the layer now grows evenly from its start size to its end size, as in Chrome and Safari. Before, it stayed small almost all the way and grew only once it had faded out, so the wave hardly showed.

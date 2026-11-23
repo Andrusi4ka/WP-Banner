@@ -1,0 +1,18 @@
+/* WPBakery's Backend editor: a WP Banner element that is the background of its block (assets/js/wpbakery-marks.js);
+   yellow, the user's choice (2026-11-23). */
+.wpbn-vc--bg > .wpb_element_wrapper {
+	background: #fcf0e3 !important;
+	box-shadow: inset 4px 0 0 #dba617;
+}
+
+.wpbn-vc-mark {
+	display: inline-block;
+	margin: 6px 0 0;
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-size: 11px;
+	line-height: 1.6;
+	font-weight: 600;
+	color: #1d2327;
+	background: #f0c33c;
+}

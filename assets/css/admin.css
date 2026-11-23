@@ -356,6 +356,12 @@ body.wpbn-modal-open{overflow:hidden}
 .wpbn-tip:hover::after,.wpbn-tip:focus-visible::after{opacity:1;visibility:visible}
 .wpbn-field.is-disabled .wpbn-tip{opacity:1}
 /* Placement: another scene uses the same class. */
+/* Insert into blocks by class: the field, Generate and copy / Copy at its right, Copied under it for a moment. */
+.wpbn-target-row{gap:6px}
+.wpbn-target-row input[type=text]{flex:1 1 auto;min-width:0}
+.wpbn-target-row .wpbn-target-copy{flex:0 0 auto;white-space:nowrap}
+.wpbn-target-copied{display:block;margin:4px 0 0;font-size:12px;color:#00a32a}
+.wpbn-target-copied[hidden]{display:none}
 .wpbn-target-warning{display:flex;align-items:flex-start;gap:6px;margin:-6px 0 12px;padding:8px 10px;border-left:4px solid #dba617;background:#fcf9e8;font-size:12px;line-height:1.45}
 .wpbn-target-warning[hidden]{display:none}
 .wpbn-target-warning .dashicons{flex:0 0 auto;width:16px;height:16px;font-size:16px;color:#dba617}

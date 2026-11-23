@@ -357,6 +357,16 @@ margin from the container's, at 100% its right (bottom) edge its right (bottom) 
 .wpbn-scene .wpbn-layer.wpbn-layer--margin{margin:0;margin-left:calc(var(--wpbn-mgl) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb) * var(--wpbn-ay))}
 @media(max-width:1024px){.wpbn-scene .wpbn-layer.wpbn-layer--margin{margin-left:calc(var(--wpbn-mgl-t) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr-t) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt-t) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb-t) * var(--wpbn-ay))}}
 @media(max-width:767px){.wpbn-scene .wpbn-layer.wpbn-layer--margin{margin-left:calc(var(--wpbn-mgl-m) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr-m) * var(--wpbn-ax));margin-top:calc(var(--wpbn-mgt-m) * (1 - var(--wpbn-ay)) - var(--wpbn-mgb-m) * var(--wpbn-ay))}}
+/* The scene's Margin (2026-11-23): room around the banner, per device; placed in a block (fill) it is drawn inside its edges by as much. */
+.wpbn-scene.wpbn-scene--margin{width:auto;margin:var(--wpbn-smg)}
+.wpbn-scene.wpbn-scene--fill.wpbn-scene--margin{right:0;bottom:0;width:auto;height:auto}
+@media(max-width:1024px){.wpbn-scene.wpbn-scene--margin{margin:var(--wpbn-smg-t,var(--wpbn-smg))}}
+@media(max-width:767px){.wpbn-scene.wpbn-scene--margin{margin:var(--wpbn-smg-m,var(--wpbn-smg-t,var(--wpbn-smg)))}}
+/* An overlay's Margin (2026-11-23): never larger than the room it leaves (--wpbn-omw / -omh, WPBN_Render); cqw for a % top or bottom. */
+.wpbn-scene.wpbn-scene--cq{container-type:inline-size}
+.wpbn-scene .wpbn-layer--overlay.wpbn-layer--margin{max-width:var(--wpbn-omw);max-height:var(--wpbn-omh)}
+@media(max-width:1024px){.wpbn-scene .wpbn-layer--overlay.wpbn-layer--margin{max-width:var(--wpbn-omw-t,var(--wpbn-omw));max-height:var(--wpbn-omh-t,var(--wpbn-omh))}}
+@media(max-width:767px){.wpbn-scene .wpbn-layer--overlay.wpbn-layer--margin{max-width:var(--wpbn-omw-m,var(--wpbn-omw-t,var(--wpbn-omw)));max-height:var(--wpbn-omh-m,var(--wpbn-omh-t,var(--wpbn-omh)))}}
 /* A Shortcode layer's Height (2026-11-17, the user's request; WPBN_Render: only where some device has one, --wpbn-sh per device,
    Auto = its content's). Its content stretched to it: the layer, its Entrance / Loop boxes, .wpbn-shortcode and the content's own
    root are columns, each filling the one above, and the root's children fill it (e.g. an HTML block's row and its background).

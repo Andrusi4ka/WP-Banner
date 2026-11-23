@@ -241,7 +241,12 @@ const server=http.createServer((req,res)=>{
         await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__size');
         const devInfo=await frame().evaluate(()=>{const r=document.querySelector('.wpbn-scene').getBoundingClientRect(),n=v=>Math.round(v*10)/10;return {size:document.querySelector('.wpbn-dev__size').textContent,scene:n(r.width)+' × '+n(r.height),names:[...document.querySelectorAll('.wpbn-dev__name')].map(e=>e.textContent),dims:document.querySelectorAll('.wpbn-dev__dimension').length};});
         // Readable since 2026-11-10: "Scene · W × H", each layer "number · name · W × H".
-        assert.ok(devInfo.size==='Scene · '+devInfo.scene && devInfo.names.length===1 && /^1 · Title 1 · \d/.test(devInfo.names[0]) && devInfo.dims>0,'Developer mode: the scene size, the title box and distances ('+JSON.stringify(devInfo)+')');
+        assert.ok(devInfo.size==='Scene · '+devInfo.scene && devInfo.names.length===1 && /^1 · Title 1 · \d/.test(devInfo.names[0]) && devInfo.dims===0,'Developer mode: the scene size, the title box; no layer chosen: no distances (2026-11-23) ('+JSON.stringify(devInfo)+')');
+        // Only the chosen layer's data (2026-11-23): the title chosen, its distances.
+        await page.click('[data-select="0"]');
+        await frame().waitForFunction(()=>document.querySelectorAll('.wpbn-dev__dimension').length>0);
+        await page.click('#wpbn-scene-settings');
+        await frame().waitForFunction(()=>document.querySelectorAll('.wpbn-dev__dimension').length===0);
         await update();
         await frame().waitForSelector('.wpbn-scene > .wpbn-dev .wpbn-dev__name');
         await page.click('#wpbn-dev');
@@ -852,6 +857,19 @@ const server=http.createServer((req,res)=>{
         assert.equal(await page.locator('#wpbn-f-as_background').isDisabled(),true,'No class yet: Background of the block greyed');
         await page.selectOption('[data-key="height_unit"]','auto');
         assert.equal(await page.locator('#wpbn-f-target').getAttribute('placeholder'),'wpbn-scene-7','A class suggested');
+        // Generate and copy (2026-11-23): empty, the scene's own class goes into the field and is copied; then the button only copies.
+        assert.equal((await page.locator('#wpbn-target-copy').textContent()).trim(),'Generate and copy','Empty: Generate and copy');
+        await page.click('#wpbn-target-copy');
+        assert.equal(await page.inputValue('#wpbn-f-target'),'wpbn-scene-7','Generated: the scene\'s own class in the field');
+        assert.equal((await data()).target,'wpbn-scene-7','Generated: kept in the settings, as typed');
+        assert.equal(await page.locator('#wpbn-target-copied').isVisible(),true,'Copied shows');
+        assert.equal((await page.locator('#wpbn-target-copy').textContent()).trim(),'Copy','With a class: Copy');
+        assert.equal(await page.locator('#wpbn-f-as_background').isDisabled(),false,'Generated: Background of the block active');
+        await page.fill('#wpbn-f-target','hero');
+        await page.click('#wpbn-target-copy');
+        assert.equal(await page.inputValue('#wpbn-f-target'),'hero','Copy keeps a class of one\'s own');
+        await page.fill('#wpbn-f-target','');
+        assert.equal((await page.locator('#wpbn-target-copy').textContent()).trim(),'Generate and copy','Emptied: Generate and copy again');
         await page.fill('#wpbn-f-target','hero');
         assert.ok(!(await page.locator('#wpbn-f-as_background').isDisabled()) && await page.locator('#wpbn-f-as_background').isChecked(),'With a class: Background of the block on');
         assert.equal(await page.locator('#wpbn-height-note').isHidden(),true,'With a class, the unit help gives way');
@@ -1222,10 +1240,50 @@ const server=http.createServer((req,res)=>{
         await tp.click('[data-margin-link]');await tp.fill('#wpbn-f-margin_right','10');
         pd=await padOf();
         assert.ok(pd.margin_linked===false && pd.margin_right===10 && pd.margin_left===30,'Margin unlinked: the right side on its own');
+        // Emptied by Backspace (2026-11-23): 0 on Desktop, no need to type it; the field shows 0 once left.
+        await tp.click('#wpbn-f-margin_right');await tp.keyboard.press('End');await tp.keyboard.press('Backspace');await tp.keyboard.press('Backspace');
+        assert.equal((await padOf()).margin_right,0,'Backspace to empty: 0 on Desktop');
+        await tp.keyboard.press('Tab');await tp.waitForTimeout(50);
+        assert.equal(await tp.locator('#wpbn-f-margin_right').inputValue(),'0','Left: the field shows 0');
+        await tp.fill('#wpbn-f-margin_right','10');
         await tp.click('#wpbn-refresh');await tp.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
         const mgSite=await tp.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--text').evaluate(el=>{const c=getComputedStyle(el),ax=parseFloat(c.getPropertyValue('--wpbn-ax')),ay=parseFloat(c.getPropertyValue('--wpbn-ay'));
             return [el.classList.contains('wpbn-layer--margin'),Math.abs(parseFloat(c.marginLeft)-(30*(1-ax)-10*ax))<0.6,Math.abs(parseFloat(c.marginTop)-(30*(1-ay)-30*ay))<0.6].join(' ');});
         assert.equal(mgSite,'true true true','On the site: its Margin moves it within its container as its Position says');
+        // The scene's Padding/Margin (2026-11-23): in Scene settings → Size; Padding a safe area the title keeps from the banner's
+        // edges (larger than its own Margin here); Margin around the banner.
+        await tp.click('#wpbn-scene-settings');await tp.click('[data-block="size"]');
+        assert.equal(await tp.locator('#wpbn-f-padding_left').count(),0,'The scene: Padding/Margin behind its switch');
+        await tp.click('label[for="wpbn-f-use_padding"]');
+        await tp.fill('#wpbn-f-padding_left','200');await tp.fill('#wpbn-f-margin_top','30');
+        const spData=JSON.parse(await tp.locator('#wpbn-data').inputValue());
+        assert.ok(spData.use_padding===true && spData.padding_right===200 && spData.margin_bottom===30,'Linked: one side sets all four');
+        await tp.click('#wpbn-refresh');await tp.waitForFunction(()=>document.querySelector('#wpbn-frame').dataset.state==='done');
+        const spSite=await tp.frames().find(f=>f.name()==='wpbn_preview_frame').locator('.wpbn-layer--text').evaluate(el=>{const sc=el.closest('.wpbn-scene'),s=sc.getBoundingClientRect(),r=el.getBoundingClientRect();return {left:r.left-s.left,right:s.right-r.right,margin:parseFloat(getComputedStyle(sc).marginTop)};});
+        assert.ok(spSite.left>=199.5 && spSite.right>=199.5 && spSite.margin===30,'On the site: the title 200px from both sides at least; 30px above the banner ('+JSON.stringify(spSite)+')');
+        // Developer mode (2026-11-23): the scene chosen: its safe area with its px, its Margin in its label and around it; the layers
+        // only as boxes (no bands, no distances). Then the title chosen: its Margin (here the safe area: 200) and distances, no scene data.
+        await tp.click('#wpbn-dev');
+        const devFrame=tp.frames().find(f=>f.name()==='wpbn_preview_frame');
+        await devFrame.waitForSelector('.wpbn-dev .wpbn-dev__safe');
+        const dev=await devFrame.evaluate(()=>({safe:document.querySelector('.wpbn-dev__safe-size').textContent,size:document.querySelector('.wpbn-dev__size').textContent,
+            margins:[...document.querySelectorAll('.wpbn-dev__band--margin')].length,nums:[...document.querySelectorAll('.wpbn-dev__space--margin')].map(e=>e.textContent)}));
+        assert.ok(/^Safe area · 200 200 200 200$/.test(dev.safe) && / · Margin 30 30 30 30$/.test(dev.size),'Developer mode: the safe area and the scene\'s Margin ('+JSON.stringify(dev)+')');
+        assert.ok(dev.nums.filter(n=>Number(n)>=199.5).length===0 && await devFrame.locator('.wpbn-dev__dimension').count()===0,'The scene chosen: no layer\'s bands or distances ('+JSON.stringify(dev)+')');
+        // As a browser's inspector (the user's drawing): the safe area's bands inside the scene, the scene's Margin around it on the page.
+        const devBands=await devFrame.evaluate(()=>{const outer=document.querySelector('body > .wpbn-dev--outer'),s=document.querySelector('.wpbn-scene').getBoundingClientRect(),o=outer&&outer.getBoundingClientRect();
+            return {outer:outer?[...outer.querySelectorAll('.wpbn-dev__space--margin')].map(e=>e.textContent):null,around:o?[s.left-o.left,s.top-o.top].map(Math.round):null,
+                safe:[...document.querySelectorAll('.wpbn-scene > .wpbn-dev > .wpbn-dev__space--padding')].filter(e=>e.textContent==='200').length,color:getComputedStyle(document.querySelector('.wpbn-dev__space--margin')).backgroundColor};});
+        assert.ok(devBands.outer && devBands.outer.join(' ')==='30 30 30 30' && devBands.around.join(' ')==='30 30' && devBands.safe===4 && devBands.color==='rgb(249, 206, 162)','Developer mode: the scene\'s Margin around it on the page, its safe area\'s four bands ('+JSON.stringify(devBands)+')');
+        await tp.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'dev-spaces.png')});
+        await tp.click('[data-select="1"]');
+        await devFrame.waitForFunction(()=>!document.querySelector('.wpbn-dev__safe') && !document.querySelector('body > .wpbn-dev--outer'));
+        const devTitle=await devFrame.evaluate(()=>({nums:[...document.querySelectorAll('.wpbn-dev__space--margin')].map(e=>e.textContent),dims:document.querySelectorAll('.wpbn-dev__dimension').length,size:document.querySelector('.wpbn-dev__size').textContent}));
+        assert.ok(devTitle.nums.filter(n=>Number(n)>=199.5).length>=2 && devTitle.dims>0 && !/Margin/.test(devTitle.size),'The title chosen: its Margin (200) and distances, no scene data ('+JSON.stringify(devTitle)+')');
+        await tp.locator('#wpbn-frame').screenshot({path:path.join(__dirname,'dev-spaces-title.png')});
+        await tp.click('#wpbn-dev');
+        await tp.click('#wpbn-scene-settings');await tp.click('[data-block="size"]');await tp.click('label[for="wpbn-f-use_padding"]');
+        await tp.click('[data-select="1"]');
         await tp.click('[data-select="0"]');
         // An image layer's device note is an "i" beside Image on every device, not the note above its blocks; a title keeps the note (not on desktop).
         assert.match(await tp.locator('[data-base="image"] .wpbn-field__head .wpbn-tip').getAttribute('data-tip'),/^Desktop values. Tablet and mobile follow them/,'Image on desktop: its tip too');
@@ -1434,6 +1492,39 @@ const server=http.createServer((req,res)=>{
         await at.selectOption('#wpbn-f-anchor','');
         assert.ok((await atData()).layers[1].anchor==='' && (await atData()).layers[1].anchor_desktop===null,'None: placed by its own Position again');
         await at.close();
+        // WPBakery's Backend editor marks (2026-11-23): WordPress's own jQuery, Underscore and Backbone from this site,
+        // vc.shortcodes as WPBakery's (a Backbone collection, each model's view.$el); skipped where the site is not there.
+        const wpJs=path.join(__dirname,'../../../../wp-includes/js');
+        if(fs.existsSync(path.join(wpJs,'backbone.min.js'))){
+            const mk=await browser.newPage();
+            mk.on('pageerror',e=>errors.push('marks: '+e.message));
+            await mk.setContent('<div id="row" class="wpb_vc_row"><div id="col" class="wpb_vc_column"><div id="el" class="wpb_wp_banner"><div class="wpb_element_wrapper">WP Banner</div></div></div></div>');
+            await mk.addStyleTag({path:path.join(__dirname,'../assets/css/wpbakery-marks.css')});
+            for(const f of ['jquery/jquery.min.js','underscore.min.js','backbone.min.js'])await mk.addScriptTag({path:path.join(wpJs,f)});
+            await mk.evaluate(()=>{
+                window.wpbnVcMarks={shortcode:'wp_banner',scenes:[{id:12,label:'Hero (#12)',host:'wpbn-scene-12',on:['desktop','tablet','mobile']},{id:13,label:'Map (#13)',host:'map',on:['desktop']},{id:14,label:'Plain (#14)',host:'',on:[]}],
+                    list:'about:blank',
+                    i18n:{background:'background of %s'}};
+                const c=new Backbone.Collection([{id:'r',shortcode:'vc_row',params:{el_class:'hero wpbn-scene-12'}},{id:'c',shortcode:'vc_column',parent_id:'r',params:{}},{id:'e',shortcode:'wp_banner',parent_id:'c',params:{id:'12'}}]);
+                ['r','c','e'].forEach(id=>{c.get(id).view={$el:jQuery('#'+({r:'row',c:'col',e:'el'})[id])};});
+                window.vc={shortcodes:c};
+            });
+            await mk.addScriptTag({path:path.join(__dirname,'../assets/js/wpbakery-marks.js')});
+            const markNow=async()=>{await mk.waitForTimeout(200);return mk.evaluate(()=>{const el=document.getElementById('el'),m=el.querySelector('.wpb_element_wrapper > .wpbn-vc-mark');return {cls:el.className,text:m?m.textContent:'',n:el.querySelectorAll('.wpbn-vc-mark').length};});};
+            let mark=await markNow();
+            assert.ok(/wpbn-vc--bg/.test(mark.cls) && mark.text==='background of .wpbn-scene-12' && mark.n===1,'In a row with its class: marked as its background ('+JSON.stringify(mark)+')');
+            assert.equal(await mk.evaluate(()=>getComputedStyle(document.querySelector('#el > .wpb_element_wrapper')).backgroundColor),'rgb(252, 240, 227)','Its box light yellow');
+            await mk.evaluate(()=>vc.shortcodes.get('r').set('params',{el_class:'hero'}));
+            mark=await markNow();
+            assert.ok(!/wpbn-vc--/.test(mark.cls) && mark.n===0,'Class taken off the row: a plain element, no warning');
+            await mk.evaluate(()=>{vc.shortcodes.get('c').set('params',{el_class:'map'});vc.shortcodes.get('e').set('params',{id:'13'});});
+            mark=await markNow();
+            assert.ok(/wpbn-vc--bg/.test(mark.cls) && mark.text==='background of .map','The column has the class: marked with that class');
+            await mk.evaluate(()=>vc.shortcodes.get('e').set('params',{id:'14'}));
+            mark=await markNow();
+            assert.ok(!/wpbn-vc--/.test(mark.cls) && mark.n===0,'A scene not placed by class: no mark');
+            await mk.close();
+        } else console.log('WPBakery marks: skipped (no wp-includes/js here).');
         assert.deepEqual(errors,[]);
         console.log('Browser checks passed: layer editing, order, hide/delete, switches, reset, preview (own size, page), rotation, responsive sizes, motion, opacity at the end, reduced motion and reverse scroll, animation, undo / redo, follow the mouse, text width, layer names, layer rotation, entrance animation, tips, settings tabs, shape layers.');
     } finally {if(browser)await browser.close();server.close();}

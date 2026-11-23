@@ -15,6 +15,7 @@ class WPBN_WPBakery {
     public static function init() {
         add_action('vc_before_init', array(__CLASS__, 'map'));
         add_action('wp_ajax_'.self::LIST_ACTION, array(__CLASS__, 'ajax_scenes'));
+        add_action('vc_backend_editor_enqueue_js_css', array(__CLASS__, 'marks'));
     }
 
     public static function map() {
@@ -118,9 +119,32 @@ class WPBN_WPBakery {
         $list = array();
         foreach (get_posts(array('post_type'=>self::POST_TYPE, 'post_status'=>'publish', 'posts_per_page'=>-1, 'orderby'=>'title', 'order'=>'ASC')) as $scene) {
             $title = $scene->post_title !== '' ? $scene->post_title : __('(no title)', 'wp-banner');
-            $list[] = array('id'=>(int) $scene->ID, 'label'=>sprintf('%s (#%d)', $title, $scene->ID));
+            // Its class and devices for the Backend editor's marks (marks()); the name alone: the mark says it (user's choice, 2026-11-23).
+            $placement = WPBN_Settings::placement($scene->ID);
+            $list[] = array('id'=>(int) $scene->ID, 'label'=>sprintf('%s (#%d)', $title, $scene->ID), 'host'=>$placement ? $placement['class'] : '', 'on'=>$placement ? $placement['on'] : array());
         }
         return $list;
+    }
+
+    /**
+     * The Backend editor (2026-11-23, user's request): a WP Banner element whose scene is placed by class is marked
+     * on its box (assets/js/wpbakery-marks.js): yellow "background of .class" when a row, column or block around it
+     * has the class; otherwise nothing (user's choice). Only for those given the element.
+     */
+    public static function marks() {
+        if (!WPBN_Access::can('wpbakery')) { return; }
+        wp_enqueue_style('wpbn-vc-marks', WPBN_URL.'assets/css/wpbakery-marks.css', array(), wpbn_asset('assets/css/wpbakery-marks.css'));
+        wp_enqueue_script('wpbn-vc-marks', WPBN_URL.'assets/js/wpbakery-marks.js', array('jquery'), wpbn_asset('assets/js/wpbakery-marks.js'), true);
+        wp_localize_script('wpbn-vc-marks', 'wpbnVcMarks', array(
+            'shortcode' => WPBN_Render::SHORTCODE,
+            'scenes'    => self::scenes(),
+            // Asked again when the page is back in view (a scene changed in another tab).
+            'list'      => add_query_arg(array('action'=>self::LIST_ACTION, '_wpnonce'=>wp_create_nonce(self::LIST_ACTION)), admin_url('admin-ajax.php')),
+            'i18n'      => array(
+                /* translators: %s: a class, e.g. ".wpbn-scene-12" */
+                'background' => __('background of %s', 'wp-banner')
+            ),
+        ));
     }
 
     // WPBakery dropdown values: label => value.

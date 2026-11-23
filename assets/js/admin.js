@@ -500,24 +500,24 @@
         if (option) chooseFont(option.dataset.family);
     });
     app.addEventListener('input', event => { if (fontBox && event.target.classList.contains('wpbn-font__search')) listFonts(); });
-    // A side's padding typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
+    // A side's padding typed (all four while linked; empty: 0 on Desktop, the larger screen's on tablet / mobile), within its unit's largest.
     app.addEventListener('input', event => {
         const input = event.target.closest && event.target.closest('[data-pad-side], [data-margin-side]'), l = input && current();
         if (!l) return;
         const kind = input.dataset.marginSide ? 'margin' : 'padding', d = device(), s0 = input.dataset.marginSide || input.dataset.padSide;
         let value = null;
-        if (input.value === '') { if (d === 'desktop') return; }
+        if (input.value === '') { if (d === 'desktop') value = 0; }
         else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(PADDING_MAX[l[kind + '_' + s0 + '_unit']] || 500, Math.round(n))); }
         (l[kind + '_linked'] ? BORDER_SIDES : [s0]).forEach(s => { l[dkey(kind + '_' + s, d)] = value; });
         refreshPadding(); changed();
     });
-    // A corner's radius typed (all four while linked; tablet / mobile empty: the larger screen's), within its unit's largest.
+    // A corner's radius typed (all four while linked; empty: 0 on Desktop, the larger screen's on tablet / mobile), within its unit's largest.
     app.addEventListener('input', event => {
         const input = event.target.closest && event.target.closest('[data-radius-corner]'), l = input && current();
         if (!l) return;
         const d = device(), c0 = input.dataset.radiusCorner;
         let value = null;
-        if (input.value === '') { if (d === 'desktop') return; }
+        if (input.value === '') { if (d === 'desktop') value = 0; }
         else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(RADIUS_MAX[l['radius_' + c0 + '_unit']] || 1000, Math.round(n))); }
         (l.radius_linked ? RADIUS_CORNERS : [c0]).forEach(c => { l[dkey('radius_' + c, d)] = value; });
         refreshRadius(); changed();
@@ -527,10 +527,17 @@
         if (!l) return;
         const d = device();
         let value = null;
-        if (input.value === '') { if (d === 'desktop') return; }
+        if (input.value === '') { if (d === 'desktop') value = 0; }
         else { const n = Number(input.value); if (!Number.isFinite(n)) return; value = Math.max(0, Math.min(100, Math.round(n))); }
         (l.border_linked ? BORDER_SIDES : [input.dataset.borderSide]).forEach(s => { l[dkey('border_' + s, d)] = value; });
         refreshBorder(); changed();
+    });
+    // Emptied (Backspace, 2026-11-23, user's request): 0 on Desktop, the larger screen's on tablet / mobile (as typed above); the
+    // field shows it once left.
+    app.addEventListener('focusout', event => {
+        const t = event.target;
+        if (!t.matches || !t.matches('[data-pad-side], [data-margin-side], [data-radius-corner], [data-border-side], [data-shape-border]')) return;
+        setTimeout(() => { if (t.matches('[data-radius-corner]')) refreshRadius(); else if (t.matches('[data-border-side]')) refreshBorder(); else if (t.matches('[data-shape-border]')) refreshShape(); else refreshPadding(); });
     });
     // A font under the pointer: the one looked at (the sample shows it).
     app.addEventListener('mouseover', event => {
@@ -642,7 +649,9 @@
     const padOwn = (l, dv) => spaceOwn(l, 'padding', dv) || spaceOwn(l, 'margin', dv);
     function paddingField(l) {
         // Its switch (user's request, 2026-11-09), with the help beside it; on, its sides.
-        const toggle = withTip(check('use_padding', 'Padding/Margin'), 'Margin (outside): the room the layer keeps from its container\'s edges, e.g. a title kept 20px from the edge of the screen on a phone; its Position moves it within what is left. Padding (inside): space inside the layer\'s box, its content keeps away from its edges (its lines wrap inside it). % is of the banner\'s width.');
+        const help = l === scene ? 'Margin (outside): room around the whole banner on the page, e.g. 40px above and below it. Padding (inside): a safe area: titles, texts, buttons, shortcodes and image objects keep at least this far from the banner\'s edges (their own Margin when larger); photos filling the scene, overlays and shapes still cover it edge to edge. % is of the banner\'s width.'
+            : l.type === 'overlay' ? 'Margin: the room the overlay keeps from its container\'s edges, e.g. 20px all round frames a 100% overlay; its Position moves it within what is left, and it is never larger than that room. Padding (inside): its colour or gradient (with its Border) drawn that far inside its box, e.g. a frame of empty space around the fill. % is of the banner\'s width.' : null;
+        const toggle = withTip(check('use_padding', 'Padding/Margin'), help || 'Margin (outside): the room the layer keeps from its container\'s edges, e.g. a title kept 20px from the edge of the screen on a phone; its Position moves it within what is left. Padding (inside): space inside the layer\'s box, its content keeps away from its edges (its lines wrap inside it). % is of the banner\'s width.');
         if (!l.use_padding) return toggle;
         const d = device();
         const side = (kind, s) => {
@@ -844,11 +853,18 @@
     }
     // A layer's Margin on a device in px of a scene W px wide (% is of its width, as CSS takes it), as WPBN_Settings::margins():
     // none with Padding/Margin off, on a layer without one (a photo filling the scene there), or attached there (frontend.js attach()).
+    // An overlay's own Margin too, and the scene's Padding (2026-11-23): a title, text, button, shortcode or image object keeps at
+    // least that far from the banner's edges (its own Margin when larger; less the room its container leaves at the sides).
     function marginPx(l, d, W) {
-        const none = {top:0, right:0, bottom:0, left:0};
-        if (!l || !l.use_padding || !(textual(l) || (l.type === 'image' && imageObject(l, d))) || attachedOn(l, d)) return none;
-        const out = {};
-        BORDER_SIDES.forEach(s => { const v = Number(eff(l, 'margin_' + s, d)) || 0; out[s] = l['margin_' + s + '_unit'] === '%' ? v / 100 * W : v; });
+        const out = {top:0, right:0, bottom:0, left:0};
+        if (!l || l === scene || attachedOn(l, d)) return out;
+        const placed = textual(l) || (l.type === 'image' && imageObject(l, d));
+        const px = (o, k) => { const v = Number(eff(o, k, d)) || 0; return o[k + '_unit'] === '%' ? v / 100 * W : v; };
+        if (l.use_padding && (placed || l.type === 'overlay')) BORDER_SIDES.forEach(s => { out[s] = px(l, 'margin_' + s); });
+        if (placed && scene.use_padding) {
+            const c = container(W, l, d), inset = c ? c.left : 0;
+            BORDER_SIDES.forEach(s => { out[s] = Math.max(out[s], px(scene, 'padding_' + s) - (s === 'left' || s === 'right' ? inset : 0)); });
+        }
         return out;
     }
     const customWidth = () => current().container === 'custom' || (current().container === 'theme' && !boot.themeContainer);
@@ -1571,10 +1587,35 @@
     // Shown only while "Insert into blocks by class" is on (its value is kept while off).
     function targetField() {
         const id = 'wpbn-f-target', help = 'Add this class to a row, column or block (in WPBakery: its "Extra class name") and put the WP Banner element inside it: the scene becomes that block\'s background, as wide and tall as the block, behind its content. One class, without the dot. Empty: not used.';
-        return '<div class="wpbn-field">' + head(id, 'Insert into blocks by class', tip(help)) + '<input id="' + id + '" data-key="target" type="text" value="' + escape(scene.target || '') + '" placeholder="wpbn-scene-' + boot.postId + '"></div>'
+        // Beside it (2026-11-23, user's request): Generate and copy while empty (the scene's own class, wpbn-scene-<id>), then Copy.
+        return '<div class="wpbn-field">' + head(id, 'Insert into blocks by class', tip(help)) + '<div class="wpbn-field__row wpbn-target-row"><input id="' + id + '" data-key="target" type="text" value="' + escape(scene.target || '') + '" placeholder="' + targetSuggestion() + '">'
+            + '<button type="button" class="button wpbn-target-copy" id="wpbn-target-copy">' + targetCopyLabel() + '</button></div>'
+            + '<span class="wpbn-target-copied" id="wpbn-target-copied" role="status" hidden>Copied</span></div>'
             // Per device (2026-11-13, user's request): off, the scene stays a block of its own where the element stands, with its Height.
             + needs(withTip(respCheck('as_background', 'Background of the block'), 'On: on this device the scene is the block\'s background (its height is the block\'s). Off: it stays a block of its own where the element stands, with its Height. The icons choose the device: e.g. the background on Desktop, a block of its own on Mobile.'), 'classed')
             + '<p class="wpbn-target-warning" id="wpbn-target-warning" role="status" hidden><span class="dashicons dashicons-warning" aria-hidden="true"></span><span></span></p>';
+    }
+    const targetSuggestion = () => 'wpbn-scene-' + boot.postId;
+    const targetCopyLabel = () => String(scene.target || '').trim() ? 'Copy' : 'Generate and copy';
+    // Empty: the scene's own class goes into the field (as if typed: saved with the scene); then the class is copied.
+    function copyTarget() {
+        const input = $('f-target');
+        if (!input) return;
+        if (!input.value.trim()) {
+            input.value = targetSuggestion();
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+        const text = input.value.trim(), done = () => {
+            const note = $('target-copied');
+            if (!note) return;
+            note.hidden = false;
+            clearTimeout(copyTarget.timer);
+            copyTarget.timer = setTimeout(() => { note.hidden = true; }, 2000);
+        };
+        // The clipboard API only on https; on http the field's own text is copied.
+        const fallback = () => { input.focus(); input.select(); try { document.execCommand('copy'); } catch (e) { /* Selected: Ctrl+C. */ } input.setSelectionRange(text.length, text.length); done(); };
+        if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+        else fallback();
     }
     function targetWarning() {
         const box = $('target-warning');
@@ -1720,7 +1761,9 @@
             html = legend + blocks([
                 ['size', 'Size', 'editor-expand', card('Size', heightField()
                     // Per device (2026-11-16, user's request): off, the layers may go above and below the banner (WPBN_Render::unclipped()).
-                    + withTip(respCheck('clip', 'Clip layers to the banner'), 'On: the layers are cut at the banner\'s edges. Off: on this device they may go above and below it, over the blocks around it, e.g. a title moving out with the scroll; its sides stay cut, so the page never scrolls sideways. The icons choose the device.'))],
+                    + withTip(respCheck('clip', 'Overflow: hidden'), 'On: the layers are cut at the banner\'s edges. Off: on this device they may go above and below it, over the blocks around it, e.g. a title moving out with the scroll; its sides stay cut, so the page never scrolls sideways. The icons choose the device.')
+                    // Padding/Margin of the whole scene (2026-11-23, user's request): Margin around the banner, Padding a safe area.
+                    + paddingField(scene))],
                 ['placement', 'Placement', 'layout', card('Placement', targetField())],
                 // The scene's own id and classes, on its block (as WPBakery's Element ID and Extra class name), one under the other.
                 ['attributes', 'Attributes', 'tag', card('Attributes', withTip(field('css_id', 'Element ID'), 'An id for the banner\'s block, e.g. to link to it (#offer) or to style it. Unique on the page; a letter first, without the #.')
@@ -1797,7 +1840,7 @@
                     l.type === 'overlay' ? ['fill', 'Fill', 'art', card('Fill', first)] : null,
                     ...cards,
                     // Where and how large.
-                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + attachField(l) + heightField(l, 'width') + heightField(l)) : card('Size', (l.type === 'image' ? withTip(respCheck('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title. The icons choose the device: e.g. on Mobile an object above the title, filling the scene on larger screens. Filling the scene is for Cover; a whole picture (Contain) is better as an object: Width and Height 100%, or Height 100% and Width Auto.') : '')
+                    ['position', 'Size', 'image-crop', l.type === 'overlay' ? card('Size', containerField(l) + attachField(l) + heightField(l, 'width') + heightField(l) + paddingField(l)) : card('Size', (l.type === 'image' ? withTip(respCheck('fill_scene', 'Fill the scene'), 'On: the image fills the scene (a photo and its cutout for the mountain effect; its edges never show while it moves). Off: an object of its own size (Width and Height), placed where you put it, e.g. a picture beside the title. The icons choose the device: e.g. on Mobile an object above the title, filling the scene on larger screens. Filling the scene is for Cover; a whole picture (Contain) is better as an object: Width and Height 100%, or Height 100% and Width Auto.') : '')
                         + containerField(l)
                         // Attached to another layer (2026-11-13).
                         + (attachable(l) ? attachField(l) : '')
@@ -2004,7 +2047,7 @@
             settings(); changed(); return;
         }
         refreshDots(input.closest('.wpbn-field')); refreshReset(input.closest('.wpbn-field'));
-        if (key === 'target') { targetWarning(); heightHelp(); applyStates(); }
+        if (key === 'target') { targetWarning(); heightHelp(); applyStates(); const copy = $('target-copy'); if (copy) copy.textContent = targetCopyLabel(); }
         // The font sample shows the title's text.
         if (key === 'text' || key === 'content') refreshFontSample();
         // A button's link: Open in a new window applies with one; a Shape object's Edge color, with an Edge.
@@ -2013,13 +2056,13 @@
         if ((key === 'color' && obj.type === 'overlay') || key === 'name') list();
         changed();
     });
-    // A Shape object's Border width typed (tablet / mobile empty: the larger screen's).
+    // A Shape object's Border width typed (empty: 0 on Desktop, the larger screen's on tablet / mobile).
     app.addEventListener('input', event => {
         const input = event.target.closest && event.target.closest('[data-shape-border]'), o = input && current();
         if (!o) return;
         const d = device();
         let value = null;
-        if (input.value === '') { if (d === 'desktop') return; }
+        if (input.value === '') { if (d === 'desktop') value = 0; }
         else { const v = Number(input.value); if (!Number.isFinite(v)) return; value = Math.max(0, Math.min(100, v)); }
         o[dkey('border_width', d)] = value;
         refreshShape(); changed();
@@ -2073,6 +2116,7 @@
         const button = event.target.closest('button');
         if (!button || !app.contains(button)) return;
         if (button.dataset.previewDevice) { setDevice(button.dataset.previewDevice); return; }
+        if (button.id === 'wpbn-target-copy') { copyTarget(); return; }
         // Border: the sides set together (from then on; the top's width on every side of this device) or each on its own.
         // Radius: a corner's unit (every corner's while linked; values over 50% brought down to it), and the link (from then on;
         // the top left's radius and unit on every corner of this device).

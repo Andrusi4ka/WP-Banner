@@ -32,7 +32,7 @@ function wp_get_attachment_image_url($id, $size) { return $id ? '/assets/images/
 function wp_get_attachment_image_srcset($id, $size) { return false; }
 // WPBN_TEST_IMAGE: the editor opens a scene with one photo layer (tests/motion.cjs, Image position).
 // A Shape layer's SVG: the objects WPBN_Shape keeps for an attachment ($GLOBALS['wpbn_shapes'], set below).
-function get_post_meta($id,$key='',$single=false) { if ($key === '_wpbn_shape') { return $GLOBALS['wpbn_shapes'][(int) $id] ?? ''; } if ($key === '_wp_attachment_image_alt') { return ''; } return getenv('WPBN_TEST_IMAGE') ? array('layers'=>array(array('type'=>'image','image'=>3,'name'=>'Mountains'))) : array(); }
+function get_post_meta($id,$key='',$single=false) { if ($key === '_wpbn_scene' && isset($GLOBALS['wpbn_test_meta'][(int) $id])) { return $GLOBALS['wpbn_test_meta'][(int) $id]; } if ($key === '_wpbn_shape') { return $GLOBALS['wpbn_shapes'][(int) $id] ?? ''; } if ($key === '_wp_attachment_image_alt') { return ''; } return getenv('WPBN_TEST_IMAGE') ? array('layers'=>array(array('type'=>'image','image'=>3,'name'=>'Mountains'))) : array(); }
 // The posts a check set (WPBN_Shape::cleanup()), else none.
 function get_posts($args) { return $GLOBALS['wpbn_test_posts'] ?? array(); }
 function wp_nonce_field($a,$b) { echo '<input name="'.esc_attr($b).'" value="test">'; }
@@ -589,7 +589,7 @@ check(strpos($rdm,'wpbn-layer--radius')!==false && strpos($rdm,'--wpbn-brr:24px 
 $pd=$lay(array('type'=>'text','use_padding'=>1,'padding_top'=>20,'padding_right'=>9000,'padding_left'=>80,'padding_left_unit'=>'%','padding_bottom_unit'=>'em','padding_top_mobile'=>8));
 check($pd['padding_right']===500 && $pd['padding_left']===50 && $pd['padding_bottom_unit']==='px' && $pd['padding_linked']===true && WPBN_Settings::layer()['padding_top']===0 && WPBN_Settings::layer()['use_padding']===false,'Padding: bounded by its unit (px 500, % 50), unknown unit px, linked, off and 0 by default');
 check($lay(array('type'=>'text','padding_left'=>10))['use_padding']===true && $lay(array('type'=>'text'))['use_padding']===false && WPBN_Settings::paddings($lay(array('type'=>'text','use_padding'=>0,'padding_top'=>20)))==='','Its switch: saved before it, on where a side has space; off: none');
-check(WPBN_Settings::paddings($pd)===array('desktop'=>'20px 500px 0px 50%','tablet'=>'20px 500px 0px 50%','mobile'=>'8px 500px 0px 50%') && WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'overlay','padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'text')))==='','Its sides per device; none for a photo filling the scene, an overlay, or at 0');
+check(WPBN_Settings::paddings($pd)===array('desktop'=>'20px 500px 0px 50%','tablet'=>'20px 500px 0px 50%','mobile'=>'8px 500px 0px 50%') && WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'overlay','use_padding'=>0,'padding_top'=>20)))==='' && WPBN_Settings::paddings($lay(array('type'=>'overlay','use_padding'=>1,'padding_top'=>20)))['desktop']==='20px 0px 0px 0px' && WPBN_Settings::paddings($lay(array('type'=>'text')))==='','Its sides per device; none for a photo filling the scene, with the switch off, or at 0; an overlay has them (2026-11-23)');
 check(WPBN_Settings::paddings($lay(array('type'=>'image','image'=>3,'fill_scene'=>0,'use_padding'=>1,'padding_top'=>6)))['desktop']==='6px 0px 0px 0px','An image object has one');
 // Margin (2026-11-16): behind the same switch, its own sides, units and link; layers saved before it: none, linked.
 $mg=$lay(array('type'=>'text','use_padding'=>1,'margin_top'=>20,'margin_right'=>9000,'margin_left'=>10,'margin_left_unit'=>'%','margin_bottom_unit'=>'em','margin_top_mobile'=>4,'container'=>'full'));
@@ -599,6 +599,25 @@ check(WPBN_Settings::margins($lay(array('type'=>'text','padding_top'=>8)))==='' 
 $mgm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','text'=>'M','use_padding'=>1,'margin_top'=>20,'margin_right'=>9000,'margin_left'=>10,'margin_left_unit'=>'%','margin_top_mobile'=>4,'container'=>'full')))));
 check(strpos($mgm,'wpbn-layer--margin')!==false && strpos($mgm,'--wpbn-mgt:20px;--wpbn-mgr:500px;--wpbn-mgb:0px;--wpbn-mgl:10%;')!==false && strpos($mgm,'--wpbn-mgt-m:4px;')!==false,'Its markup: the sides per device');
 check(strpos($mgm,'--wpbn-width:calc(100% - 500px - 10%);')!==false,'A title: at most its container less its left and right Margin');
+// The scene's Padding/Margin (2026-11-23): Margin around the banner; Padding a safe area for the placed layers (max of their own
+// Margin and it, less the room their container leaves at the sides); a photo filling the scene, an overlay: not in it.
+$sp=WPBN_Settings::sanitize(array('use_padding'=>1,'padding_top'=>30,'padding_left'=>40,'padding_right'=>40,'padding_bottom'=>30,'padding_left_mobile'=>10,'margin_top'=>24,'margin_bottom'=>24,'margin_top_unit'=>'%','layers'=>array(
+    array('type'=>'text','text'=>'T','container'=>'full'),
+    array('type'=>'text','text'=>'C','container'=>'custom','container_width'=>1000,'use_padding'=>1,'margin_top'=>50),
+    array('type'=>'image','image'=>3),
+    array('type'=>'overlay','use_padding'=>1,'padding_top'=>9,'margin_top'=>20,'margin_bottom'=>20,'margin_left'=>20,'margin_right'=>20,'margin_bottom_unit'=>'%'))));
+check($sp['use_padding']===true && $sp['padding_left_mobile']===10 && $sp['margin_top_unit']==='%' && WPBN_Settings::sanitize(array())['use_padding']===false && WPBN_Settings::sanitize(array())['padding_top']===0,'The scene keeps its Padding/Margin; off and 0 by default');
+check(WPBN_Settings::scene_spaces($sp,'margin')['mobile']===array('24%','0px','24px','0px') && WPBN_Settings::scene_spaces(array('use_padding'=>false)+$sp,'margin')==='','Its Margin per device; none with its switch off');
+$spm=WPBN_Render::markup($sp);
+check(strpos($spm,'wpbn-scene--margin')!==false && strpos($spm,'--wpbn-smg:24% 0px 24px 0px;')!==false,'The scene\'s Margin on its block');
+check(strpos($spm,'--wpbn-mgl:max(0px, 40px - 0px);')!==false && strpos($spm,'--wpbn-mgt:max(0px, 30px);')!==false && strpos($spm,'--wpbn-mgl-m:max(0px, 10px - 0px);')!==false,'A title on Full width: the safe area as its Margin');
+check(strpos($spm,'--wpbn-mgt:max(50px, 30px);')!==false && strpos($spm,'40px - (100% - var(--wpbn-cw)) / 2)')!==false,'In a container: its own Margin when larger, the sides less the room its container leaves');
+preg_match_all('/<div class="wpbn-layer wpbn-layer--image[^"]*"[^>]*>/',$spm,$spImg);
+check($spImg[0] && strpos($spImg[0][0],'wpbn-layer--margin')===false,'A photo filling the scene: not in the safe area');
+check(strpos($spm,'--wpbn-mgl:20px;')!==false && strpos($spm,'--wpbn-omw:calc(100% - 20px - 20px);--wpbn-omh:calc(100% - 20px - 20cqw);')!==false && strpos($spm,'wpbn-scene--cq')!==false,'An overlay: its own Margin (not the safe area), never larger than the room it leaves; a % bottom in cqw');
+check(strpos($spm,'wpbn-layer--padding')!==false && strpos($spm,'--wpbn-pad:9px 0px 0px 0px;')!==false,'An overlay: its Padding too (its fill inside its box)');
+$css=file_get_contents(__DIR__.'/../assets/css/frontend.css');
+check(strpos($css,'.wpbn-scene.wpbn-scene--margin{width:auto;margin:var(--wpbn-smg)}')!==false && strpos($css,'.wpbn-scene .wpbn-layer--overlay.wpbn-layer--margin{max-width:var(--wpbn-omw);max-height:var(--wpbn-omh)}')!==false,'frontend.css: the scene\'s Margin, an overlay kept in its room');
 check(strpos(file_get_contents(__DIR__.'/../assets/css/frontend.css'),'margin-left:calc(var(--wpbn-mgl) * (1 - var(--wpbn-ax)) - var(--wpbn-mgr) * var(--wpbn-ax))')!==false,'frontend.css: the left margin at 0%, less the right one towards 100%');
 check(strpos(WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array(array('type'=>'text','text'=>'M','use_padding'=>1,'padding_top'=>5))))),'wpbn-layer--margin')===false,'Padding alone: no Margin class');
 $pdm=WPBN_Render::markup(WPBN_Settings::sanitize(array('layers'=>array($pd))));
@@ -879,4 +898,13 @@ $edPub=WPBN_Block::render(array('id'=>70)); $edDraft=WPBN_Block::render(array('i
 check($siteDraft==='' && strpos($edPub,'wpbn-block-note')===false && strpos($edPub,'<section')!==false
     && strpos($edDraft,'This scene is not published: it shows here, not on the site.')!==false && strpos($edDraft,'<section')!==false
     && strpos($edGone,'This scene no longer exists.')!==false && strpos($edGone,'<section')===false,'Block: a draft shows in the editor with a note, not on the site; a deleted scene: a note');
+// WPBakery (2026-11-23): a scene's class and devices for the Backend editor's marks; its name alone in the list (the mark says it).
+require_once __DIR__.'/../includes/class-wpbn-wpbakery.php';
+$GLOBALS['wpbn_test_meta'] = array(80=>array('target'=>'.wpbn-scene-80', 'as_background'=>true, 'as_background_mobile'=>false, 'layers'=>array()), 81=>array('target'=>'', 'layers'=>array()));
+$GLOBALS['wpbn_test_posts'] = array((object) array('ID'=>80, 'post_title'=>'Hero'), (object) array('ID'=>81, 'post_title'=>'Plain'));
+$vcScenes = WPBN_WPBakery::scenes();
+check($vcScenes[0]['label']==='Hero (#80)' && $vcScenes[0]['host']==='wpbn-scene-80' && $vcScenes[0]['on']===array('desktop', 'tablet'), 'WPBakery: a scene placed by class, its name alone, its class and devices ('.json_encode($vcScenes[0]).')');
+check($vcScenes[1]['label']==='Plain (#81)' && $vcScenes[1]['host']==='' && $vcScenes[1]['on']===array(), 'WPBakery: a scene of its own, its name alone');
+check(WPBN_Settings::placed_class(80)==='wpbn-scene-80' && WPBN_Settings::placed_class(81)==='', 'placed_class() as before');
+unset($GLOBALS['wpbn_test_meta']); $GLOBALS['wpbn_test_posts'] = array();
 echo "Release checks passed.\n";
